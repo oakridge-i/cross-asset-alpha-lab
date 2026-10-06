@@ -56,7 +56,7 @@ def assess(frames, start, end, *, adjustment_tolerance=0.00005):
         # Yahoo's backwards dividend factor differs from ex-date cash reinvestment.
         residual = ratio / ratio.shift(1) * (1 - view.source_dividend / view.source_close.shift(1)) - 1
         breaks = residual.abs() > adjustment_tolerance
-        largest = residual.abs().nlargest(10).index
+        largest = residual.dropna().abs().nlargest(10).index
         result = dict(rows=len(view), full_source_rows=len(f), first_session=f.index[0], last_session=f.index[-1],
                       missing_sessions=missing, unexpected_sessions=unexpected,
                       dividend_events=int((view.dividend > 0).sum()),
