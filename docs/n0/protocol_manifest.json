@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "protocol_version": "1.0",
+  "registered_date": "2026-10-06",
+  "hypotheses_status": "registered_not_tested",
+  "strategy_results_computed": false,
+  "risky_universe": ["SPY", "EFA", "EEM", "IEF", "TLT", "LQD", "HYG", "GLD", "DBC"],
+  "cash_proxy": "BIL",
+  "groups": {
+    "Equity": ["SPY", "EFA", "EEM"],
+    "Treasury": ["IEF", "TLT"],
+    "Credit": ["LQD", "HYG"],
+    "Real": ["GLD", "DBC"]
+  },
+  "baselines": ["B0", "B1", "B2", "B3"],
+  "additional_reference": "REF_SPY",
+  "configurations": [
+    {"id": "H1_252_3", "hypothesis": "H1", "lookback": 252, "skip": 21, "top_k": 3, "primary": true, "comparator": "B3"},
+    {"id": "H1_252_4", "hypothesis": "H1", "lookback": 252, "skip": 21, "top_k": 4, "primary": false, "comparator": "B3"},
+    {"id": "H1_126_3", "hypothesis": "H1", "lookback": 126, "skip": 21, "top_k": 3, "primary": false, "comparator": "B3"},
+    {"id": "H1_126_4", "hypothesis": "H1", "lookback": 126, "skip": 21, "top_k": 4, "primary": false, "comparator": "B3"},
+    {"id": "H2_4of6", "hypothesis": "H2", "parent": "H1_252_3", "positive_months": 4, "months": 6, "primary": true, "comparator": "H1_252_3"},
+    {"id": "H2_5of6", "hypothesis": "H2", "parent": "H1_252_3", "positive_months": 5, "months": 6, "primary": false, "comparator": "H1_252_3"}
+  ],
+  "adaptive_policy": {
+    "id": "P_A1",
+    "candidate_ids": ["H1_252_3", "H1_252_4", "H1_126_3", "H1_126_4"],
+    "past_years": 5,
+    "validation_years": 2,
+    "utility_risk_aversion": 3,
+    "tie_tolerance": 0.001,
+    "tie_order": ["H1_252_3", "H1_252_4", "H1_126_3", "H1_126_4"],
+    "fallback": "H1_252_3",
+    "confirmatory_pipeline_p_value": false
+  },
+  "risk": {"vol_sessions": 63, "cov_sessions": 126, "ddof": 1, "annualization": 252, "asset_cap": 0.25, "group_cap": 0.5, "vol_target": 0.1, "max_risky_weight": 1.0, "leverage": false},
+  "execution": {"initial_usd": 100000, "reserve": 0.01, "signal_time_ny": "18:00", "size_at": "month_end_close", "fill_at": "next_regular_open", "cash_interest": 0, "cost_bps_one_way": 10, "cost_grid": [0, 10, 20, 50], "session_lags": [1, 2], "missing_pay_date_calendar_delay": 10, "pay_delay_grid": [0, 10, 30], "reserve_grid": [0, 0.01, 0.02]},
+  "splits": {
+    "warmup": ["2007-05-30", "2008-12-31"],
+    "development": ["2009-01-01", "2013-12-31"],
+    "walk_forward": ["2014-01-01", "2022-12-31"],
+    "reserved_historical": ["2023-01-01", "2025-12-31"],
+    "fresh_historical": ["2026-01-01", "2026-10-05"]
+  },
+  "historical_exposure": "unknown_user_unsure",
+  "independent_historical_holdout_claimed": false,
+  "prospective_start": null,
+  "prospective_start_reason": "model_not_yet_frozen",
+  "statistics": {"minimum_delta_utility": 0.01, "bootstrap_blocks": [21, 63, 126], "primary_block": 63, "bootstrap_repetitions": 10000, "bootstrap_seed": 20261006, "holm_family_size": 6, "family_error_rate": 0.05, "hac_monthly_lag": 3, "minimum_regression_months": 36, "selection_stability_repetitions": 1000, "selection_stability_seed": 20261007},
+  "reserved_test_opened": false,
+  "data_ready_for_n2": false,
+  "environment_locked": false,
+  "raw_data_redistribution_rights_established": false
+}

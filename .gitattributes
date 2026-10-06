@@ -1,0 +1,4 @@
+# Preserve exact copied sources and registered protocol byte hashes.
+* -text
+# CRLF is valid while actual trailing spaces and blank EOF lines still fail.
+* whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

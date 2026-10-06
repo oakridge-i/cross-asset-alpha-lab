@@ -1,0 +1,320 @@
+{
+  "verified_at_utc": "2026-10-06T10:16:37.974573+00:00",
+  "stage": "N0",
+  "status": "passed",
+  "git_head_at_verification": null,
+  "pass_count": 35,
+  "check_count": 35,
+  "protocol_sha256": "71a230d738bddd6dff1f31f0fa8013ebac538c67e7f97570fa28e3d4a02ce849",
+  "protocol_manifest_sha256": "89f5d563618a06044f4b08d3ca7198ba32f8efcb7919b1a273d1100e75ccabcc",
+  "file_hashes": {
+    "AGENTS.md": "0fdc3cbf0052b4d2ee40f6592ac566e19af7f8318418b22c8ce238347603d062",
+    "README.md": "e9f88beeff77edaf110c9ce44931fbf7b89ef51fcf7415d1916ac0e2df4dce84",
+    "DECISIONS.md": "e1247d72cd16d51735a027714220a9d083e54c08923855f6640d160f35e9e5bf",
+    "RESEARCH_PROTOCOL.md": "71a230d738bddd6dff1f31f0fa8013ebac538c67e7f97570fa28e3d4a02ce849",
+    "docs/MASTER_PLAN.md": "1e3744398b3987458416a33e0ab4b66d243bcd3a2c8e2de344da04238993e9ef",
+    "experiments/EXPERIMENT_LOG.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "experiments/README.md": "878e30f75df93c7283415b8b260a40e11479f14c0681c29746a641cc71181734",
+    "docs/n0/N0_REPORT.md": "adb54cbeef4d830a8f289f67ddcf4983687b2e2ff19552ae42775e06d8b4f26d",
+    "docs/n0/AAPL_REUSE_AUDIT.md": "58a4d173c6b7725acdc5b298e3a1caf097f7d51d3639a65429df9cc19a710260",
+    "docs/n0/protocol_manifest.json": "89f5d563618a06044f4b08d3ca7198ba32f8efcb7919b1a273d1100e75ccabcc",
+    "docs/n0/source_probe.json": "13e11fd88d3d0c1e6c0cd2b41d1eaf41bc53a43e5b1e6b549d1d6d5bf74d6465",
+    "docs/n0/source_probe_extended.json": "fce4bdbfffc9794698884e91c0613e532c5e75f575a9b55b56b2dc2b6af0a5c5",
+    "docs/n0/probe_sources.py": "0229272bb61684ade3e1e266c24cbfeec70edb2349375131e2e9ec05e6327675",
+    "docs/n0/verify_n0.py": "1f756929c0c3ed08e62eca0938e93b7cb2ed41bc7cd51e6ef33d1fda4d87472b"
+  },
+  "checks": [
+    {
+      "name": "required_artifacts",
+      "passed": true,
+      "detail": [
+        "AGENTS.md",
+        "README.md",
+        "STATUS.md",
+        "DECISIONS.md",
+        "RESEARCH_PROTOCOL.md",
+        "docs/MASTER_PLAN.md",
+        "experiments/EXPERIMENT_LOG.jsonl",
+        "experiments/README.md",
+        "docs/n0/N0_REPORT.md",
+        "docs/n0/AAPL_REUSE_AUDIT.md",
+        "docs/n0/protocol_manifest.json",
+        "docs/n0/source_probe.json",
+        "docs/n0/source_probe_extended.json",
+        "docs/n0/probe_sources.py",
+        "docs/n0/verify_n0.py"
+      ]
+    },
+    {
+      "name": "exact_copy:AGENTS.template.md",
+      "passed": true,
+      "detail": "0fdc3cbf0052b4d2ee40f6592ac566e19af7f8318418b22c8ce238347603d062"
+    },
+    {
+      "name": "exact_copy:MASTER_PLAN.md",
+      "passed": true,
+      "detail": "1e3744398b3987458416a33e0ab4b66d243bcd3a2c8e2de344da04238993e9ef"
+    },
+    {
+      "name": "exact_copy:NEW_CHAT_BRIEF.md",
+      "passed": true,
+      "detail": "0a6df0716dcd2daf73e5ac3dbb84855e499ad68edfb3c186cada7ec91ca8b5c1"
+    },
+    {
+      "name": "exact_copy:NEW_PROJECT_SETUP.md",
+      "passed": true,
+      "detail": "a971bda14b9987ce6532da8b3c4b58eb22057ab8313ade33d3765fbfbebf7085"
+    },
+    {
+      "name": "empty_experiment_log",
+      "passed": true,
+      "detail": "N0 availability probes separate; no strategy/data pipeline experiments started"
+    },
+    {
+      "name": "six_fixed_configurations",
+      "passed": true,
+      "detail": [
+        "H1_252_3",
+        "H1_252_4",
+        "H1_126_3",
+        "H1_126_4",
+        "H2_4of6",
+        "H2_5of6"
+      ]
+    },
+    {
+      "name": "h1_exact_grid",
+      "passed": true,
+      "detail": "2 lengths x 2 top-k"
+    },
+    {
+      "name": "h2_fixed_parent",
+      "passed": true,
+      "detail": "No replacement of parent by selected H1"
+    },
+    {
+      "name": "four_baselines",
+      "passed": true,
+      "detail": [
+        "B0",
+        "B1",
+        "B2",
+        "B3"
+      ]
+    },
+    {
+      "name": "policy_is_separate",
+      "passed": true,
+      "detail": "Four H1 only; conditional inference disclosed"
+    },
+    {
+      "name": "not_tested_or_independent",
+      "passed": true,
+      "detail": "unknown_user_unsure"
+    },
+    {
+      "name": "ten_available_sources",
+      "passed": true,
+      "detail": [
+        {
+          "ticker": "SPY",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "EFA",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "EEM",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "IEF",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "TLT",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "LQD",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "HYG",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "GLD",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "DBC",
+          "last": "2026-10-05"
+        },
+        {
+          "ticker": "BIL",
+          "last": "2026-10-05"
+        }
+      ]
+    },
+    {
+      "name": "returned_rows_shape",
+      "passed": true,
+      "detail": {
+        "returned_rows": 59426,
+        "calendar_validated": false
+      }
+    },
+    {
+      "name": "common_start_and_warmup",
+      "passed": true,
+      "detail": {
+        "common_sessions": 4869,
+        "warmup_returns": 402
+      }
+    },
+    {
+      "name": "no_pay_dates_disclosed",
+      "passed": true,
+      "detail": "Missing pay dates are disclosed; not a data-certification pass"
+    },
+    {
+      "name": "h1_hand_example",
+      "passed": true,
+      "detail": {
+        "T_end": 120,
+        "T_start": 100,
+        "cash_growth": 1.02,
+        "sigma": 0.2,
+        "score": 0.8823529411764708
+      }
+    },
+    {
+      "name": "h2_hand_example",
+      "passed": true,
+      "detail": {
+        "month_excess": [
+          0.02,
+          -0.01,
+          0.01,
+          0.0,
+          0.03,
+          0.01
+        ],
+        "positive_count": 4
+      }
+    },
+    {
+      "name": "split_dividend_hand_example",
+      "passed": true,
+      "detail": "3:1 split, previous close330, ex-close109.5, post-share dividend0.5: TR wealth unchanged"
+    },
+    {
+      "name": "top3_cap_hand_example",
+      "passed": true,
+      "detail": {
+        "risky_weights": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "BIL_weight": 0.25
+      }
+    },
+    {
+      "name": "gap_partial_fill_hand_example",
+      "passed": true,
+      "detail": {
+        "precreated_quantity": 10,
+        "open": 11,
+        "filled": 9,
+        "cash_remaining": 0.9010000000000105
+      }
+    },
+    {
+      "name": "no_placeholders:README.md",
+      "passed": true,
+      "detail": "Reviewed text"
+    },
+    {
+      "name": "no_placeholders:STATUS.md",
+      "passed": true,
+      "detail": "Reviewed text"
+    },
+    {
+      "name": "no_placeholders:DECISIONS.md",
+      "passed": true,
+      "detail": "Reviewed text"
+    },
+    {
+      "name": "no_placeholders:RESEARCH_PROTOCOL.md",
+      "passed": true,
+      "detail": "Reviewed text"
+    },
+    {
+      "name": "no_placeholders:experiments/README.md",
+      "passed": true,
+      "detail": "Reviewed text"
+    },
+    {
+      "name": "no_placeholders:docs/n0/N0_REPORT.md",
+      "passed": true,
+      "detail": "Reviewed text"
+    },
+    {
+      "name": "no_placeholders:docs/n0/AAPL_REUSE_AUDIT.md",
+      "passed": true,
+      "detail": "Reviewed text"
+    },
+    {
+      "name": "local_links",
+      "passed": true,
+      "detail": {
+        "checked": 21,
+        "broken": [],
+        "self_receipt_output": "docs/n0/verification.json"
+      }
+    },
+    {
+      "name": "git_root_is_separate",
+      "passed": true,
+      "detail": "cross-asset-alpha-lab"
+    },
+    {
+      "name": "no_remote",
+      "passed": true,
+      "detail": "Local repository only"
+    },
+    {
+      "name": "sensitive_generated_paths_ignored",
+      "passed": true,
+      "detail": [
+        "data/probe.csv",
+        "outputs/results.csv",
+        ".venv/pyvenv.cfg",
+        ".env"
+      ]
+    },
+    {
+      "name": "diff_whitespace",
+      "passed": true,
+      "detail": "Working/staged diffs"
+    },
+    {
+      "name": "aapl_source_unchanged",
+      "passed": true,
+      "detail": "Old main clean and unchanged"
+    },
+    {
+      "name": "aapl_release_unchanged",
+      "passed": true,
+      "detail": "Release worktree clean and unchanged"
+    }
+  ],
+  "limits": [
+    "No engine or strategy tests run; illustrative arithmetic only",
+    "No calendar/independent market-data certification",
+    "No alpha or independent historical holdout claim"
+  ]
+}
