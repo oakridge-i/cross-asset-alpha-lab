@@ -1,0 +1,20 @@
+{
+  "protocol_version": "1.0",
+  "universe": ["SPY", "EFA", "EEM", "IEF", "TLT", "LQD", "HYG", "GLD", "DBC", "BIL"],
+  "start": "1990-01-01",
+  "end_exclusive": "2026-10-06",
+  "common_start": "2007-05-30",
+  "cutoff": "2026-10-05",
+  "calendar": "XNYS",
+  "pay_delay_days": 10,
+  "adjustment_factor_tolerance": 0.00005,
+  "splits": {
+    "warmup": ["2007-05-30", "2008-12-31"],
+    "development": ["2009-01-01", "2013-12-31"],
+    "walk_forward": ["2014-01-01", "2022-12-31"],
+    "reserved_historical_not_independent": ["2023-01-01", "2025-12-31"],
+    "fresh_historical_not_independent": ["2026-01-01", "2026-10-05"]
+  },
+  "basis_status": "provisional_pending_external_evidence",
+  "source_flags": {"interval": "1d", "auto_adjust": false, "back_adjust": false, "actions": true, "repair": false, "keepna": true}
+}

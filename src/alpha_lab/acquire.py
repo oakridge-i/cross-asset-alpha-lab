@@ -6,7 +6,7 @@ from .provenance import canonical_bytes, now
 
 
 def recording_session(files):
-    from curl_cffi.requests import Session
+    from requests import Session
 
     class RecordingSession(Session):
         def get(self, url, **kwargs):
@@ -28,7 +28,10 @@ def recording_session(files):
                     'raw_file': name})
             return response
 
-    return RecordingSession(impersonate='chrome')
+    # Python's TLS stack supports Unicode Windows CA paths; curl's CAfile does not.
+    session = RecordingSession()
+    session.headers['User-Agent'] = 'Mozilla/5.0'
+    return session
 
 
 def download(tickers, start, end, files=None, *, ticker_factory=None, session=None):
