@@ -18,16 +18,17 @@ def main(argv=None):
     args = parser.parse_args(argv)
     root = args.root.resolve()
     if args.command == 'acquire':
-        print(acquire_snapshot(root, json.loads((root/'configs/n1.json').read_bytes()), args.parent))
+        # Config and payable files are read inside the pipeline so unreadable inputs are journaled.
+        print(acquire_snapshot(root, Path('configs/n1.json'), args.parent))
     elif args.command == 'evidence':
-        print(fetch_evidence(root, json.loads((root/'configs/n1_evidence.json').read_bytes()), args.parent))
+        print(fetch_evidence(root, Path('configs/n1_evidence.json'), args.parent))
     else:
         if not args.snapshot:
             parser.error('snapshot required for audit/replay/reconcile')
         snapshot = root / args.snapshot
         if args.command == 'audit':
-            payable = json.loads(args.payable.read_bytes()) if args.payable else {}
-            print(audit_snapshot(root, snapshot, args.parent, payable))
+            # --payable resolves against --root, like the snapshot paths.
+            print(audit_snapshot(root, snapshot, args.parent, args.payable or {}))
         elif args.command == 'reconcile':
             if not args.evidence:
                 parser.error('evidence snapshot required for reconcile')

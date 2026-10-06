@@ -73,3 +73,21 @@ def test_sandy_closures_are_not_missing_bars():
 def test_payable_before_ex_date_rejected():
     with pytest.raises(ValueError):
         norm(frame([10, 9], dividends=[0, 1]), payable={'2017-11-29': {'date':'2017-11-28','source':'issuer'}})
+
+
+def test_sandy_closure_bar_is_rejected():
+    with pytest.raises(ValueError, match='non-session'):
+        norm(frame([10, 10], dates=['2012-10-26', '2012-10-29']))
+
+
+def test_capital_gain_alone_counts_as_distribution():
+    f = frame([10, 9])
+    f['Capital Gains'] = [0, 0.5]
+    assert norm(f)['dividend'].tolist() == [0, 0.5]
+
+
+def test_dividend_and_capital_gain_on_one_date_rejected_until_basis_is_evidenced():
+    f = frame([10, 9], dividends=[0, 1])
+    f['Capital Gains'] = [0, 0.5]
+    with pytest.raises(ValueError, match='capital gain'):
+        norm(f)

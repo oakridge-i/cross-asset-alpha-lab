@@ -98,7 +98,7 @@ def test_split_adjusted_yahoo_matches_as_traded_issuer_and_zero_rows_are_not_eve
     assert bil['materiality_bps'] == pytest.approx(0.000102 / 45 * 1e4)
 
 
-def test_discrepancy_classes_coverage_and_materiality(tmp_path):
+def test_discrepancy_classes_coverage_and_materiality(tmp_path, no_network):
     _, c, _ = run(tmp_path)
     spy = c['tickers']['SPY']
     assert spy['status'] == 'unresolved'
@@ -132,7 +132,7 @@ def test_current_unit_issuer_amounts_and_tolerance_scale_with_split_factor(tmp_p
     assert eem['status'] == 'unresolved'
 
 
-def test_payable_only_for_matched_events_and_audit_accepts_it(tmp_path):
+def test_payable_only_for_matched_events_and_audit_accepts_it(tmp_path, no_network):
     target, _, payable = run(tmp_path)
     ref = 'https://issuer.test/ssga.xlsx data/evidence/e/ssga.xlsx#' + sha256(xlsx(SSGA))
     # EFA matched, but its payable date precedes the ex-date and is rejected.
@@ -147,6 +147,19 @@ def test_payable_only_for_matched_events_and_audit_accepts_it(tmp_path):
     assert rows[1]['output_paths'] == [target.relative_to(tmp_path).as_posix()]
     assert rows[1]['quality_warnings'] == ['Unresolved issuer reconciliation: SPY, EEM',
                                            'No issuer distribution source: GLD']
+    manifest = lambda name: sha256((tmp_path / f'data/{name}/manifest.json').read_bytes())
+    assert (rows[1]['source_manifest_sha256'], rows[1]['evidence_manifest_sha256']) == (
+        manifest('snapshots/s'), manifest('evidence/e'))
+    assert rows[3]['source_manifest_sha256'] == manifest('snapshots/s')
+
+
+def test_altered_evidence_bytes_are_refused(tmp_path, no_network):
+    e = evidence(tmp_path)
+    (e / 'ssga.xlsx').write_bytes(xlsx(SSGA[:1]))
+    with pytest.raises(ValueError, match='content hash mismatch'):
+        r.reconcile(tmp_path, source(tmp_path), e)
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    assert [x['event'] for x in rows] == ['started', 'failed']
 
 
 def test_failed_evidence_source_is_refused_and_logged(tmp_path, no_network):

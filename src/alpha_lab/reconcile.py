@@ -85,6 +85,8 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
     with Run(root, 'N1 issuer distribution reconciliation', cfg, parent) as run:
         require_inside(root, source, evidence)
         manifest, evidence_manifest = verify(source), verify(evidence)
+        run.base.update(source_manifest_sha256=sha256((source / 'manifest.json').read_bytes()),
+                        evidence_manifest_sha256=sha256((evidence / 'manifest.json').read_bytes()))
         config = manifest['metadata']['config']
         run.base.update(universe=config['universe'], splits=config.get('splits', {}))
         issuer = issuer_events(evidence, evidence_manifest)
@@ -109,8 +111,8 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
         target = root / 'data/reconciliation' / run.run_id
         freeze(target, {'comparison.json': canonical_bytes(comparison), 'payable.json': canonical_bytes(payable)},
                {'source_snapshot': cfg['source_snapshot'], 'evidence_snapshot': cfg['evidence_snapshot'],
-                'source_manifest_sha256': sha256((source / 'manifest.json').read_bytes()),
-                'evidence_manifest_sha256': sha256((evidence / 'manifest.json').read_bytes()),
+                'source_manifest_sha256': run.base['source_manifest_sha256'],
+                'evidence_manifest_sha256': run.base['evidence_manifest_sha256'],
                 'environment': run.env, 'run_id': run.run_id, 'tolerance': TOLERANCE})
         warnings = []
         for status, text in [('unresolved', 'Unresolved issuer reconciliation'),

@@ -33,6 +33,8 @@ def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_del
         raise ValueError('non-positive price')
     if (f[['Volume','Dividends','Stock Splits','Capital Gains']] < 0).any().any():
         raise ValueError('negative volume/action')
+    if ((f.Dividends > 0) & (f['Capital Gains'] > 0)).any():
+        raise ValueError('dividend and capital gain on one date: basis not evidenced')
     if ((f.Low > f[['Open','Close']].min(axis=1)) | (f.High < f[['Open','Close']].max(axis=1))).any():
         raise ValueError('OHLC inequality')
     payable = payable or {}

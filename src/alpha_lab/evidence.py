@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 import zlib
 
+from .pipeline import load_json
 from .provenance import Run, freeze, now, sha256
 
 EXTENSIONS = {'ssga_xlsx': '.xlsx', 'ishares_html': '.html', 'document': '.pdf'}
@@ -149,7 +150,10 @@ def check(source, body):
 
 
 def fetch_evidence(root, config, parent=None):
+    """config is a dict or a path relative to root."""
     root = Path(root).resolve()
+    if isinstance(config, Path):
+        config = load_json(root, config, 'N1 issuer evidence acquisition', {}, parent)
     with Run(root, 'N1 issuer evidence acquisition', config, parent) as run:
         import requests
         ids = [s['id'] for s in config['sources']]

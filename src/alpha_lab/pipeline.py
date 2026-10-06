@@ -37,6 +37,9 @@ def normalized(source, manifest, payable):
         for col in REQUIRED:
             if not np.allclose(f[col], adapter[col], rtol=0, atol=1e-12, equal_nan=True):
                 raise ValueError(f'adapter/raw value mismatch: {ticker}/{col}')
+        gains = adapter['Capital Gains'] if 'Capital Gains' in adapter.columns else 0.
+        if not np.allclose(f['Capital Gains'], gains, rtol=0, atol=1e-12):
+            raise ValueError(f'adapter/raw value mismatch: {ticker}/Capital Gains')
         x = normalize(f, ticker, manifest['metadata']['retrieved_at'], manifest['files'][name],
                       payable.get(ticker, {}), pay_delay_days=cfg['pay_delay_days'])
         frames[ticker] = x
@@ -54,18 +57,33 @@ def build(source, manifest, payable):
     return files, report
 
 
-def acquire_snapshot(root, config, parent=None):
+def load_json(root, path, purpose, cfg, parent):
+    """Read a JSON input; an unreadable file is still journaled as a failed run of `purpose`."""
+    path = (Path(root) / path).resolve()
+    try:
+        return json.loads(path.read_bytes())
+    except (OSError, ValueError):
+        with Run(root, purpose, cfg | {'unreadable_input': project_path(root, path)}, parent):
+            raise
+
+
+def acquire_snapshot(root, config, parent=None, *, downloader=None):
+    """config is a dict or a path relative to root; downloader defaults to the yfinance adapter."""
     root = Path(root).resolve()
+    if isinstance(config, Path):
+        config = load_json(root, config, 'N1 acquisition', {}, parent)
     with Run(root, 'N1 acquisition', config, parent) as run:
-        import yfinance as yf
-        cache = root / 'data/yfinance-cache'
-        cache.mkdir(parents=True, exist_ok=True)
-        yf.set_tz_cache_location(str(cache))
+        if downloader is None:
+            import yfinance as yf
+            cache = root / 'data/yfinance-cache'
+            cache.mkdir(parents=True, exist_ok=True)
+            yf.set_tz_cache_location(str(cache))
+            downloader = download
         files = {}
         target = root / 'data/snapshots' / run.run_id
         run.base['output_paths'] = [target.relative_to(root).as_posix()]
         try:
-            download(config['universe'], config['start'], config['end_exclusive'], files)
+            downloader(config['universe'], config['start'], config['end_exclusive'], files)
         finally:
             freeze(target, files, {'config': config, 'environment': run.env, 'retrieved_at': now(),
                                    'run_id': run.run_id, 'git_sha': run.base['git_sha']})
@@ -87,12 +105,16 @@ def require_inside(root, *paths):
 
 
 def audit_snapshot(root, source, parent=None, payable=None):
+    """payable is a dict or a path relative to root (an unreadable file is journaled as failed)."""
     root, source = Path(root).resolve(), Path(source).resolve()
+    if isinstance(payable, Path):
+        payable = load_json(root, payable, 'N1 offline QA', {'source_snapshot': project_path(root, source)}, parent)
     # Start before verifying, so corruption/missing manifests are also logged.
     cfg = {'source_snapshot': project_path(root, source), 'payable': payable or {}}
     with Run(root, 'N1 offline QA', cfg, parent) as run:
         require_inside(root, source)
         manifest = verify(source)
+        run.base['source_manifest_sha256'] = sha256((source / 'manifest.json').read_bytes())
         run.base.update(universe=manifest['metadata']['config']['universe'],
                         splits=manifest['metadata']['config'].get('splits', {}))
         source_hash = sha256((source / 'manifest.json').read_bytes())
@@ -111,11 +133,13 @@ def replay_snapshot(root, derived, parent=None):
     with Run(root, 'N1 offline replay', {'derived_snapshot':project_path(root, derived)}, parent) as run:
         require_inside(root, derived)
         m = verify(derived)
+        run.base['derived_manifest_sha256'] = sha256((derived / 'manifest.json').read_bytes())
         source = (root / m['metadata']['source_snapshot']).resolve()
         if not source.is_relative_to(root):
             raise ValueError('source snapshot outside project')
         sm = verify(source)
-        if sha256((source/'manifest.json').read_bytes()) != m['metadata']['source_manifest_sha256']:
+        run.base['source_manifest_sha256'] = sha256((source/'manifest.json').read_bytes())
+        if run.base['source_manifest_sha256'] != m['metadata']['source_manifest_sha256']:
             raise ValueError('source manifest changed')
         payable = json.loads((derived/'payable.json').read_bytes())
         files, report = build(source, sm, payable)

@@ -8,6 +8,7 @@
   "calendar": "XNYS",
   "pay_delay_days": 10,
   "adjustment_factor_tolerance": 0.00005,
+  "http_backend": "requests_verified_TLS",
   "splits": {
     "warmup": ["2007-05-30", "2008-12-31"],
     "development": ["2009-01-01", "2013-12-31"],
