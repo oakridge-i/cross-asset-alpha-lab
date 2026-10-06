@@ -92,10 +92,29 @@ def test_ishares_missing_or_inconsistent_table_fails_closed(body):
         e.parse_ishares_html(body)
 
 
+def corrupted_xlsx():
+    """Deflate-compressed workbook whose workbook.xml stream is damaged (zlib.error on read)."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(xlsx(SSGA_ROWS))) as src, zipfile.ZipFile(buffer, 'w') as dst:
+        for name in src.namelist():
+            dst.writestr(zipfile.ZipInfo(name, (2026, 1, 1, 0, 0, 0)), src.read(name), zipfile.ZIP_DEFLATED)
+    body = bytearray(buffer.getvalue())
+    info = zipfile.ZipFile(io.BytesIO(bytes(body))).getinfo('xl/workbook.xml')
+    start = info.header_offset + 30 + len(info.filename)
+    body[start:start + 4] = bytes([255]) * 4
+    return bytes(body)
+
+
+def test_corrupted_workbook_raises_value_error():
+    with pytest.raises(ValueError, match='malformed SSGA workbook'):
+        e.parse_ssga_xlsx(corrupted_xlsx(), 'SPY')
+
+
 @pytest.fixture
 def server():
     routes = {'/ssga.xlsx': (200, xlsx(SSGA_ROWS)), '/eem': (200, page(table(), table())),
-              '/memo.pdf': (200, b'%PDF-1.4 memo'), '/blocked': (403, b'Access Denied')}
+              '/memo.pdf': (200, b'%PDF-1.4 memo'), '/blocked': (403, b'Access Denied'),
+              '/corrupt.xlsx': (200, corrupted_xlsx())}
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -116,8 +135,9 @@ def server():
 
 def config(url, *extra):
     return {'protocol_version': '1.0', 'sources': [
-        {'id': 'ssga', 'url': f'{url}/ssga.xlsx', 'kind': 'ssga_xlsx', 'tickers': ['SPY', 'BIL']},
-        {'id': 'eem', 'url': f'{url}/eem', 'kind': 'ishares_html', 'tickers': ['EEM']},
+        {'id': 'ssga', 'url': f'{url}/ssga.xlsx', 'kind': 'ssga_xlsx', 'tickers': ['SPY', 'BIL'],
+         'amount_basis': 'as_traded'},
+        {'id': 'eem', 'url': f'{url}/eem', 'kind': 'ishares_html', 'tickers': ['EEM'], 'amount_basis': 'current_units'},
         {'id': 'memo', 'url': f'{url}/memo.pdf', 'kind': 'document', 'tickers': ['EEM']}, *extra]}
 
 
@@ -136,19 +156,34 @@ def test_fetch_freezes_sources_with_metadata(tmp_path, server):
         ('eem', 'eem.html', 'ishares_html', ['EEM'], 200, 'completed', m['files']['eem.html']),
         ('memo', 'memo.pdf', 'document', ['EEM'], 200, 'completed', m['files']['memo.pdf'])]
     assert all(s['retrieved_at'] for s in m['metadata']['sources'])
+    assert [s['amount_basis'] for s in m['metadata']['sources']] == ['as_traded', 'current_units', None]
     assert events(tmp_path) == ['started', 'completed']
 
 
+def test_fetch_requires_amount_basis_for_distribution_sources(tmp_path, no_network):
+    cfg = config('https://issuer.test')
+    del cfg['sources'][1]['amount_basis']
+    with pytest.raises(ValueError, match='amount_basis'):
+        e.fetch_evidence(tmp_path, cfg)
+    assert events(tmp_path) == ['started', 'failed']
+
+
 def test_fetch_failure_freezes_partial_evidence_and_logs_failed(tmp_path, server):
-    bad = [{'id': 'blocked', 'url': f'{server}/blocked', 'kind': 'ishares_html', 'tickers': ['EFA']},
-           {'id': 'fake', 'url': f'{server}/eem', 'kind': 'document', 'tickers': ['EEM']}]
-    with pytest.raises(RuntimeError, match='blocked, fake'):
+    bad = [{'id': 'blocked', 'url': f'{server}/blocked', 'kind': 'ishares_html', 'tickers': ['EFA'],
+            'amount_basis': 'current_units'},
+           {'id': 'fake', 'url': f'{server}/eem', 'kind': 'document', 'tickers': ['EEM']},
+           {'id': 'corrupt', 'url': f'{server}/corrupt.xlsx', 'kind': 'ssga_xlsx', 'tickers': ['SPY'],
+            'amount_basis': 'as_traded'}]
+    with pytest.raises(RuntimeError, match='blocked, fake, corrupt'):
         e.fetch_evidence(tmp_path, config(server, *bad))
     [target] = (tmp_path / 'data/evidence').iterdir()
     m = verify(target)
-    assert sorted(m['files']) == ['eem.html', 'fake.pdf', 'memo.pdf', 'ssga.xlsx']
+    assert sorted(m['files']) == ['blocked.http403', 'corrupt.xlsx', 'eem.html', 'fake.pdf', 'memo.pdf', 'ssga.xlsx']
+    assert (target / 'blocked.http403').read_bytes() == b'Access Denied'
     status = {s['id']: (s['status'], s['http_status'], s['file']) for s in m['metadata']['sources']}
-    assert status['blocked'] == ('failed', 403, None)
+    assert status['blocked'] == ('failed', 403, 'blocked.http403')
+    assert status['corrupt'] == ('failed', 200, 'corrupt.xlsx')
+    assert all(s['sha256'] == m['files'][s['file']] for s in m['metadata']['sources'])
     assert status['fake'] == ('failed', 200, 'fake.pdf')
     assert status['ssga'] == ('completed', 200, 'ssga.xlsx')
     rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
@@ -166,3 +201,5 @@ def test_registered_evidence_config_is_well_formed():
     covered = {t for s in cfg['sources'] if s['kind'] != 'document' for t in s['tickers']}
     assert covered == {'SPY', 'BIL', 'EFA', 'EEM', 'IEF', 'TLT', 'LQD', 'HYG'}
     assert all(len(s['tickers']) == 1 for s in cfg['sources'] if s['kind'] == 'ishares_html')
+    assert {s['kind']: s['amount_basis'] for s in cfg['sources'] if s['kind'] != 'document'} == {
+        'ssga_xlsx': 'as_traded', 'ishares_html': 'current_units'}

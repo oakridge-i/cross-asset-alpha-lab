@@ -75,11 +75,23 @@ def acquire_snapshot(root, config, parent=None):
     return target
 
 
+def project_path(root, path):
+    """POSIX path for run configs; out-of-project paths stay absolute so the refusal is logged."""
+    return path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix()
+
+
+def require_inside(root, *paths):
+    for path in paths:
+        if not path.is_relative_to(root):
+            raise ValueError(f'snapshot outside project: {path}')
+
+
 def audit_snapshot(root, source, parent=None, payable=None):
     root, source = Path(root).resolve(), Path(source).resolve()
     # Start before verifying, so corruption/missing manifests are also logged.
-    cfg = {'source_snapshot': source.relative_to(root).as_posix(), 'payable': payable or {}}
+    cfg = {'source_snapshot': project_path(root, source), 'payable': payable or {}}
     with Run(root, 'N1 offline QA', cfg, parent) as run:
+        require_inside(root, source)
         manifest = verify(source)
         run.base.update(universe=manifest['metadata']['config']['universe'],
                         splits=manifest['metadata']['config'].get('splits', {}))
@@ -96,7 +108,8 @@ def audit_snapshot(root, source, parent=None, payable=None):
 
 def replay_snapshot(root, derived, parent=None):
     root, derived = Path(root).resolve(), Path(derived).resolve()
-    with Run(root, 'N1 offline replay', {'derived_snapshot':derived.relative_to(root).as_posix()}, parent) as run:
+    with Run(root, 'N1 offline replay', {'derived_snapshot':project_path(root, derived)}, parent) as run:
+        require_inside(root, derived)
         m = verify(derived)
         source = (root / m['metadata']['source_snapshot']).resolve()
         if not source.is_relative_to(root):

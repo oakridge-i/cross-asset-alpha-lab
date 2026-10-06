@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from alpha_lab import reconcile as r
-from alpha_lab.pipeline import audit_snapshot
+from alpha_lab.pipeline import audit_snapshot, replay_snapshot
 from alpha_lab.provenance import freeze, sha256
 from alpha_lab.quality import parse_chart
 from test_evidence import page, table, xlsx
@@ -34,7 +34,10 @@ def source(root):
         'SPY': chart('SPY', [100.] * 10, [('2017-11-28', 0.5), ('2017-11-29', 0.7), ('2017-11-30', 1.0),
                                           ('2017-12-04', 0.3)]),
         'EFA': chart('EFA', [60.] * 10, [('2017-11-29', 0.648931)]),
-        'GLD': chart('GLD', [120.] * 10)}
+        'GLD': chart('GLD', [120.] * 10),
+        # EEM-like 3:1 split; Yahoo amounts are per post-split share, as-traded = 3x before the split.
+        'EEM': chart('EEM', [50.] * 10, [('2017-11-29', 0.649), ('2017-11-30', 0.5004), ('2017-12-01', 0.40053333333)],
+                     [('2017-12-05', 3, 1)])}
     files = {}
     for ticker, body in charts.items():
         files[f'raw/{ticker}-0.json'] = body
@@ -54,17 +57,23 @@ SSGA = [
     ['S&P 500', 'SPY', 'x', '12/11/2017', '12/12/2017', '12/18/2017', '0.4', '', '', 'Quarterly'],
 ]
 EFA = {'exDate': [20171129], 'recordDate': [20171130], 'payableDate': [20171128], 'totalDistribution': ['0.648931']}
+# iShares restates pre-split distributions in current units.
+EEM = {'exDate': [20171129, 20171130, 20171201], 'recordDate': [None] * 3, 'payableDate': [None] * 3,
+       'totalDistribution': ['0.648931', '0.5', '0.4']}
 
 
-def evidence(root, failed=False):
-    files = {'ssga.xlsx': xlsx(SSGA), 'efa.html': page(EFA, EFA), 'memo.pdf': b'%PDF memo'}
-    sources = [dict(id=i, file=f, url=f'https://issuer.test/{f}', kind=k, tickers=t, retrieved_at='2026-10-06T00:00:00',
-                    sha256=sha256(files[f]), http_status=200, status='completed')
-               for i, f, k, t in [('ssga', 'ssga.xlsx', 'ssga_xlsx', ['SPY', 'BIL']),
-                                  ('efa', 'efa.html', 'ishares_html', ['EFA']),
-                                  ('memo', 'memo.pdf', 'document', ['EEM'])]]
+def evidence(root, failed=False, change=None):
+    files = {'ssga.xlsx': xlsx(SSGA), 'efa.html': page(EFA, EFA), 'eem.html': page(EEM, EEM), 'memo.pdf': b'%PDF memo'}
+    sources = [dict(id=i, file=f, url=f'https://issuer.test/{f}', kind=k, tickers=t, amount_basis=b,
+                    retrieved_at='2026-10-06T00:00:00', sha256=sha256(files[f]), http_status=200, status='completed')
+               for i, f, k, t, b in [('ssga', 'ssga.xlsx', 'ssga_xlsx', ['SPY', 'BIL'], 'as_traded'),
+                                     ('efa', 'efa.html', 'ishares_html', ['EFA'], 'current_units'),
+                                     ('eem', 'eem.html', 'ishares_html', ['EEM'], 'current_units'),
+                                     ('memo', 'memo.pdf', 'document', ['EEM'], None)]]
     if failed:
         sources[1].update(status='failed', error='HTTP 403')
+    if change:
+        sources[0].update(change)
     return freeze(root / 'data/evidence/e', files, {'sources': sources})
 
 
@@ -84,6 +93,8 @@ def test_split_adjusted_yahoo_matches_as_traded_issuer_and_zero_rows_are_not_eve
     [m] = bil['matched']
     assert (m['ex_date'], m['yahoo_amount'], m['issuer_amount'], m['diff']) == ('2017-11-29', 0.203, 0.203102, -0.000102)
     assert m['previous_close'] == 45.0
+    assert (m['issuer_raw_amount'], m['amount_basis'], m['split_factor'], m['tolerance']) == (
+        0.203102, 'as_traded', 0.5, 0.0005)
     assert bil['materiality_bps'] == pytest.approx(0.000102 / 45 * 1e4)
 
 
@@ -108,9 +119,22 @@ def test_discrepancy_classes_coverage_and_materiality(tmp_path):
     assert c['tolerance'] == r.TOLERANCE == 0.0005
 
 
+def test_current_unit_issuer_amounts_and_tolerance_scale_with_split_factor(tmp_path, no_network):
+    _, c, _ = run(tmp_path)
+    eem = c['tickers']['EEM']
+    pick = lambda kind: [(x['ex_date'], x['yahoo_amount'], x['issuer_raw_amount'], x['issuer_amount'],
+                          x['amount_basis'], x['split_factor'], x['tolerance']) for x in eem[kind]]
+    assert pick('matched') == [('2017-11-29', 1.947, 0.648931, 1.946793, 'current_units', 3.0, 0.0015),
+                               ('2017-11-30', 1.5012, 0.5, 1.5, 'current_units', 3.0, 0.0015)]
+    assert pick('amount_mismatch') == [('2017-12-01', 1.2016, 0.4, 1.2, 'current_units', 3.0, 0.0015)]
+    assert [x['diff'] for x in eem['matched']] == [0.000207, 0.0012]
+    assert eem['amount_mismatch'][0]['diff'] == pytest.approx(0.0016)
+    assert eem['status'] == 'unresolved'
+
+
 def test_payable_only_for_matched_events_and_audit_accepts_it(tmp_path):
     target, _, payable = run(tmp_path)
-    ref = 'ssga.xlsx#' + sha256(xlsx(SSGA))
+    ref = 'https://issuer.test/ssga.xlsx data/evidence/e/ssga.xlsx#' + sha256(xlsx(SSGA))
     # EFA matched, but its payable date precedes the ex-date and is rejected.
     assert payable == {'BIL': {'2017-11-29': {'date': '2017-12-05', 'source': ref}},
                        'SPY': {'2017-11-29': {'date': '2017-12-15', 'source': ref}}}
@@ -121,7 +145,7 @@ def test_payable_only_for_matched_events_and_audit_accepts_it(tmp_path):
     rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
     assert [x['event'] for x in rows[:2]] == ['started', 'completed']
     assert rows[1]['output_paths'] == [target.relative_to(tmp_path).as_posix()]
-    assert rows[1]['quality_warnings'] == ['Unresolved issuer reconciliation: SPY',
+    assert rows[1]['quality_warnings'] == ['Unresolved issuer reconciliation: SPY, EEM',
                                            'No issuer distribution source: GLD']
 
 
@@ -130,6 +154,29 @@ def test_failed_evidence_source_is_refused_and_logged(tmp_path, no_network):
         r.reconcile(tmp_path, source(tmp_path), evidence(tmp_path, failed=True))
     rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed']
+
+
+@pytest.mark.parametrize('change', [{'file': 'missing.xlsx'}, {'sha256': '0' * 64}, {'amount_basis': None}],
+                         ids=['file_not_in_manifest', 'hash_not_manifest', 'no_amount_basis'])
+def test_evidence_metadata_must_agree_with_manifest(tmp_path, change, no_network):
+    with pytest.raises(ValueError):
+        r.reconcile(tmp_path, source(tmp_path), evidence(tmp_path, change=change))
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    assert [x['event'] for x in rows] == ['started', 'failed']
+
+
+def test_out_of_project_snapshots_are_logged_as_failed_runs(tmp_path, no_network):
+    root = tmp_path / 'project'
+    inside, outside = source(root), evidence(tmp_path)
+    with pytest.raises(ValueError, match='outside project'):
+        r.reconcile(root, inside, outside)
+    with pytest.raises(ValueError, match='outside project'):
+        audit_snapshot(root, source(tmp_path / 'other'))
+    with pytest.raises(ValueError, match='outside project'):
+        replay_snapshot(root, outside)
+    rows = [json.loads(x) for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    assert [x['event'] for x in rows] == ['started', 'failed'] * 3
+    assert rows[0]['config']['evidence_snapshot'] == outside.as_posix()
 
 
 def test_cli_reconcile_output_feeds_audit_payable_unchanged(tmp_path, capsys, no_network):
