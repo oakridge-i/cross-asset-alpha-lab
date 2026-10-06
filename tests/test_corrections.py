@@ -56,7 +56,7 @@ SESSIONS = ['2017-11-27', '2017-11-28', '2017-11-29', '2017-11-30', '2017-12-01'
             '2017-12-04', '2017-12-05', '2017-12-06', '2017-12-07', '2017-12-08']
 
 
-def source(root, name='cd'):
+def source(root, name='cd', retrieved_at='2026-10-06T00:00:00+00:00'):
     charts = {
         # Mismatch at 11-30 (yahoo 1.0 vs issuer 1.05); issuer_only at 12-01 (issuer 0.25, no yahoo event).
         'CCC': chart('CCC', [100.] * 10, [('2017-11-30', 1.0)]),
@@ -72,7 +72,7 @@ def source(root, name='cd'):
     config = {'universe': list(charts), 'start': '2017-11-27', 'common_start': '2017-11-28', 'cutoff': '2017-12-08',
               'end_exclusive': '2017-12-09', 'pay_delay_days': 10, 'adjustment_factor_tolerance': 0.00005}
     return freeze(root / f'data/snapshots/{name}', files,
-                  {'config': config, 'retrieved_at': '2026-10-06T00:00:00+00:00'})
+                  {'config': config, 'retrieved_at': retrieved_at})
 
 
 def evidence(root, name='cd'):
@@ -184,3 +184,36 @@ def test_corrections_provenance_and_corrected_reconciliation_is_refused(tmp_path
     cfile.write_bytes(b'{}\n')
     with pytest.raises(ValueError, match='content hash mismatch'):
         audit_snapshot(tmp_path, source(tmp_path, 'cd3'), corrections=cfile)
+
+
+def journal(root):
+    return [json.loads(x) for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+
+
+def test_audit_refuses_corrections_of_another_source_snapshot(tmp_path, no_network):
+    first = reconcile(tmp_path, source(tmp_path), evidence(tmp_path))
+    derived = co.corrections_run(tmp_path, first)
+    # Same universe and prices, different manifest (retrieved_at): the vintage was not derived from this snapshot.
+    other = source(tmp_path, 'other', retrieved_at='2026-10-07T00:00:00+00:00')
+    with pytest.raises(ValueError, match='corrections vintage was derived from another source snapshot'):
+        audit_snapshot(tmp_path, other, payable=derived / 'payable.json', corrections=derived / 'corrections.json')
+    rows = journal(tmp_path)
+    assert [r['event'] for r in rows][-2:] == ['started', 'failed']
+    assert not (tmp_path / 'data/derived').exists()
+    # The snapshot the reconciliation was made on is accepted.
+    audit_snapshot(tmp_path, source(tmp_path, 'cd2'), payable=derived / 'payable.json',
+                   corrections=derived / 'corrections.json')
+
+
+def test_audit_refuses_payable_from_another_corrections_vintage(tmp_path, no_network):
+    s = source(tmp_path)
+    first = reconcile(tmp_path, s, evidence(tmp_path))
+    a = co.corrections_run(tmp_path, first)
+    b = co.corrections_run(tmp_path, reconcile(tmp_path, s, evidence(tmp_path, 'cd2')))
+    assert a != b
+    with pytest.raises(ValueError, match='payable and corrections belong to different vintages'):
+        audit_snapshot(tmp_path, s, payable=a / 'payable.json', corrections=b / 'corrections.json')
+    assert [r['event'] for r in journal(tmp_path)][-2:] == ['started', 'failed']
+    # Same vintage, and a hand-written payable next to a vintage corrections file, are both accepted.
+    audit_snapshot(tmp_path, s, payable=b / 'payable.json', corrections=b / 'corrections.json')
+    audit_snapshot(tmp_path, s, payable={}, corrections=b / 'corrections.json')

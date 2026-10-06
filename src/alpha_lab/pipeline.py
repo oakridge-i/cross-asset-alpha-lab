@@ -100,6 +100,25 @@ def corrections_info(root, corrections, path):
     return info
 
 
+def check_vintage_lineage(root, source_hash, corrections_path, payable_path):
+    """A corrections vintage must descend from the audited source snapshot (through its reconciliation), and a
+    payable file taken from a vintage directory must come from the same vintage as the corrections file."""
+    vintage = corrections_path.parent
+    if not (vintage / 'manifest.json').exists():
+        return
+    meta = verify(vintage)['metadata']
+    reconciliation = (root / meta['reconciliation_snapshot']).resolve()
+    require_inside(root, reconciliation)
+    rm = verify(reconciliation)
+    recorded = sha256((reconciliation / 'manifest.json').read_bytes())
+    if recorded != meta['reconciliation_manifest_sha256']:
+        raise ValueError('reconciliation manifest changed since the corrections vintage was derived')
+    if rm['metadata']['source_manifest_sha256'] != source_hash:
+        raise ValueError('corrections vintage was derived from another source snapshot')
+    if payable_path is not None and (payable_path.parent / 'manifest.json').exists()             and payable_path.parent != vintage:
+        raise ValueError('payable and corrections belong to different vintages')
+
+
 def acquire_snapshot(root, config, parent=None, *, downloader=None):
     """config is a dict or a path relative to root; downloader defaults to the yfinance adapter."""
     root = Path(root).resolve()
@@ -141,7 +160,9 @@ def audit_snapshot(root, source, parent=None, payable=None, corrections=None):
     """payable and corrections are each a dict or a path relative to root (an unreadable file is
     journaled as failed)."""
     root, source = Path(root).resolve(), Path(source).resolve()
+    payable_path = None
     if isinstance(payable, Path):
+        payable_path = (root / payable).resolve()
         payable = load_json(root, payable, 'N1 offline QA', {'source_snapshot': project_path(root, source)}, parent)
     corrections, corrections_path = read_corrections(root, corrections, 'N1 offline QA',
                                                      {'source_snapshot': project_path(root, source)}, parent)
@@ -156,6 +177,8 @@ def audit_snapshot(root, source, parent=None, payable=None, corrections=None):
         source_hash = sha256((source / 'manifest.json').read_bytes())
         info = corrections_info(root, corrections, corrections_path)
         run.base.update(info)
+        if corrections_path is not None:
+            check_vintage_lineage(root, source_hash, corrections_path, payable_path)
         files, report = build(source, manifest, payable or {}, corrections or {})
         target = root / 'data/derived' / run.run_id
         freeze(target, files, {'source_snapshot': source.relative_to(root).as_posix(),
