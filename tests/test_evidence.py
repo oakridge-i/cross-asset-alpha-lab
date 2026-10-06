@@ -280,3 +280,25 @@ def test_local_capture_copied_and_hash_checked(tmp_path, no_network):
     [bad_entry] = bm['metadata']['sources']
     assert bad_entry['status'] == 'failed'
     assert (bad / 'invesco.json').read_bytes() == body
+    assert events(tmp_path)[-2:] == ['started', 'failed']
+
+
+def test_local_capture_outside_project_is_refused(tmp_path, no_network):
+    root = tmp_path / 'project'
+    root.mkdir()
+    body = invesco_json()
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'capture.json').write_bytes(body)
+    (outside / 'capture.capture.json').write_text(json.dumps({'captured_at_utc': '2026-10-06T16:25:00Z'}),
+                                                 encoding='utf-8')
+    with pytest.raises(RuntimeError, match='invesco'):
+        e.fetch_evidence(root, local_config('../outside/capture.json', sha256(body)))
+    assert events(root) == ['started', 'failed']
+    [target] = (root / 'data/evidence').iterdir()
+    m = verify(target)
+    [entry] = m['metadata']['sources']
+    # Nothing was read or copied: the source failed before its bytes were touched.
+    assert m['files'] == {}
+    assert (entry['status'], entry['file'], entry['sha256']) == ('failed', None, None)
+    assert 'local capture outside project' in entry['error']
