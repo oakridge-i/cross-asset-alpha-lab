@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cross-asset-alpha-lab"
+version = "0.1.0"
+requires-python = ">=3.14,<3.15"
+description = "Auditable research data pipeline; no trading engine yet"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"
