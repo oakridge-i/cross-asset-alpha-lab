@@ -1,20 +1,32 @@
 {
- "schema_version": 1,
- "purpose": "N1 issuer evidence, distribution reconciliation and split-basis verdicts; no strategy statistics",
+ "schema_version": 2,
+ "purpose": "N1 issuer evidence, distribution reconciliation, issuer corrections and split-basis verdicts; no strategy statistics",
  "runs": {
   "source_snapshot": "20261006T103809-a4a22ec667",
-  "evidence": "20261006T122017-3048321309",
-  "reconciliation": "20261006T122119-c6bfb5c69b",
-  "audit": "20261006T122144-73228a71eb",
-  "replay": "20261006T122200-a9fd9ddbda",
+  "evidence": "20261006T172354-1c0a8ca2d8",
+  "reconciliation_raw": "20261006T172415-ce65adb53e",
+  "corrections": "20261006T172434-fbb5c9f554",
+  "audit_corrected": "20261006T172442-80ef993493",
+  "reconciliation_corrected": "20261006T172453-4d72af092f",
+  "replay_corrected": "20261006T172504-6b932ef79b",
   "superseded": [
+   "20261006T122017-3048321309",
+   "20261006T122119-c6bfb5c69b",
+   "20261006T122144-73228a71eb",
+   "20261006T122200-a9fd9ddbda",
+   "20261006T131812-09887a01da",
    "20261006T103625-5202b05cbc",
    "20261006T104437-36dd8f9b4a",
    "20261006T104336-dff9099c6b"
-  ]
+  ],
+  "superseded_note": "20261006T122144-73228a71eb replays only with code before the corrections change (normalized schema gained dividend_basis and dividend_correction_source, corrections.json joined the derived snapshot); its exact replay is run 20261006T131812-09887a01da at commit 977eaf6"
  },
- "evidence_manifest_sha256": "0a9bcea68b7f669fd765dbfc6bf9c60827d795de746aba3cb06c93fc2f0466bc",
- "reconciliation_manifest_sha256": "cb69e4fc30cd73d759dac530ffb836993d7003f7318d5b6c45ee0a4a4b916ce7",
+ "evidence_manifest_sha256": "e7bea8227548333d1fc299b9ca48424dd593dc6edd7b78d4056797ec49cb4379",
+ "reconciliation_raw_manifest_sha256": "f329ac0a9d0552581546bc72a9f57341d3f9f2d334d93152bab8ffc3b91405db",
+ "corrections_manifest_sha256": "da623293203e9bb987793009532cd6a741f2a3ab51df6a6ac57dee5c0b62a91b",
+ "corrections_file_sha256": "b8f2ef2560ff587be1c6456232b527de9358f2d63a1bb606e480d98ba7df241d",
+ "derived_manifest_sha256": "f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2",
+ "reconciliation_corrected_manifest_sha256": "cded7286175edd8990816bccfa53461b3ab7b7796753e5c67c9b23cce2a6b530",
  "reconciliation_rule": {
   "window": {
    "end": "2026-10-05",
@@ -33,7 +45,7 @@
     "SPY",
     "BIL"
    ],
-   "retrieved_at": "2026-10-06T12:20:19.713040+00:00",
+   "retrieved_at": "2026-10-06T17:23:55.880156+00:00",
    "sha256": "b162dd17027d1128f2209e312b0f634960daa78319dafe0ab821ab0b7e77ce23",
    "http_status": 200,
    "status": "completed",
@@ -46,8 +58,8 @@
    "tickers": [
     "EFA"
    ],
-   "retrieved_at": "2026-10-06T12:20:24.441131+00:00",
-   "sha256": "c6c80143f7c22daa1c168ff7101e0b7ddf5112b87b96894767da4f4ae8af2276",
+   "retrieved_at": "2026-10-06T17:23:57.463740+00:00",
+   "sha256": "38ce9abac2f36adbdc23a569542147dc45942441c1eb7937ef98d31d4f43fe6d",
    "http_status": 200,
    "status": "completed",
    "amount_basis": "current_units"
@@ -59,8 +71,8 @@
    "tickers": [
     "EEM"
    ],
-   "retrieved_at": "2026-10-06T12:20:27.078589+00:00",
-   "sha256": "d2f3e699b17323ae6e04c03138bbd1dab0ab10719d49c626fd7ea2f723b99aab",
+   "retrieved_at": "2026-10-06T17:23:58.660319+00:00",
+   "sha256": "d65a77209f4f32135297d29ad7beb8e8ebaf402f5962925ce9a31c37934ccfc7",
    "http_status": 200,
    "status": "completed",
    "amount_basis": "current_units"
@@ -72,8 +84,8 @@
    "tickers": [
     "IEF"
    ],
-   "retrieved_at": "2026-10-06T12:20:29.458705+00:00",
-   "sha256": "f4ddd4a204d6f09d3e0b63c97eb460cb1e5448b0d8ca70f3bfbafcb4e70b54d1",
+   "retrieved_at": "2026-10-06T17:23:59.579302+00:00",
+   "sha256": "d401ddf5add946fcfa2ab3af4522835bfa722dcc5331d3442eb38c6db21fbc6d",
    "http_status": 200,
    "status": "completed",
    "amount_basis": "current_units"
@@ -85,8 +97,8 @@
    "tickers": [
     "TLT"
    ],
-   "retrieved_at": "2026-10-06T12:20:32.028236+00:00",
-   "sha256": "d4bf512ac701168fdad2c9ff13fd3b0cb522319266780d7092d67f58d5dfe0b8",
+   "retrieved_at": "2026-10-06T17:24:00.537711+00:00",
+   "sha256": "e29ba7e457a887822deb2c76a986847ec3692251a880569d48c6ef8bf6a13d08",
    "http_status": 200,
    "status": "completed",
    "amount_basis": "current_units"
@@ -98,8 +110,8 @@
    "tickers": [
     "LQD"
    ],
-   "retrieved_at": "2026-10-06T12:20:35.696879+00:00",
-   "sha256": "c23a403f429e21bcb7d28aaf09fbc605ab0f338e7b3454c8a8b809637ae74d80",
+   "retrieved_at": "2026-10-06T17:24:01.738213+00:00",
+   "sha256": "96a13a36881d84f555f25a7f8205ee5e12ed0400e3398986dbbf6a44c06170c6",
    "http_status": 200,
    "status": "completed",
    "amount_basis": "current_units"
@@ -111,11 +123,25 @@
    "tickers": [
     "HYG"
    ],
-   "retrieved_at": "2026-10-06T12:20:38.632740+00:00",
-   "sha256": "4596f62d798b797048e85838634df391743afebd033447741da870ee35d7e519",
+   "retrieved_at": "2026-10-06T17:24:02.712734+00:00",
+   "sha256": "f6c39eed269bf75286f013fd397f6165279dbcc7898b0b21186f5ef3e616b67b",
    "http_status": 200,
    "status": "completed",
    "amount_basis": "current_units"
+  },
+  {
+   "id": "invesco-dbc-distribution",
+   "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46138B103/distribution?idType=cusip&productType=ETF",
+   "kind": "invesco_json",
+   "tickers": [
+    "DBC"
+   ],
+   "retrieved_at": "2026-10-06T16:25:00Z",
+   "sha256": "7337eeb71802061102d85c051178c059507b8c07a75fea7a9718e775f374ae41",
+   "http_status": null,
+   "status": "completed",
+   "amount_basis": "as_traded",
+   "local_capture": "data/manual/dbc-invesco-distribution.json"
   },
   {
    "id": "eem-2008-split-memo",
@@ -124,7 +150,7 @@
    "tickers": [
     "EEM"
    ],
-   "retrieved_at": "2026-10-06T12:20:40.422976+00:00",
+   "retrieved_at": "2026-10-06T17:24:03.875000+00:00",
    "sha256": "a1351cfd9c50d1c8187964038766ccaff143a80d2975271bc207c72fa3796a9b",
    "http_status": 200,
    "status": "completed",
@@ -137,14 +163,76 @@
    "tickers": [
     "BIL"
    ],
-   "retrieved_at": "2026-10-06T12:20:48.296434+00:00",
+   "retrieved_at": "2026-10-06T17:24:04.811293+00:00",
    "sha256": "e1b28c61ea9e73051cd7f34a8b8d310cb37e6b54aaa2b5793805784c9308fb55",
    "http_status": 200,
    "status": "completed",
    "amount_basis": null
+  },
+  {
+   "id": "gld-prospectus",
+   "url": "https://www.ssga.com/library-content/pdfs/etf/us/SPDR_GOLD_TRUST_PROSPECTUS.pdf",
+   "kind": "document",
+   "tickers": [
+    "GLD"
+   ],
+   "retrieved_at": "2026-10-06T17:24:05.458107+00:00",
+   "sha256": "30460f8321eb51df89efdaec8ef342e9c24c15de802a8a01a29619065e3d13b4",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": null,
+   "no_distributions": [
+    "GLD"
+   ],
+   "statements": [
+    {
+     "page": "p. 9 (PDF page 12) of SPDR Gold Trust prospectus",
+     "quote": "Shareholders do not have the right to elect directors and will not receive dividends"
+    },
+    {
+     "page": "p. 30 (PDF page 33) of SPDR Gold Trust prospectus, DISTRIBUTIONS section",
+     "quote": "The Trust Indenture provides for distributions to Shareholders in only two circumstances."
+    }
+   ],
+   "basis": "Neither statement says the Trust has never distributed; the second only bounds when a distribution could occur (excess 12-month cash reserve above $0.01/share, or Trust termination/liquidation). Status confirmed_no_distributions rests on: this narrow indenture scope, the GLD FAQ statement below that the Trust makes no distributions of gold-sale proceeds, zero Yahoo dividend events for GLD in the reconciliation window, and GLD remaining an active, non-terminated trust over that window."
+  },
+  {
+   "id": "gld-faq",
+   "url": "https://www.ssga.com/library-content/products/fund-docs/etfs/us/tax-documents/gld-faq.pdf",
+   "kind": "document",
+   "tickers": [
+    "GLD"
+   ],
+   "retrieved_at": "2026-10-06T17:24:06.410386+00:00",
+   "sha256": "bb312825fd536c11bc8f55f253606f971622a1e99f4976af55d1f73d276e560f",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": null,
+   "no_distributions": [
+    "GLD"
+   ],
+   "statements": [
+    {
+     "page": "p. 3 of GLD FAQ (ssga.com), gold-sale-proceeds Q&A",
+     "quote": "makes no distributions of sale proceeds to the Trust's shareholders"
+    }
+   ]
   }
  ],
- "reconciliation": {
+ "dbc_capture": {
+  "file": "dbc-invesco-distribution.json",
+  "sha256": "7337eeb71802061102d85c051178c059507b8c07a75fea7a9718e775f374ae41",
+  "bytes": 2521,
+  "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46138B103/distribution?idType=cusip&productType=ETF",
+  "referer_page": "https://www.invesco.com/us/en/financial-products/etfs/invesco-db-commodity-index-tracking-fund.html",
+  "captured_at_utc": "2026-10-06T16:25:00Z",
+  "method": "fetch() executed in the page context of the Claude desktop built-in browser; response text saved verbatim; sha256 computed in the browser (crypto.subtle) and re-checked on disk",
+  "reason": "Invesco returns HTTP 406 to non-browser HTTP clients (requests); no bot-protection bypass was attempted in code",
+  "http_status": 200,
+  "content_type": "application/json",
+  "cookies": "non-essential cookies declined; no account, no credentials"
+ },
+ "reconciliation_raw": {
   "BIL": {
    "status": "unresolved",
    "source_id": "ssga-distributions",
@@ -192,12 +280,23 @@
    "payable_note": "Matched event 2008-03-03: SSGA record 2008-02-05 and payable 2008-02-11 precede the ex-date (record and payable dates repeat those of the 2008-02-01 row; amounts differ: 0.086739 vs 0.115251); actual payable rejected, proxy ex+10 used."
   },
   "DBC": {
-   "status": "unverified_no_issuer_source",
-   "source_id": null,
+   "status": "confirmed",
+   "source_id": "invesco-dbc-distribution",
    "counts": {
-    "yahoo_events": 8
+    "amount_mismatch": 0,
+    "issuer_events": 8,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 8,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 8,
+    "yahoo_only": 0
    },
-   "note": "Invesco returns HTTP 406 to non-browser clients; no issuer source. Yahoo in-window ex-dates: 2007-12-17, 2008-12-15, 2018-12-24, 2019-12-23, 2022-12-19, 2023-12-18, 2024-12-23, 2025-12-22."
+   "coverage": {
+    "first_ex_date": "2007-12-17",
+    "last_ex_date": "2025-12-22"
+   },
+   "materiality_bps": 0.8596
   },
   "EEM": {
    "status": "confirmed",
@@ -216,8 +315,7 @@
     "first_ex_date": "2003-12-22",
     "last_ex_date": "2026-06-15"
    },
-   "materiality_bps": 2.1783,
-   "unresolved_events": []
+   "materiality_bps": 2.1783
   },
   "EFA": {
    "status": "confirmed",
@@ -236,16 +334,18 @@
     "first_ex_date": "2001-10-02",
     "last_ex_date": "2026-06-15"
    },
-   "materiality_bps": 1.5478,
-   "unresolved_events": []
+   "materiality_bps": 1.5478
   },
   "GLD": {
-   "status": "unverified_no_issuer_source",
-   "source_id": null,
+   "status": "confirmed_no_distributions",
+   "source_id": [
+    "gld-prospectus",
+    "gld-faq"
+   ],
    "counts": {
     "yahoo_events": 0
    },
-   "note": "No issuer distribution source. Yahoo has 0 GLD distributions; the absence of distributions is not documented by an issuer source."
+   "basis": "Neither statement says the Trust has never distributed; the second only bounds when a distribution could occur (excess 12-month cash reserve above $0.01/share, or Trust termination/liquidation). Status confirmed_no_distributions rests on: this narrow indenture scope, the GLD FAQ statement below that the Trust makes no distributions of gold-sale proceeds, zero Yahoo dividend events for GLD in the reconciliation window, and GLD remaining an active, non-terminated trust over that window."
   },
   "HYG": {
    "status": "unresolved",
@@ -309,8 +409,7 @@
     "first_ex_date": "2002-09-03",
     "last_ex_date": "2026-10-01"
    },
-   "materiality_bps": 5.742,
-   "unresolved_events": []
+   "materiality_bps": 5.742
   },
   "LQD": {
    "status": "unresolved",
@@ -410,6 +509,254 @@
      "explanation": "Same Yahoo gap as HYG 2012-11-01."
     }
    ]
+  }
+ },
+ "corrections": {
+  "rule": "issuer_only -> add issuer amount; amount_mismatch -> replace with issuer amount; yahoo_only -> remove only if the issuer lists an explicit zero-amount row on that ex-date; matched events keep Yahoo amounts (DECISIONS D016)",
+  "events": {
+   "BIL": {
+    "2022-03-01": {
+     "action": "remove",
+     "issuer_amount": 0.0,
+     "payable_date": null,
+     "source": "https://www.ssga.com/library-content/products/fund-data/etfs/us/spdr-etf-historical-distributions.xlsx data/evidence/20261006T172354-1c0a8ca2d8/ssga-distributions.xlsx#b162dd17027d1128f2209e312b0f634960daa78319dafe0ab821ab0b7e77ce23",
+     "yahoo_amount": 0.022
+    },
+    "2022-09-01": {
+     "action": "replace",
+     "issuer_amount": 0.138459,
+     "payable_date": "2022-09-08",
+     "source": "https://www.ssga.com/library-content/products/fund-data/etfs/us/spdr-etf-historical-distributions.xlsx data/evidence/20261006T172354-1c0a8ca2d8/ssga-distributions.xlsx#b162dd17027d1128f2209e312b0f634960daa78319dafe0ab821ab0b7e77ce23",
+     "yahoo_amount": 0.139
+    }
+   },
+   "HYG": {
+    "2012-11-01": {
+     "action": "add",
+     "issuer_amount": 0.510521,
+     "payable_date": "2012-11-07",
+     "source": "https://www.ishares.com/us/products/239565/ishares-iboxx-high-yield-corporate-bond-etf data/evidence/20261006T172354-1c0a8ca2d8/ishares-hyg.html#f6c39eed269bf75286f013fd397f6165279dbcc7898b0b21186f5ef3e616b67b",
+     "yahoo_amount": null
+    },
+    "2023-12-14": {
+     "action": "replace",
+     "issuer_amount": 0.37847,
+     "payable_date": "2023-12-20",
+     "source": "https://www.ishares.com/us/products/239565/ishares-iboxx-high-yield-corporate-bond-etf data/evidence/20261006T172354-1c0a8ca2d8/ishares-hyg.html#f6c39eed269bf75286f013fd397f6165279dbcc7898b0b21186f5ef3e616b67b",
+     "yahoo_amount": 0.379
+    }
+   },
+   "LQD": {
+    "2012-11-01": {
+     "action": "add",
+     "issuer_amount": 0.378397,
+     "payable_date": "2012-11-07",
+     "source": "https://www.ishares.com/us/products/239566/ishares-iboxx-investment-grade-corporate-bond-etf data/evidence/20261006T172354-1c0a8ca2d8/ishares-lqd.html#96a13a36881d84f555f25a7f8205ee5e12ed0400e3398986dbbf6a44c06170c6",
+     "yahoo_amount": null
+    }
+   },
+   "SPY": {
+    "2021-12-17": {
+     "action": "replace",
+     "issuer_amount": 1.636431,
+     "payable_date": "2022-01-31",
+     "source": "https://www.ssga.com/library-content/products/fund-data/etfs/us/spdr-etf-historical-distributions.xlsx data/evidence/20261006T172354-1c0a8ca2d8/ssga-distributions.xlsx#b162dd17027d1128f2209e312b0f634960daa78319dafe0ab821ab0b7e77ce23",
+     "yahoo_amount": 1.633
+    }
+   },
+   "TLT": {
+    "2012-11-01": {
+     "action": "add",
+     "issuer_amount": 0.269553,
+     "payable_date": "2012-11-07",
+     "source": "https://www.ishares.com/us/products/239454/ishares-20-year-treasury-bond-etf data/evidence/20261006T172354-1c0a8ca2d8/ishares-tlt.html#e29ba7e457a887822deb2c76a986847ec3692251a880569d48c6ef8bf6a13d08",
+     "yahoo_amount": null
+    }
+   }
+  }
+ },
+ "reconciliation_corrected": {
+  "BIL": {
+   "status": "confirmed",
+   "source_id": "ssga-distributions",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 127,
+    "issuer_only": 0,
+    "issuer_zero_rows": 105,
+    "matched": 127,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 127,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2007-07-02",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 4.6369
+  },
+  "DBC": {
+   "status": "confirmed",
+   "source_id": "invesco-dbc-distribution",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 8,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 8,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 8,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2007-12-17",
+    "last_ex_date": "2025-12-22"
+   },
+   "materiality_bps": 0.8596
+  },
+  "EEM": {
+   "status": "confirmed",
+   "source_id": "ishares-eem",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 42,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 42,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 42,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2003-12-22",
+    "last_ex_date": "2026-06-15"
+   },
+   "materiality_bps": 2.1783
+  },
+  "EFA": {
+   "status": "confirmed",
+   "source_id": "ishares-efa",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 39,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 39,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 39,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2001-10-02",
+    "last_ex_date": "2026-06-15"
+   },
+   "materiality_bps": 1.5478
+  },
+  "GLD": {
+   "status": "confirmed_no_distributions",
+   "source_id": [
+    "gld-prospectus",
+    "gld-faq"
+   ],
+   "counts": {
+    "yahoo_events": 0
+   },
+   "basis": "Neither statement says the Trust has never distributed; the second only bounds when a distribution could occur (excess 12-month cash reserve above $0.01/share, or Trust termination/liquidation). Status confirmed_no_distributions rests on: this narrow indenture scope, the GLD FAQ statement below that the Trust makes no distributions of gold-sale proceeds, zero Yahoo dividend events for GLD in the reconciliation window, and GLD remaining an active, non-terminated trust over that window."
+  },
+  "HYG": {
+   "status": "confirmed",
+   "source_id": "ishares-hyg",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 233,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 233,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 233,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2007-05-01",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 6.5922
+  },
+  "IEF": {
+   "status": "confirmed",
+   "source_id": "ishares-ief",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 233,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 233,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 233,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2002-09-03",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 5.742
+  },
+  "LQD": {
+   "status": "confirmed",
+   "source_id": "ishares-lqd",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 233,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 233,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 233,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2002-09-03",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 5.2623
+  },
+  "SPY": {
+   "status": "confirmed",
+   "source_id": "ssga-distributions",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 78,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 78,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 78,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "1993-03-19",
+    "last_ex_date": "2026-09-18"
+   },
+   "materiality_bps": 0.9353
+  },
+  "TLT": {
+   "status": "confirmed",
+   "source_id": "ishares-tlt",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 233,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 233,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 233,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2002-09-03",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 5.0292
   }
  },
  "split_verdicts": [
