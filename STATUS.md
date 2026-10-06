@@ -34,3 +34,9 @@
 Следующая конкретная задача N1: подготовить и проверить environment lock, adapter, DATA_CONTRACT.md, локальный неизменяемый snapshot/manifest и полный coverage/calendar/actions QA; сверить EEM2008/BIL2017 и dividend/pay-date semantics. До N2 требуется явный verdict по split basis и существенным дефектам. Не рассчитывать результаты H1/H2 и reserved performance.
 
 Работа этого запроса ограничена анализом/N0. DATA_CONTRACT/EXECUTION_MODEL/FINAL_REPORT появятся на своих этапах, а не как пустые документы, создающие видимость выполнения. Контрольный git SHA фиксируется при локальной финализации ниже.
+
+## Локальная финализация N0
+
+Контрольный содержательный коммит: 1f32ac1a9e8d2d71c26ed6579faf80786dca9aea (N0 protocol/source audit). После него сохранены эта запись и receipt повторной проверки. Точный HEAD с финальными метаданными доступен через git log -1; запись не пытается включить хеш содержащего её собственного коммита.
+
+Сохранённый receipt подтверждает 35/35 проверок; финальная команда python -X utf8 docs/n0/verify_n0.py --no-write позволяет повторить аудит без изменения файлов. Дополнительно сверено совпадение байтов staged AGENTS/MASTER_PLAN/protocol с рабочими файлами, чтобы Git не менял регистрацию через CRLF. AAPL source/release worktree clean, HEAD неизменны. Сырые OHLC и продуктовый код не добавлены; EXPERIMENT_LOG пуст.

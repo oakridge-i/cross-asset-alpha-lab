@@ -1,8 +1,8 @@
 {
-  "verified_at_utc": "2026-10-06T10:16:37.974573+00:00",
+  "verified_at_utc": "2026-10-06T10:17:39.534739+00:00",
   "stage": "N0",
   "status": "passed",
-  "git_head_at_verification": null,
+  "git_head_at_verification": "1f32ac1a9e8d2d71c26ed6579faf80786dca9aea",
   "pass_count": 35,
   "check_count": 35,
   "protocol_sha256": "71a230d738bddd6dff1f31f0fa8013ebac538c67e7f97570fa28e3d4a02ce849",
