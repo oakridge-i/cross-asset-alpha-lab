@@ -88,6 +88,11 @@ def tamper(root, derived, change):
         freeze(source, body, sm['metadata'] | {'retrieved_at': '2026-10-07T00:00:00+00:00'})
     if change == 'escape':
         metadata['source_snapshot'] = '../../etc'
+    if change == 'corrections':
+        # A different issuer amount than the one baked into the frozen normalized/TEST.csv: internally
+        # inconsistent, so the rebuild during replay will not match the stored files.
+        files['corrections.json'] = (b'{"TEST":{"2017-11-29":{"action":"replace","yahoo_amount":1.0,'
+                                     b'"issuer_amount":9.99,"payable_date":null,"source":"tampered"}}}\n')
     return freeze(root/'data/derived/tampered', files, metadata)
 
 
@@ -99,6 +104,35 @@ def test_replay_refuses_tampered_inputs(tmp_path, change, message, no_network):
     with pytest.raises(ValueError, match=message):
         p.replay_snapshot(tmp_path, derived)
     assert [r['event'] for r in journal(tmp_path)] == ['started', 'completed', 'started', 'failed']
+
+
+def test_replay_with_corrections_and_tampered_corrections_fails(tmp_path, no_network):
+    s = source(tmp_path)
+    corrections = {'TEST': {'2017-11-29': {'action': 'replace', 'yahoo_amount': 1.0, 'issuer_amount': 1.5,
+                                           'payable_date': None, 'source': 'issuer-ref'}}}
+    derived = p.audit_snapshot(tmp_path, s, corrections=corrections)
+    csv_text = (derived / 'normalized/TEST.csv').read_text()
+    assert 'issuer_correction' in csv_text  # the correction is baked into the frozen vintage
+    stored_corrections = json.loads((derived / 'corrections.json').read_bytes())
+    assert stored_corrections == corrections
+    # Exact replay reproduces every frozen byte, including corrections.json.
+    assert p.replay_snapshot(tmp_path, derived) is True
+
+    tampered = tamper(tmp_path, derived, 'corrections')
+    with pytest.raises(ValueError, match='replay differs'):
+        p.replay_snapshot(tmp_path, tampered)
+    rows = journal(tmp_path)
+    assert rows[-1]['event'] == 'failed'
+
+
+def test_correction_for_ticker_outside_universe_is_rejected(tmp_path, no_network):
+    s = source(tmp_path)
+    corrections = {'NOTINUNIVERSE': {'2017-11-29': {'action': 'replace', 'yahoo_amount': 1.0,
+                                                     'issuer_amount': 1.5, 'payable_date': None, 'source': 'ref'}}}
+    with pytest.raises(ValueError, match='outside the universe'):
+        p.audit_snapshot(tmp_path, s, corrections=corrections)
+    rows = journal(tmp_path)
+    assert [r['event'] for r in rows] == ['started', 'failed']
 
 
 def test_failed_acquisition_keeps_partial_raw_evidence(tmp_path, no_network):

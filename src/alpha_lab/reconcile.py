@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from .evidence import AMOUNT_BASES, parse_invesco_json, parse_ishares_html, parse_ssga_xlsx
-from .pipeline import normalized, project_path, require_inside
+from .pipeline import load_json, normalized, project_path, require_inside
 from .provenance import Run, canonical_bytes, freeze, sha256, verify
 
 # Half of the 0.001 USD rounding step of Yahoo dividends. Yahoo rounds either in as-traded units (BIL) or
@@ -37,6 +37,12 @@ def issuer_events(evidence, manifest):
             else:
                 raise ValueError(f'unsupported evidence source: {s["id"]}')
     return out
+
+
+def source_ref(source, evidence_snapshot):
+    """Evidence citation shared by payable dates and derived corrections: issuer URL, evidence snapshot
+    project path and file#sha256, so a reader can locate and verify the exact byte evidence."""
+    return f'{source["url"]} {evidence_snapshot}/{source["file"]}#{source["sha256"]}'
 
 
 def no_distribution_sources(manifest):
@@ -91,10 +97,16 @@ def compare(frame, source, events, start, end):
                 issuer_zero_dates=zero_dates, **result)
 
 
-def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
+def reconcile(root, source_snapshot, evidence_snapshot, parent=None, corrections=None):
+    """corrections is a dict or a path relative to root: applying a corrected vintage's corrections.json
+    here lets a corrected frame be reconciled again, to confirm the correction actually resolves the event."""
     root, source, evidence = Path(root).resolve(), Path(source_snapshot).resolve(), Path(evidence_snapshot).resolve()
+    if isinstance(corrections, Path):
+        corrections = load_json(root, corrections, 'N1 issuer distribution reconciliation',
+                                {'source_snapshot': project_path(root, source),
+                                 'evidence_snapshot': project_path(root, evidence)}, parent)
     cfg = {'source_snapshot': project_path(root, source), 'evidence_snapshot': project_path(root, evidence),
-           'tolerance': TOLERANCE}
+           'tolerance': TOLERANCE, 'corrections': corrections or {}}
     with Run(root, 'N1 issuer distribution reconciliation', cfg, parent) as run:
         require_inside(root, source, evidence)
         manifest, evidence_manifest = verify(source), verify(evidence)
@@ -104,7 +116,7 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
         run.base.update(universe=config['universe'], splits=config.get('splits', {}))
         issuer = issuer_events(evidence, evidence_manifest)
         no_distributions = no_distribution_sources(evidence_manifest)
-        frames = normalized(source, manifest, {})
+        frames = normalized(source, manifest, {}, corrections or {})
         start, end = config['common_start'], config['cutoff']
         tickers, payable = {}, {}
         for ticker, frame in frames.items():
@@ -124,7 +136,7 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
                 continue
             s, events = issuer[ticker]
             tickers[ticker] = c = compare(frame, s, events, start, end)
-            ref = f'{s["url"]} {cfg["evidence_snapshot"]}/{s["file"]}#{s["sha256"]}'
+            ref = source_ref(s, cfg['evidence_snapshot'])
             dates = {m['ex_date']: {'date': m['payable_date'], 'source': ref} for m in c['matched']
                      if m['payable_date'] and m['payable_date'] >= m['ex_date']}
             if dates:

@@ -91,3 +91,55 @@ def test_dividend_and_capital_gain_on_one_date_rejected_until_basis_is_evidenced
     f['Capital Gains'] = [0, 0.5]
     with pytest.raises(ValueError, match='capital gain'):
         norm(f)
+
+
+def test_normalize_applies_corrections():
+    # The last session carries its own real, uncorrected dividend: a correction on other sessions must
+    # leave it (and its payable date) completely untouched.
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0.2])
+    baseline = norm(f)
+    corrections = {
+        # Replace an existing Yahoo event (issuer amount differs) ...
+        '2017-11-29': {'action': 'replace', 'yahoo_amount': 0.4, 'issuer_amount': 0.45,
+                       'payable_date': '2017-12-05', 'source': 'issuer-ref-replace'},
+        # ... and add an issuer-only event where Yahoo had none.
+        '2017-11-30': {'action': 'add', 'yahoo_amount': None, 'issuer_amount': 1.0,
+                       'payable_date': '2017-12-10', 'source': 'issuer-ref-add'},
+    }
+    x = norm(f, payable={'2017-11-29': {'date': '2017-12-05', 'source': 'issuer-ref-replace'},
+                         '2017-11-30': {'date': '2017-12-10', 'source': 'issuer-ref-add'}},
+            corrections=corrections)
+    # Prices and splits are untouched by a dividend correction.
+    assert x['close'].tolist() == baseline['close'].tolist()
+    assert x['split_ratio'].tolist() == baseline['split_ratio'].tolist()
+    # The session before the first correction is byte-identical: TR only changes from the corrected session on.
+    assert x['total_return_index'].iloc[0] == baseline['total_return_index'].iloc[0]
+    assert x['total_return_index'].tolist()[1:] != baseline['total_return_index'].tolist()[1:]
+    assert x['dividend'].tolist() == [0, 0.45, 1.0, 0.2]
+    assert x['source_dividend'].tolist() == baseline['source_dividend'].tolist()  # source column never rewritten
+    assert x['dividend_basis'].tolist() == ['source', 'issuer_correction', 'issuer_correction', 'source']
+    assert x['dividend_correction_source'].tolist() == ['', 'issuer-ref-replace', 'issuer-ref-add', '']
+    assert x.loc['2017-11-29', ['payable_date', 'payable_basis']].tolist() == ['2017-12-05', 'actual']
+    # 2017-12-10 is a Sunday: the actual payable date snaps forward to the next session.
+    assert x.loc['2017-11-30', ['payable_date', 'payable_basis']].tolist() == ['2017-12-11', 'actual']
+    # The uncorrected real dividend on the last session is untouched, down to its proxy payable date.
+    assert x.loc['2017-12-01', ['dividend', 'payable_date', 'payable_basis']].tolist() == \
+        baseline.loc['2017-12-01', ['dividend', 'payable_date', 'payable_basis']].tolist()
+    # No corrections at all: every row keeps the 'source' basis and an empty correction reference.
+    assert baseline['dividend_basis'].tolist() == ['source'] * 4
+    assert baseline['dividend_correction_source'].tolist() == [''] * 4
+
+
+def test_correction_rejects_unknown_or_inconsistent():
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0])
+    with pytest.raises(ValueError, match='not a session'):
+        norm(f, corrections={'2099-01-01': {'action': 'replace', 'yahoo_amount': 0.4, 'issuer_amount': 0.45,
+                                            'payable_date': None, 'source': 'ref'}})
+    # Stale correction: the amount recorded at reconciliation time no longer matches the source event.
+    with pytest.raises(ValueError, match='disagrees'):
+        norm(f, corrections={'2017-11-29': {'action': 'replace', 'yahoo_amount': 0.5, 'issuer_amount': 0.45,
+                                            'payable_date': None, 'source': 'ref'}})
+    # An 'add' where Yahoo already carries an event on that session must be rejected, not merged.
+    with pytest.raises(ValueError, match='conflicts'):
+        norm(f, corrections={'2017-11-29': {'action': 'add', 'yahoo_amount': None, 'issuer_amount': 0.45,
+                                            'payable_date': None, 'source': 'ref'}})

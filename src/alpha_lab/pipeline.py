@@ -10,9 +10,13 @@ from .quality import parse_chart, assess
 from .provenance import Run, canonical_bytes, freeze, now, sha256, verify
 
 
-def normalized(source, manifest, payable):
-    """Full-history normalized frames after raw/adapter cross-checks; shared by audit and reconciliation."""
+def normalized(source, manifest, payable, corrections=None):
+    """Full-history normalized frames after raw/adapter cross-checks; shared by audit and reconciliation.
+    corrections is {ticker: {ex_date: {...}}}; a ticker outside the universe is rejected, not ignored."""
     cfg = manifest['metadata']['config']
+    corrections = corrections or {}
+    if unknown := set(corrections) - set(cfg['universe']):
+        raise ValueError(f'correction for ticker(s) outside the universe: {sorted(unknown)}')
     frames = {}
     for ticker in cfg['universe']:
         candidates = []
@@ -41,19 +45,23 @@ def normalized(source, manifest, payable):
         if not np.allclose(f['Capital Gains'], gains, rtol=0, atol=1e-12):
             raise ValueError(f'adapter/raw value mismatch: {ticker}/Capital Gains')
         x = normalize(f, ticker, manifest['metadata']['retrieved_at'], manifest['files'][name],
-                      payable.get(ticker, {}), pay_delay_days=cfg['pay_delay_days'])
+                      payable.get(ticker, {}), pay_delay_days=cfg['pay_delay_days'],
+                      corrections=corrections.get(ticker, {}))
         frames[ticker] = x
     return frames
 
 
-def build(source, manifest, payable):
+def build(source, manifest, payable, corrections=None):
     cfg = manifest['metadata']['config']
-    frames = normalized(source, manifest, payable)
+    corrections = corrections or {}
+    frames = normalized(source, manifest, payable, corrections)
     files = {f'normalized/{t}.csv': x.to_csv(lineterminator='\n').encode() for t, x in frames.items()}
     report = assess(frames, cfg['common_start'], cfg['cutoff'],
                     adjustment_tolerance=cfg['adjustment_factor_tolerance'])
     files['quality.json'] = canonical_bytes(report)
     files['payable.json'] = canonical_bytes(payable)
+    # Always present (possibly empty), alongside payable.json, so replay rebuilds identically either way.
+    files['corrections.json'] = canonical_bytes(corrections)
     return files, report
 
 
@@ -104,13 +112,17 @@ def require_inside(root, *paths):
             raise ValueError(f'snapshot outside project: {path}')
 
 
-def audit_snapshot(root, source, parent=None, payable=None):
-    """payable is a dict or a path relative to root (an unreadable file is journaled as failed)."""
+def audit_snapshot(root, source, parent=None, payable=None, corrections=None):
+    """payable and corrections are each a dict or a path relative to root (an unreadable file is
+    journaled as failed)."""
     root, source = Path(root).resolve(), Path(source).resolve()
     if isinstance(payable, Path):
         payable = load_json(root, payable, 'N1 offline QA', {'source_snapshot': project_path(root, source)}, parent)
+    if isinstance(corrections, Path):
+        corrections = load_json(root, corrections, 'N1 offline QA',
+                                {'source_snapshot': project_path(root, source)}, parent)
     # Start before verifying, so corruption/missing manifests are also logged.
-    cfg = {'source_snapshot': project_path(root, source), 'payable': payable or {}}
+    cfg = {'source_snapshot': project_path(root, source), 'payable': payable or {}, 'corrections': corrections or {}}
     with Run(root, 'N1 offline QA', cfg, parent) as run:
         require_inside(root, source)
         manifest = verify(source)
@@ -118,7 +130,7 @@ def audit_snapshot(root, source, parent=None, payable=None):
         run.base.update(universe=manifest['metadata']['config']['universe'],
                         splits=manifest['metadata']['config'].get('splits', {}))
         source_hash = sha256((source / 'manifest.json').read_bytes())
-        files, report = build(source, manifest, payable or {})
+        files, report = build(source, manifest, payable or {}, corrections or {})
         target = root / 'data/derived' / run.run_id
         freeze(target, files, {'source_snapshot': source.relative_to(root).as_posix(),
                               'source_manifest_sha256': source_hash, 'environment': run.env,
@@ -142,7 +154,8 @@ def replay_snapshot(root, derived, parent=None):
         if run.base['source_manifest_sha256'] != m['metadata']['source_manifest_sha256']:
             raise ValueError('source manifest changed')
         payable = json.loads((derived/'payable.json').read_bytes())
-        files, report = build(source, sm, payable)
+        corrections = json.loads((derived/'corrections.json').read_bytes())
+        files, report = build(source, sm, payable, corrections)
         if {k:sha256(v) for k,v in files.items()} != m['files']:
             raise ValueError('replay differs from frozen derived files')
         run.base.update(universe=sm['metadata']['config']['universe'], splits=sm['metadata']['config'].get('splits',{}))

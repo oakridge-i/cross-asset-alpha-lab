@@ -13,7 +13,7 @@ def calendar(start, end):
     return xcals.get_calendar('XNYS', start=str(start), end=str(end))
 
 
-def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_delay_days=10):
+def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_delay_days=10, corrections=None):
     if frame.empty or not set(REQUIRED).issubset(frame.columns):
         raise ValueError('empty history or missing required columns')
     if not isinstance(pay_delay_days, int) or pay_delay_days < 0:
@@ -59,6 +59,26 @@ def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_del
     out['dividend'] = ((f.Dividends + f['Capital Gains']) * factor).to_numpy()
     out['split_ratio'] = ratios.to_numpy()
     out['future_split_factor'] = factor.to_numpy()
+    out['dividend_basis'] = 'source'
+    out['dividend_correction_source'] = ''
+    # Explicit, per-event issuer corrections, applied before total-return growth is computed so TR changes
+    # only from the corrected session onward. A correction never silently repairs a matched event: it must
+    # agree with the Yahoo-derived (as-traded) amount already on that session, or be rejected.
+    for ex_date, correction in (corrections or {}).items():
+        if ex_date not in out.index:
+            raise ValueError(f'correction ex-date is not a session: {ticker}/{ex_date}')
+        action = correction['action']
+        actual = float(out.loc[ex_date, 'dividend'])
+        if action == 'add':
+            if abs(actual) > 1e-9:
+                raise ValueError(f'correction add conflicts with an existing Yahoo event: {ticker}/{ex_date}')
+        else:
+            stated = correction.get('yahoo_amount')
+            if stated is None or abs(actual - stated) > 1e-9:
+                raise ValueError(f'correction yahoo_amount disagrees with the source event: {ticker}/{ex_date}')
+        out.loc[ex_date, 'dividend'] = 0. if action == 'remove' else float(correction['issuer_amount'])
+        out.loc[ex_date, 'dividend_basis'] = 'issuer_correction'
+        out.loc[ex_date, 'dividend_correction_source'] = correction['source']
     growth = out.split_ratio * (out.close + out.dividend) / out.close.shift(1)
     growth.iloc[0] = 1.
     out['total_return_index'] = growth.cumprod()
