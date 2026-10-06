@@ -75,6 +75,31 @@ def load_json(root, path, purpose, cfg, parent):
             raise
 
 
+NO_CORRECTIONS_SHA256 = sha256(canonical_bytes({}))
+
+
+def read_corrections(root, corrections, purpose, cfg, parent):
+    """(corrections dict, resolved file path or None); a path is read via load_json, so an unreadable
+    file is journaled as a failed run of `purpose`."""
+    if isinstance(corrections, Path):
+        return load_json(root, corrections, purpose, cfg, parent), (Path(root) / corrections).resolve()
+    return corrections or {}, None
+
+
+def corrections_info(root, corrections, path):
+    """Provenance of a corrections input: hash of its canonical bytes (equal to corrections.json in a derived
+    snapshot), its file path and, when the file sits in a frozen vintage, the verified vintage and run id."""
+    info = {'corrections_sha256': sha256(canonical_bytes(corrections or {})), 'corrections_path': None,
+            'corrections_vintage': None, 'corrections_vintage_run_id': None}
+    if path is not None:
+        info['corrections_path'] = project_path(root, path)
+        if (path.parent / 'manifest.json').exists():
+            vintage = verify(path.parent)
+            info.update(corrections_vintage=project_path(root, path.parent),
+                        corrections_vintage_run_id=vintage['metadata'].get('run_id'))
+    return info
+
+
 def acquire_snapshot(root, config, parent=None, *, downloader=None):
     """config is a dict or a path relative to root; downloader defaults to the yfinance adapter."""
     root = Path(root).resolve()
@@ -118,9 +143,8 @@ def audit_snapshot(root, source, parent=None, payable=None, corrections=None):
     root, source = Path(root).resolve(), Path(source).resolve()
     if isinstance(payable, Path):
         payable = load_json(root, payable, 'N1 offline QA', {'source_snapshot': project_path(root, source)}, parent)
-    if isinstance(corrections, Path):
-        corrections = load_json(root, corrections, 'N1 offline QA',
-                                {'source_snapshot': project_path(root, source)}, parent)
+    corrections, corrections_path = read_corrections(root, corrections, 'N1 offline QA',
+                                                     {'source_snapshot': project_path(root, source)}, parent)
     # Start before verifying, so corruption/missing manifests are also logged.
     cfg = {'source_snapshot': project_path(root, source), 'payable': payable or {}, 'corrections': corrections or {}}
     with Run(root, 'N1 offline QA', cfg, parent) as run:
@@ -130,11 +154,13 @@ def audit_snapshot(root, source, parent=None, payable=None, corrections=None):
         run.base.update(universe=manifest['metadata']['config']['universe'],
                         splits=manifest['metadata']['config'].get('splits', {}))
         source_hash = sha256((source / 'manifest.json').read_bytes())
+        info = corrections_info(root, corrections, corrections_path)
+        run.base.update(info)
         files, report = build(source, manifest, payable or {}, corrections or {})
         target = root / 'data/derived' / run.run_id
         freeze(target, files, {'source_snapshot': source.relative_to(root).as_posix(),
                               'source_manifest_sha256': source_hash, 'environment': run.env,
-                              'config': manifest['metadata']['config'], 'run_id':run.run_id})
+                              'config': manifest['metadata']['config'], 'run_id':run.run_id} | info)
         run.finish('completed' if report['technical_pass'] else 'quality_failed',
                    [target.relative_to(root).as_posix()], sha256((target/'manifest.json').read_bytes()), report['warnings'])
     return target

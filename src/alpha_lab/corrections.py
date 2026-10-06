@@ -10,7 +10,7 @@ touched. Three rules, matching the issuer-authoritative decision:
 """
 import json
 from pathlib import Path
-from .pipeline import project_path, require_inside
+from .pipeline import NO_CORRECTIONS_SHA256, project_path, require_inside
 from .provenance import Run, canonical_bytes, freeze, sha256, verify
 from .reconcile import source_ref
 
@@ -55,6 +55,10 @@ def corrections_run(root, reconciliation_snapshot, parent=None):
     with Run(root, 'N1 issuer corrections', cfg, parent) as run:
         require_inside(root, reconciliation)
         manifest = verify(reconciliation)
+        # Corrections are derived from Yahoo-vs-issuer differences; a corrected frame has none left to derive
+        # from, so a corrected reconciliation must never seed another corrections vintage.
+        if manifest['metadata'].get('corrections_sha256', NO_CORRECTIONS_SHA256) != NO_CORRECTIONS_SHA256:
+            raise ValueError('reconciliation snapshot was produced with corrections; use the uncorrected one')
         run.base['reconciliation_manifest_sha256'] = sha256((reconciliation / 'manifest.json').read_bytes())
         comparison = json.loads((reconciliation / 'comparison.json').read_bytes())
         reconciled_payable = json.loads((reconciliation / 'payable.json').read_bytes())
@@ -64,6 +68,8 @@ def corrections_run(root, reconciliation_snapshot, parent=None):
         for ticker, events in corrections.items():
             for ex_date, event in events.items():
                 if event['action'] in ('add', 'replace') and event.get('payable_date'):
+                    if event['payable_date'] < ex_date:
+                        raise ValueError(f'issuer payable date precedes the ex-date: {ticker}/{ex_date}')
                     payable.setdefault(ticker, {})[ex_date] = {'date': event['payable_date'],
                                                                 'source': event['source']}
         target = root / 'data/corrections' / run.run_id

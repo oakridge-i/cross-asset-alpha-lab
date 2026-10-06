@@ -143,3 +143,84 @@ def test_correction_rejects_unknown_or_inconsistent():
     with pytest.raises(ValueError, match='conflicts'):
         norm(f, corrections={'2017-11-29': {'action': 'add', 'yahoo_amount': None, 'issuer_amount': 0.45,
                                             'payable_date': None, 'source': 'ref'}})
+
+
+def test_correction_on_split_sessions_matches_manual_total_return():
+    # 3:1 split on 2017-11-30. Yahoo reports the 2017-11-29 dividend split-adjusted (1/3 = 1.0 as traded).
+    f = frame([10, 10, 9, 9], splits=[0, 0, 3, 0], dividends=[0, 1/3, 0, 0])
+    x = norm(f, corrections={
+        '2017-11-29': {'action': 'replace', 'yahoo_amount': 1.0, 'issuer_amount': 1.2,
+                       'payable_date': None, 'source': 'ref-replace'},
+        # An add on the split day itself: the split day already trades in new shares (factor 1).
+        '2017-11-30': {'action': 'add', 'yahoo_amount': None, 'issuer_amount': 0.6,
+                       'payable_date': None, 'source': 'ref-add'}})
+    assert x['close'].tolist() == [30, 30, 9, 9]
+    assert x['split_ratio'].tolist() == [1, 1, 3, 1]
+    assert x['dividend'].tolist() == pytest.approx([0, 1.2, 0.6, 0])
+    assert x['source_dividend'].tolist() == pytest.approx([0, 1/3, 0, 0])
+    # Manual growth_t = split_ratio_t * (close_t + dividend_t) / close_(t-1).
+    g1 = 1 * (30 + 1.2) / 30
+    g2 = 3 * (9 + 0.6) / 30
+    g3 = 1 * (9 + 0) / 9
+    assert x['total_return_index'].tolist() == pytest.approx([1, g1, g1 * g2, g1 * g2 * g3])
+
+
+def test_remove_correction_total_return_and_unchanged_prefix():
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0.3, 0.2])
+    baseline = norm(f)
+    x = norm(f, corrections={'2017-11-30': {'action': 'remove', 'yahoo_amount': 0.3, 'issuer_amount': 0.0,
+                                            'payable_date': None, 'source': 'ref-remove'}})
+    assert x['dividend'].tolist() == [0, 0.4, 0, 0.2]
+    assert x['dividend_basis'].tolist() == ['source', 'source', 'issuer_correction', 'source']
+    # No payable date for a removed event.
+    assert x.loc['2017-11-30', ['payable_date', 'payable_basis', 'payable_source']].tolist() == ['', '', '']
+    # Every session before the first corrected one, including an uncorrected dividend session, is exact.
+    assert x['total_return_index'].iloc[:2].tolist() == baseline['total_return_index'].iloc[:2].tolist()
+    g1, g2, g3 = (99 + 0.4) / 100, 98 / 99, (97 + 0.2) / 98
+    assert x['total_return_index'].tolist() == pytest.approx([1, g1, g1 * g2, g1 * g2 * g3])
+
+
+GOOD = {'action': 'replace', 'yahoo_amount': 0.4, 'issuer_amount': 0.45, 'payable_date': None, 'source': 'ref'}
+
+
+@pytest.mark.parametrize('change,match', [
+    ({'action': 'delete'}, 'action must be'),
+    ({'action': None}, 'action must be'),
+    ({'source': ''}, 'source reference'),
+    ({'source': '  '}, 'source reference'),
+    ({'source': None}, 'source reference'),
+    ({'issuer_amount': None}, 'finite nonnegative'),
+    ({'issuer_amount': float('nan')}, 'finite nonnegative'),
+    ({'issuer_amount': float('inf')}, 'finite nonnegative'),
+    ({'issuer_amount': -0.1}, 'finite nonnegative'),
+    ({'issuer_amount': '0.45'}, 'finite nonnegative'),
+    ({'issuer_amount': 0.0}, 'only valid for a remove'),
+    ({'action': 'remove', 'issuer_amount': 0.1}, 'requires issuer_amount 0'),
+    # Issuer amount inside reconcile's tolerance (0.0005) of Yahoo: that event is matched, not correctable.
+    ({'issuer_amount': 0.4003}, 'within tolerance'),
+    ({'issuer_amount': 0.4}, 'within tolerance'),
+], ids=lambda v: str(v))
+def test_correction_fields_are_validated(change, match):
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0])
+    with pytest.raises(ValueError, match=match):
+        norm(f, corrections={'2017-11-29': GOOD | change})
+
+
+def test_add_correction_needs_a_positive_amount():
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0])
+    with pytest.raises(ValueError, match='only valid for a remove'):
+        norm(f, corrections={'2017-11-30': {'action': 'add', 'yahoo_amount': None, 'issuer_amount': 0.0,
+                                            'payable_date': None, 'source': 'ref'}})
+
+
+def test_replace_tolerance_scales_with_future_split_factor():
+    # Factor 3 before the split: the matched bound is 0.0005 * 3 = 0.0015, so a 0.001 gap is a matched event.
+    f = frame([10, 10, 9, 9], splits=[0, 0, 3, 0], dividends=[0, 1/3, 0, 0])
+    with pytest.raises(ValueError, match='within tolerance'):
+        norm(f, corrections={'2017-11-29': {'action': 'replace', 'yahoo_amount': 1.0, 'issuer_amount': 1.001,
+                                            'payable_date': None, 'source': 'ref'}})
+    # The same 0.001 gap without a later split exceeds 0.0005 and is a real mismatch.
+    g = frame([100, 99, 98, 97], dividends=[0, 1.0, 0, 0])
+    x = norm(g, corrections={'2017-11-29': {'action': 'replace', 'yahoo_amount': 1.0, 'issuer_amount': 1.001,
+                                            'payable_date': None, 'source': 'ref'}})
+    assert x['dividend'].tolist() == [0, 1.001, 0, 0]

@@ -2,13 +2,10 @@
 from pathlib import Path
 
 from .evidence import AMOUNT_BASES, parse_invesco_json, parse_ishares_html, parse_ssga_xlsx
-from .pipeline import load_json, normalized, project_path, require_inside
+from .normalize import TOLERANCE, match_tolerance
+from .pipeline import corrections_info, normalized, project_path, read_corrections, require_inside
 from .provenance import Run, canonical_bytes, freeze, sha256, verify
 
-# Half of the 0.001 USD rounding step of Yahoo dividends. Yahoo rounds either in as-traded units (BIL) or
-# in split-adjusted units (EEM), so the as-traded bound is TOLERANCE * max(1, future_split_factor).
-# 1e-12 absorbs binary float error.
-TOLERANCE = 0.0005
 CLASSES = ['matched', 'amount_mismatch', 'issuer_only', 'yahoo_only', 'outside_issuer_coverage']
 
 
@@ -79,7 +76,7 @@ def compare(frame, source, events, start, end):
         raw = i and i['amount']
         amount = None if i is None else round(raw * factor if source['amount_basis'] == 'current_units' else raw, 10)
         diff = round((y or 0.) - (amount or 0.), 10)
-        tolerance = TOLERANCE * max(1., factor)
+        tolerance = match_tolerance(factor)
         row = dict(ex_date=d, yahoo_amount=y, issuer_amount=amount, issuer_raw_amount=raw,
                    amount_basis=source['amount_basis'], split_factor=factor, tolerance=tolerance, diff=diff,
                    record_date=i and i['record_date'], payable_date=i and i['payable_date'],
@@ -101,10 +98,9 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None, corrections
     """corrections is a dict or a path relative to root: applying a corrected vintage's corrections.json
     here lets a corrected frame be reconciled again, to confirm the correction actually resolves the event."""
     root, source, evidence = Path(root).resolve(), Path(source_snapshot).resolve(), Path(evidence_snapshot).resolve()
-    if isinstance(corrections, Path):
-        corrections = load_json(root, corrections, 'N1 issuer distribution reconciliation',
-                                {'source_snapshot': project_path(root, source),
-                                 'evidence_snapshot': project_path(root, evidence)}, parent)
+    corrections, corrections_path = read_corrections(
+        root, corrections, 'N1 issuer distribution reconciliation',
+        {'source_snapshot': project_path(root, source), 'evidence_snapshot': project_path(root, evidence)}, parent)
     cfg = {'source_snapshot': project_path(root, source), 'evidence_snapshot': project_path(root, evidence),
            'tolerance': TOLERANCE, 'corrections': corrections or {}}
     with Run(root, 'N1 issuer distribution reconciliation', cfg, parent) as run:
@@ -114,6 +110,8 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None, corrections
                         evidence_manifest_sha256=sha256((evidence / 'manifest.json').read_bytes()))
         config = manifest['metadata']['config']
         run.base.update(universe=config['universe'], splits=config.get('splits', {}))
+        info = corrections_info(root, corrections, corrections_path)
+        run.base.update(info)
         issuer = issuer_events(evidence, evidence_manifest)
         no_distributions = no_distribution_sources(evidence_manifest)
         frames = normalized(source, manifest, {}, corrections or {})
@@ -148,7 +146,7 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None, corrections
                {'source_snapshot': cfg['source_snapshot'], 'evidence_snapshot': cfg['evidence_snapshot'],
                 'source_manifest_sha256': run.base['source_manifest_sha256'],
                 'evidence_manifest_sha256': run.base['evidence_manifest_sha256'],
-                'environment': run.env, 'run_id': run.run_id, 'tolerance': TOLERANCE})
+                'environment': run.env, 'run_id': run.run_id, 'tolerance': TOLERANCE} | info)
         warnings = []
         for status, text in [('unresolved', 'Unresolved issuer reconciliation'),
                              ('unverified_no_issuer_source', 'No issuer distribution source')]:

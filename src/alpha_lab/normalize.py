@@ -1,16 +1,56 @@
 """Explicit share units and modeled historical availability."""
 from datetime import date, datetime, time, timedelta
+import math
 from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import exchange_calendars as xcals
 
 NY = ZoneInfo('America/New_York')
+# Half of the 0.001 USD rounding step of Yahoo dividends. Yahoo rounds either in as-traded units (BIL) or
+# in split-adjusted units (EEM), so the as-traded bound is TOLERANCE * max(1, future_split_factor).
+# 1e-12 absorbs binary float error. Shared by reconciliation (matched/mismatch) and correction validation.
+TOLERANCE = 0.0005
+ACTIONS = ('add', 'replace', 'remove')
 REQUIRED = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'Dividends', 'Stock Splits']
 
 
 def calendar(start, end):
     return xcals.get_calendar('XNYS', start=str(start), end=str(end))
+
+
+def match_tolerance(split_factor):
+    return TOLERANCE * max(1., split_factor)
+
+
+def finite_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def check_correction(ticker, ex_date, correction, actual, split_factor):
+    """Validate one correction regardless of its origin against the as-traded Yahoo amount `actual`."""
+    where = f'{ticker}/{ex_date}'
+    if not isinstance(correction, dict) or correction.get('action') not in ACTIONS:
+        raise ValueError(f'correction action must be one of {", ".join(ACTIONS)}: {where}')
+    action, issuer, source = correction['action'], correction.get('issuer_amount'), correction.get('source')
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError(f'correction has no issuer source reference: {where}')
+    if not finite_number(issuer) or issuer < 0:
+        raise ValueError(f'correction issuer_amount must be a finite nonnegative number: {where}')
+    if action == 'remove' and issuer != 0:
+        raise ValueError(f'remove correction requires issuer_amount 0: {where}')
+    if action != 'remove' and issuer == 0:
+        raise ValueError(f'zero issuer_amount is only valid for a remove correction: {where}')
+    if action == 'add':
+        if abs(actual) > 1e-9:
+            raise ValueError(f'correction add conflicts with an existing Yahoo event: {where}')
+        return
+    stated = correction.get('yahoo_amount')
+    if not finite_number(stated) or abs(actual - stated) > 1e-9:
+        raise ValueError(f'correction yahoo_amount disagrees with the source event: {where}')
+    # Same predicate as reconciliation's 'matched': such an event is already confirmed, never corrected.
+    if action == 'replace' and abs(round(stated - issuer, 10)) <= match_tolerance(split_factor) + 1e-12:
+        raise ValueError(f'replace correction is within tolerance of the source amount (matched event): {where}')
 
 
 def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_delay_days=10, corrections=None):
@@ -67,16 +107,9 @@ def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_del
     for ex_date, correction in (corrections or {}).items():
         if ex_date not in out.index:
             raise ValueError(f'correction ex-date is not a session: {ticker}/{ex_date}')
-        action = correction['action']
-        actual = float(out.loc[ex_date, 'dividend'])
-        if action == 'add':
-            if abs(actual) > 1e-9:
-                raise ValueError(f'correction add conflicts with an existing Yahoo event: {ticker}/{ex_date}')
-        else:
-            stated = correction.get('yahoo_amount')
-            if stated is None or abs(actual - stated) > 1e-9:
-                raise ValueError(f'correction yahoo_amount disagrees with the source event: {ticker}/{ex_date}')
-        out.loc[ex_date, 'dividend'] = 0. if action == 'remove' else float(correction['issuer_amount'])
+        check_correction(ticker, ex_date, correction, float(out.loc[ex_date, 'dividend']),
+                         float(out.loc[ex_date, 'future_split_factor']))
+        out.loc[ex_date, 'dividend'] = 0. if correction['action'] == 'remove' else float(correction['issuer_amount'])
         out.loc[ex_date, 'dividend_basis'] = 'issuer_correction'
         out.loc[ex_date, 'dividend_correction_source'] = correction['source']
     growth = out.split_ratio * (out.close + out.dividend) / out.close.shift(1)

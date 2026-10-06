@@ -2,7 +2,8 @@
 import json
 import pytest
 from alpha_lab import corrections as co
-from alpha_lab.provenance import freeze, sha256
+from alpha_lab.pipeline import NO_CORRECTIONS_SHA256, audit_snapshot
+from alpha_lab.provenance import canonical_bytes, freeze, sha256, verify
 from alpha_lab.quality import parse_chart
 from alpha_lab.reconcile import reconcile
 from test_evidence import xlsx
@@ -126,3 +127,60 @@ def test_cli_corrections_output_feeds_reconcile(tmp_path, capsys, no_network):
     assert (derived / 'corrections.json').exists()
     rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
     assert [r['event'] for r in rows] == ['started', 'completed', 'started', 'completed']
+
+
+def hand_reconciliation(root, comparison, name='r', **metadata):
+    """A frozen reconciliation-shaped snapshot built directly from a comparison dict."""
+    return freeze(root / f'data/reconciliation/{name}',
+                  {'comparison.json': canonical_bytes(comparison), 'payable.json': canonical_bytes({})},
+                  {'evidence_snapshot': 'data/evidence/e'} | metadata)
+
+
+@pytest.mark.parametrize('ticker,kind,date', [('HYG', 'issuer_only', '2012-10-31'),
+                                              ('LQD', 'amount_mismatch', '2023-12-13')])
+def test_corrections_run_rejects_payable_before_ex_date(tmp_path, ticker, kind, date, no_network):
+    c = comparison_fixture()
+    c['tickers'][ticker][kind][0]['payable_date'] = date
+    with pytest.raises(ValueError, match='payable date precedes the ex-date'):
+        co.corrections_run(tmp_path, hand_reconciliation(tmp_path, c))
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    assert [r['event'] for r in rows] == ['started', 'failed']
+    assert not (tmp_path / 'data/corrections').exists()
+
+
+def test_corrections_provenance_and_corrected_reconciliation_is_refused(tmp_path, no_network):
+    first = reconcile(tmp_path, source(tmp_path), evidence(tmp_path))
+    m1 = verify(first)['metadata']
+    assert (m1['corrections_sha256'], m1['corrections_path'], m1['corrections_vintage_run_id']) == (
+        NO_CORRECTIONS_SHA256, None, None)
+    derived = co.corrections_run(tmp_path, first)
+    cfile = derived / 'corrections.json'
+
+    s2, e2 = source(tmp_path, 'cd2'), evidence(tmp_path, 'cd2')
+    second = reconcile(tmp_path, s2, e2, corrections=cfile)
+    m2 = verify(second)['metadata']
+    vintage = f'data/corrections/{derived.name}'
+    assert m2['corrections_sha256'] == sha256(cfile.read_bytes())
+    assert (m2['corrections_path'], m2['corrections_vintage'], m2['corrections_vintage_run_id']) == (
+        f'{vintage}/corrections.json', vintage, derived.name)
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    done = [r for r in rows if r['event'] == 'completed' and r['purpose'] == 'N1 issuer distribution reconciliation'][-1]
+    assert (done['corrections_sha256'], done['corrections_path']) == (m2['corrections_sha256'], f'{vintage}/corrections.json')
+
+    # A reconciliation made on an already corrected frame cannot seed another corrections vintage.
+    with pytest.raises(ValueError, match='produced with corrections'):
+        co.corrections_run(tmp_path, second)
+    assert [r['event'] for r in [json.loads(x) for x in (
+        tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]][-2:] == ['started', 'failed']
+
+    # The derived snapshot records the same provenance, and the hash equals its frozen corrections.json.
+    d = audit_snapshot(tmp_path, s2, payable=derived / 'payable.json', corrections=cfile)
+    dm = verify(d)
+    assert dm['metadata']['corrections_sha256'] == dm['files']['corrections.json'] == sha256(cfile.read_bytes())
+    assert (dm['metadata']['corrections_path'], dm['metadata']['corrections_vintage_run_id']) == (
+        f'{vintage}/corrections.json', derived.name)
+
+    # An edited vintage file is refused through the vintage manifest.
+    cfile.write_bytes(b'{}\n')
+    with pytest.raises(ValueError, match='content hash mismatch'):
+        audit_snapshot(tmp_path, source(tmp_path, 'cd3'), corrections=cfile)

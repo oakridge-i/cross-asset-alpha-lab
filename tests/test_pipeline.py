@@ -115,6 +115,9 @@ def test_replay_with_corrections_and_tampered_corrections_fails(tmp_path, no_net
     assert 'issuer_correction' in csv_text  # the correction is baked into the frozen vintage
     stored_corrections = json.loads((derived / 'corrections.json').read_bytes())
     assert stored_corrections == corrections
+    m = verify(derived)
+    assert m['metadata']['corrections_sha256'] == m['files']['corrections.json']  # hash of the frozen bytes
+    assert m['metadata']['corrections_path'] is None  # given as a dict, not a file
     # Exact replay reproduces every frozen byte, including corrections.json.
     assert p.replay_snapshot(tmp_path, derived) is True
 
