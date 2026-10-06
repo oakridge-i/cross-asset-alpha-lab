@@ -10,9 +10,10 @@ from .quality import parse_chart, assess
 from .provenance import Run, canonical_bytes, freeze, now, sha256, verify
 
 
-def build(source, manifest, payable):
+def normalized(source, manifest, payable):
+    """Full-history normalized frames after raw/adapter cross-checks; shared by audit and reconciliation."""
     cfg = manifest['metadata']['config']
-    files, frames = {}, {}
+    frames = {}
     for ticker in cfg['universe']:
         candidates = []
         for name in manifest['files']:
@@ -39,7 +40,13 @@ def build(source, manifest, payable):
         x = normalize(f, ticker, manifest['metadata']['retrieved_at'], manifest['files'][name],
                       payable.get(ticker, {}), pay_delay_days=cfg['pay_delay_days'])
         frames[ticker] = x
-        files[f'normalized/{ticker}.csv'] = x.to_csv(lineterminator='\n').encode()
+    return frames
+
+
+def build(source, manifest, payable):
+    cfg = manifest['metadata']['config']
+    frames = normalized(source, manifest, payable)
+    files = {f'normalized/{t}.csv': x.to_csv(lineterminator='\n').encode() for t, x in frames.items()}
     report = assess(frames, cfg['common_start'], cfg['cutoff'],
                     adjustment_tolerance=cfg['adjustment_factor_tolerance'])
     files['quality.json'] = canonical_bytes(report)
