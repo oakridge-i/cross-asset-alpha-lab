@@ -1,0 +1,441 @@
+{
+ "schema_version": 1,
+ "purpose": "N1 issuer evidence, distribution reconciliation and split-basis verdicts; no strategy statistics",
+ "runs": {
+  "source_snapshot": "20261006T103809-a4a22ec667",
+  "evidence": "20261006T122017-3048321309",
+  "reconciliation": "20261006T122119-c6bfb5c69b",
+  "audit": "20261006T122144-73228a71eb",
+  "replay": "20261006T122200-a9fd9ddbda",
+  "superseded": [
+   "20261006T103625-5202b05cbc",
+   "20261006T104437-36dd8f9b4a",
+   "20261006T104336-dff9099c6b"
+  ]
+ },
+ "evidence_manifest_sha256": "0a9bcea68b7f669fd765dbfc6bf9c60827d795de746aba3cb06c93fc2f0466bc",
+ "reconciliation_manifest_sha256": "cb69e4fc30cd73d759dac530ffb836993d7003f7318d5b6c45ee0a4a4b916ce7",
+ "reconciliation_rule": {
+  "window": {
+   "end": "2026-10-05",
+   "start": "2007-05-30"
+  },
+  "base_tolerance_usd": 0.0005,
+  "tolerance": "0.0005 x max(1, future_split_factor) USD as-traded",
+  "materiality": "sum over compared events of |diff| / previous as-traded close x 1e4 bps, matched residuals included"
+ },
+ "sources": [
+  {
+   "id": "ssga-distributions",
+   "url": "https://www.ssga.com/library-content/products/fund-data/etfs/us/spdr-etf-historical-distributions.xlsx",
+   "kind": "ssga_xlsx",
+   "tickers": [
+    "SPY",
+    "BIL"
+   ],
+   "retrieved_at": "2026-10-06T12:20:19.713040+00:00",
+   "sha256": "b162dd17027d1128f2209e312b0f634960daa78319dafe0ab821ab0b7e77ce23",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": "as_traded"
+  },
+  {
+   "id": "ishares-efa",
+   "url": "https://www.ishares.com/us/products/239623/ishares-msci-eafe-etf",
+   "kind": "ishares_html",
+   "tickers": [
+    "EFA"
+   ],
+   "retrieved_at": "2026-10-06T12:20:24.441131+00:00",
+   "sha256": "c6c80143f7c22daa1c168ff7101e0b7ddf5112b87b96894767da4f4ae8af2276",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": "current_units"
+  },
+  {
+   "id": "ishares-eem",
+   "url": "https://www.ishares.com/us/products/239637/ishares-msci-emerging-markets-etf",
+   "kind": "ishares_html",
+   "tickers": [
+    "EEM"
+   ],
+   "retrieved_at": "2026-10-06T12:20:27.078589+00:00",
+   "sha256": "d2f3e699b17323ae6e04c03138bbd1dab0ab10719d49c626fd7ea2f723b99aab",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": "current_units"
+  },
+  {
+   "id": "ishares-ief",
+   "url": "https://www.ishares.com/us/products/239456/ishares-7-10-year-treasury-bond-etf",
+   "kind": "ishares_html",
+   "tickers": [
+    "IEF"
+   ],
+   "retrieved_at": "2026-10-06T12:20:29.458705+00:00",
+   "sha256": "f4ddd4a204d6f09d3e0b63c97eb460cb1e5448b0d8ca70f3bfbafcb4e70b54d1",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": "current_units"
+  },
+  {
+   "id": "ishares-tlt",
+   "url": "https://www.ishares.com/us/products/239454/ishares-20-year-treasury-bond-etf",
+   "kind": "ishares_html",
+   "tickers": [
+    "TLT"
+   ],
+   "retrieved_at": "2026-10-06T12:20:32.028236+00:00",
+   "sha256": "d4bf512ac701168fdad2c9ff13fd3b0cb522319266780d7092d67f58d5dfe0b8",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": "current_units"
+  },
+  {
+   "id": "ishares-lqd",
+   "url": "https://www.ishares.com/us/products/239566/ishares-iboxx-investment-grade-corporate-bond-etf",
+   "kind": "ishares_html",
+   "tickers": [
+    "LQD"
+   ],
+   "retrieved_at": "2026-10-06T12:20:35.696879+00:00",
+   "sha256": "c23a403f429e21bcb7d28aaf09fbc605ab0f338e7b3454c8a8b809637ae74d80",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": "current_units"
+  },
+  {
+   "id": "ishares-hyg",
+   "url": "https://www.ishares.com/us/products/239565/ishares-iboxx-high-yield-corporate-bond-etf",
+   "kind": "ishares_html",
+   "tickers": [
+    "HYG"
+   ],
+   "retrieved_at": "2026-10-06T12:20:38.632740+00:00",
+   "sha256": "4596f62d798b797048e85838634df391743afebd033447741da870ee35d7e519",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": "current_units"
+  },
+  {
+   "id": "eem-2008-split-memo",
+   "url": "https://classic.nasdaqtrader.com/content/phlxmemos/2008/Jul/1410-08.pdf",
+   "kind": "document",
+   "tickers": [
+    "EEM"
+   ],
+   "retrieved_at": "2026-10-06T12:20:40.422976+00:00",
+   "sha256": "a1351cfd9c50d1c8187964038766ccaff143a80d2975271bc207c72fa3796a9b",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": null
+  },
+  {
+   "id": "bil-2017-form-8937",
+   "url": "https://www.ssga.com/library-content/products/fund-docs/etfs/us/tax-documents/SPDR-Bloomberg-Barclays-1-3-Month-T-Bill-ETF-2017-Form-8937.pdf",
+   "kind": "document",
+   "tickers": [
+    "BIL"
+   ],
+   "retrieved_at": "2026-10-06T12:20:48.296434+00:00",
+   "sha256": "e1b28c61ea9e73051cd7f34a8b8d310cb37e6b54aaa2b5793805784c9308fb55",
+   "http_status": 200,
+   "status": "completed",
+   "amount_basis": null
+  }
+ ],
+ "reconciliation": {
+  "BIL": {
+   "status": "unresolved",
+   "source_id": "ssga-distributions",
+   "counts": {
+    "amount_mismatch": 1,
+    "issuer_events": 127,
+    "issuer_only": 0,
+    "issuer_zero_rows": 105,
+    "matched": 126,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 128,
+    "yahoo_only": 1
+   },
+   "coverage": {
+    "first_ex_date": "2007-07-02",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 7.1027,
+   "unresolved_events": [
+    {
+     "cls": "amount_mismatch",
+     "ex_date": "2022-09-01",
+     "yahoo_amount": 0.139,
+     "issuer_amount": 0.138459,
+     "issuer_raw_amount": 0.138459,
+     "split_factor": 1.0,
+     "diff": 0.000541,
+     "tolerance": 0.0005,
+     "bps": 0.0591,
+     "explanation": "Yahoo 0.139 vs SSGA 0.138459; diff 0.000541 exceeds 0.001 rounding of the issuer value (0.138). Cause not established; size 0.06 bps."
+    },
+    {
+     "cls": "yahoo_only",
+     "ex_date": "2022-03-01",
+     "yahoo_amount": 0.022,
+     "issuer_amount": null,
+     "issuer_raw_amount": null,
+     "split_factor": 1.0,
+     "diff": 0.022,
+     "tolerance": 0.0005,
+     "bps": 2.4067,
+     "explanation": "SSGA row for 2022-03-01 has 0.000000; Yahoo has 0.022. Neighbouring SSGA rows 2022-02..2022-05 are zero. Source disagreement, cause not established."
+    }
+   ],
+   "payable_note": "Matched event 2008-03-03: SSGA record 2008-02-05 and payable 2008-02-11 precede the ex-date (repeat of the 2008-02-01 row); actual payable rejected, proxy ex+10 used."
+  },
+  "DBC": {
+   "status": "unverified_no_issuer_source",
+   "source_id": null,
+   "counts": {
+    "yahoo_events": 8
+   },
+   "note": "Invesco returns HTTP 406 to non-browser clients; no issuer source. Yahoo in-window ex-dates: 2007-12-17, 2008-12-15, 2018-12-24, 2019-12-23, 2022-12-19, 2023-12-18, 2024-12-23, 2025-12-22."
+  },
+  "EEM": {
+   "status": "confirmed",
+   "source_id": "ishares-eem",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 42,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 42,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 42,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2003-12-22",
+    "last_ex_date": "2026-06-15"
+   },
+   "materiality_bps": 2.1783,
+   "unresolved_events": []
+  },
+  "EFA": {
+   "status": "confirmed",
+   "source_id": "ishares-efa",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 39,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 39,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 39,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2001-10-02",
+    "last_ex_date": "2026-06-15"
+   },
+   "materiality_bps": 1.5478,
+   "unresolved_events": []
+  },
+  "GLD": {
+   "status": "unverified_no_issuer_source",
+   "source_id": null,
+   "counts": {
+    "yahoo_events": 0
+   },
+   "note": "No issuer distribution source. Yahoo has 0 GLD distributions; the absence of distributions is not documented by an issuer source."
+  },
+  "HYG": {
+   "status": "unresolved",
+   "source_id": "ishares-hyg",
+   "counts": {
+    "amount_mismatch": 1,
+    "issuer_events": 233,
+    "issuer_only": 1,
+    "issuer_zero_rows": 0,
+    "matched": 231,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 232,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2007-05-01",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 61.7987,
+   "unresolved_events": [
+    {
+     "cls": "amount_mismatch",
+     "ex_date": "2023-12-14",
+     "yahoo_amount": 0.379,
+     "issuer_amount": 0.37847,
+     "issuer_raw_amount": 0.37847,
+     "split_factor": 1.0,
+     "diff": 0.00053,
+     "tolerance": 0.0005,
+     "bps": 0.0687,
+     "explanation": "Yahoo 0.379 vs iShares 0.37847; diff 0.00053, not explained by 0.001 rounding (0.378). Size 0.07 bps."
+    },
+    {
+     "cls": "issuer_only",
+     "ex_date": "2012-11-01",
+     "yahoo_amount": null,
+     "issuer_amount": 0.510521,
+     "issuer_raw_amount": 0.510521,
+     "split_factor": 1.0,
+     "diff": -0.510521,
+     "tolerance": 0.0005,
+     "bps": 55.1378,
+     "explanation": "Yahoo has no HYG event for November 2012 (events 2012-10-01, 2012-12-03, 2012-12-26). Ex-date follows the 2012-10-29/30 market closure. IEF on the same ex-date is present in Yahoo. Yahoo omission, cause not established."
+    }
+   ]
+  },
+  "IEF": {
+   "status": "confirmed",
+   "source_id": "ishares-ief",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 233,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 233,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 233,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2002-09-03",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 5.742,
+   "unresolved_events": []
+  },
+  "LQD": {
+   "status": "unresolved",
+   "source_id": "ishares-lqd",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 233,
+    "issuer_only": 1,
+    "issuer_zero_rows": 0,
+    "matched": 232,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 232,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2002-09-03",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 36.0213,
+   "unresolved_events": [
+    {
+     "cls": "issuer_only",
+     "ex_date": "2012-11-01",
+     "yahoo_amount": null,
+     "issuer_amount": 0.378397,
+     "issuer_raw_amount": 0.378397,
+     "split_factor": 1.0,
+     "diff": -0.378397,
+     "tolerance": 0.0005,
+     "bps": 30.759,
+     "explanation": "Same Yahoo gap as HYG 2012-11-01."
+    }
+   ]
+  },
+  "SPY": {
+   "status": "unresolved",
+   "source_id": "ssga-distributions",
+   "counts": {
+    "amount_mismatch": 1,
+    "issuer_events": 78,
+    "issuer_only": 0,
+    "issuer_zero_rows": 0,
+    "matched": 77,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 78,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "1993-03-19",
+    "last_ex_date": "2026-09-18"
+   },
+   "materiality_bps": 1.0088,
+   "unresolved_events": [
+    {
+     "cls": "amount_mismatch",
+     "ex_date": "2021-12-17",
+     "yahoo_amount": 1.633,
+     "issuer_amount": 1.636431,
+     "issuer_raw_amount": 1.636431,
+     "split_factor": 1.0,
+     "diff": -0.003431,
+     "tolerance": 0.0005,
+     "bps": 0.0736,
+     "explanation": "SSGA 1.636431 (dividend only, capital gains 0) vs Yahoo 1.633. No split. Cause not established; size 0.07 bps."
+    }
+   ]
+  },
+  "TLT": {
+   "status": "unresolved",
+   "source_id": "ishares-tlt",
+   "counts": {
+    "amount_mismatch": 0,
+    "issuer_events": 233,
+    "issuer_only": 1,
+    "issuer_zero_rows": 0,
+    "matched": 232,
+    "outside_issuer_coverage": 0,
+    "yahoo_events": 232,
+    "yahoo_only": 0
+   },
+   "coverage": {
+    "first_ex_date": "2002-09-03",
+    "last_ex_date": "2026-10-01"
+   },
+   "materiality_bps": 26.8801,
+   "unresolved_events": [
+    {
+     "cls": "issuer_only",
+     "ex_date": "2012-11-01",
+     "yahoo_amount": null,
+     "issuer_amount": 0.269553,
+     "issuer_raw_amount": 0.269553,
+     "split_factor": 1.0,
+     "diff": -0.269553,
+     "tolerance": 0.0005,
+     "bps": 21.8509,
+     "explanation": "Same Yahoo gap as HYG 2012-11-01."
+    }
+   ]
+  }
+ },
+ "split_verdicts": [
+  {
+   "ticker": "EEM",
+   "yahoo_event": "2008-07-24 3:1",
+   "document": "eem-2008-split-memo (PHLX series adjustment 1410-08, 2008-07-21)",
+   "document_states": "3 for 1 stock split, ex-distribution date 2008-07-24; pre-split option strikes 95-180",
+   "as_traded_close_2008_07_23": 131.769997,
+   "source_close_2008_07_23": 43.923332,
+   "as_traded_close_2008_07_24": 42.299999,
+   "close_ratio_pre_to_post": 3.1151,
+   "distributions": "2 pre-split events matched: 2007-12-24 iShares 0.648931 x 3 = 1.946793 vs Yahoo as-traded 1.947; 2008-06-25 0.517255 x 3 = 1.551765 vs 1.551999",
+   "verdict": "confirmed"
+  },
+  {
+   "ticker": "BIL",
+   "yahoo_event": "2017-11-30 1:2",
+   "document": "bil-2017-form-8937 (IRS Form 8937, scanned image; pypdf extracts no text, read visually)",
+   "document_states": "date of action November 30, 2017; 1:2 reverse share split; every two shares converted into one share",
+   "as_traded_close_2017_11_29": 45.740002,
+   "source_close_2017_11_29": 91.480003,
+   "as_traded_close_2017_11_30": 91.480003,
+   "close_ratio_post_to_pre": 2.0,
+   "distributions": "43 pre-split events in window matched SSGA as-traded amounts after factor 0.5 (e.g. 2017-11-01 Yahoo raw 0.07 -> 0.035 vs SSGA 0.034618); no pre-split mismatch",
+   "verdict": "confirmed"
+  }
+ ]
+}
