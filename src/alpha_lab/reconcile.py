@@ -1,7 +1,7 @@
 """Offline reconciliation of Yahoo distributions against frozen issuer evidence."""
 from pathlib import Path
 
-from .evidence import AMOUNT_BASES, parse_ishares_html, parse_ssga_xlsx
+from .evidence import AMOUNT_BASES, parse_invesco_json, parse_ishares_html, parse_ssga_xlsx
 from .pipeline import normalized, project_path, require_inside
 from .provenance import Run, canonical_bytes, freeze, sha256, verify
 
@@ -32,8 +32,20 @@ def issuer_events(evidence, manifest):
                 out[ticker] = s, parse_ssga_xlsx(body, ticker)
             elif s['kind'] == 'ishares_html' and len(s['tickers']) == 1:
                 out[ticker] = s, parse_ishares_html(body)
+            elif s['kind'] == 'invesco_json' and len(s['tickers']) == 1:
+                out[ticker] = s, parse_invesco_json(body)
             else:
                 raise ValueError(f'unsupported evidence source: {s["id"]}')
+    return out
+
+
+def no_distribution_sources(manifest):
+    """{ticker: source} for document sources asserting the issuer makes no distributions."""
+    out = {}
+    for s in manifest['metadata']['sources']:
+        if s['kind'] == 'document':
+            for ticker in s.get('no_distributions') or []:
+                out[ticker] = s
     return out
 
 
@@ -44,7 +56,7 @@ def compare(frame, source, events, start, end):
     yahoo = {d: round(float(a), 10) for d, a in view.dividend[view.dividend > 0].items()}
     first, last = events[0]['ex_date'], events[-1]['ex_date']
     issuer = {e['ex_date']: e for e in events if start <= e['ex_date'] <= end and e['amount'] > 0}
-    zero = sum(start <= e['ex_date'] <= end and e['amount'] == 0 for e in events)
+    zero_dates = sorted(e['ex_date'] for e in events if start <= e['ex_date'] <= end and e['amount'] == 0)
     result = {k: [] for k in CLASSES}
     bps = 0.
     for d in sorted(set(yahoo) | set(issuer)):
@@ -69,13 +81,13 @@ def compare(frame, source, events, start, end):
         kind = ('issuer_only' if y is None else 'yahoo_only' if i is None
                 else 'matched' if abs(diff) <= tolerance + 1e-12 else 'amount_mismatch')
         result[kind].append(row)
-    counts = {'yahoo_events': len(yahoo), 'issuer_events': len(issuer), 'issuer_zero_rows': zero}
+    counts = {'yahoo_events': len(yahoo), 'issuer_events': len(issuer), 'issuer_zero_rows': len(zero_dates)}
     counts |= {k: len(v) for k, v in result.items()}
     confirmed = not any(result[k] for k in CLASSES[1:])
     return dict(status='confirmed' if confirmed else 'unresolved', counts=counts, materiality_bps=bps,
                 coverage={'first_ex_date': first, 'last_ex_date': last},
                 source={k: source[k] for k in ['id', 'url', 'file', 'sha256', 'kind', 'amount_basis']},
-                **result)
+                issuer_zero_dates=zero_dates, **result)
 
 
 def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
@@ -90,14 +102,22 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
         config = manifest['metadata']['config']
         run.base.update(universe=config['universe'], splits=config.get('splits', {}))
         issuer = issuer_events(evidence, evidence_manifest)
+        no_distributions = no_distribution_sources(evidence_manifest)
         frames = normalized(source, manifest, {})
         start, end = config['common_start'], config['cutoff']
         tickers, payable = {}, {}
         for ticker, frame in frames.items():
             if ticker not in issuer:
                 view = frame.loc[start:end]
-                tickers[ticker] = {'status': 'unverified_no_issuer_source', 'source': None,
-                                   'counts': {'yahoo_events': int((view.dividend > 0).sum())}}
+                yahoo_events = int((view.dividend > 0).sum())
+                if doc := no_distributions.get(ticker):
+                    status = 'confirmed_no_distributions' if yahoo_events == 0 else 'unresolved'
+                    tickers[ticker] = {'status': status,
+                                       'source': {k: doc[k] for k in ['id', 'url', 'file', 'sha256', 'kind']},
+                                       'counts': {'yahoo_events': yahoo_events}}
+                else:
+                    tickers[ticker] = {'status': 'unverified_no_issuer_source', 'source': None,
+                                       'counts': {'yahoo_events': yahoo_events}}
                 continue
             s, events = issuer[ticker]
             tickers[ticker] = c = compare(frame, s, events, start, end)

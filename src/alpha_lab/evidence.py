@@ -13,7 +13,7 @@ import zlib
 from .pipeline import load_json
 from .provenance import Run, freeze, now, sha256
 
-EXTENSIONS = {'ssga_xlsx': '.xlsx', 'ishares_html': '.html', 'document': '.pdf'}
+EXTENSIONS = {'ssga_xlsx': '.xlsx', 'ishares_html': '.html', 'invesco_json': '.json', 'document': '.pdf'}
 # as_traded: per share on the ex-date; current_units: restated per share of today's unit count.
 AMOUNT_BASES = {'as_traded', 'current_units'}
 USER_AGENT = 'Mozilla/5.0'
@@ -137,6 +137,19 @@ def parse_ishares_html(body):
     return found[0]
 
 
+def parse_invesco_json(body):
+    """Invesco distribution API capture (browser-fetched; the API itself refuses non-browser clients)."""
+    try:
+        data = json.loads(body)
+        events = [event(d['exDate'], d.get('recordDate'), d.get('payDate'), d['distributionAmountPerUnit'])
+                  for d in data['distributions']]
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f'malformed Invesco distribution JSON: {exc!r}') from exc
+    if not events:
+        raise ValueError('no Invesco distributions')
+    return ordered(events)
+
+
 def check(source, body):
     if source['kind'] == 'ssga_xlsx':
         for ticker in source['tickers']:
@@ -145,6 +158,10 @@ def check(source, body):
         if len(source['tickers']) != 1:
             raise ValueError('an iShares page covers exactly one ticker')
         parse_ishares_html(body)
+    elif source['kind'] == 'invesco_json':
+        if len(source['tickers']) != 1:
+            raise ValueError('an Invesco capture covers exactly one ticker')
+        parse_invesco_json(body)
     elif not body.startswith(b'%PDF'):
         raise ValueError('document is not a PDF')
 
@@ -167,9 +184,33 @@ def fetch_evidence(root, config, parent=None):
         try:
             for s in config['sources']:
                 entry = dict(id=s['id'], file=None, url=s['url'], kind=s['kind'], tickers=s['tickers'],
-                             amount_basis=s.get('amount_basis'), retrieved_at=None, sha256=None,
-                             http_status=None, status='failed')
+                             amount_basis=s.get('amount_basis'), local_capture=s.get('local_capture'),
+                             no_distributions=s.get('no_distributions'), statement=s.get('statement'),
+                             page=s.get('page'), retrieved_at=None, sha256=None, http_status=None, status='failed')
                 sources.append(entry)
+                if 'local_capture' in s:
+                    # A manually captured file (e.g. a browser fetch of an API that refuses non-browser
+                    # clients) is copied, never requested over the network, and must stay inside the project.
+                    try:
+                        local_path = (root / s['local_capture']).resolve()
+                        if not local_path.is_relative_to(root):
+                            raise ValueError(f'local capture outside project: {s["local_capture"]}')
+                        body = local_path.read_bytes()
+                        meta = json.loads(local_path.with_suffix('.capture.json').read_bytes())
+                    except (OSError, ValueError, json.JSONDecodeError) as exc:
+                        entry['error'] = f'{type(exc).__name__}: {exc}'
+                        continue
+                    name = s['id'] + EXTENSIONS[s['kind']]
+                    files[name] = body
+                    entry.update(retrieved_at=meta.get('captured_at_utc'), file=name, sha256=sha256(body))
+                    try:
+                        if entry['sha256'] != s['sha256']:
+                            raise ValueError(f'local capture sha256 mismatch for {s["id"]}')
+                        check(s, body)
+                        entry['status'] = 'completed'
+                    except Exception as exc:  # any check failure marks the source, never loses the snapshot
+                        entry['error'] = f'{type(exc).__name__}: {exc}'
+                    continue
                 try:
                     # Verified TLS (certifi); a fresh session per request keeps no cookies.
                     response = requests.get(s['url'], headers={'User-Agent': USER_AGENT}, timeout=60)

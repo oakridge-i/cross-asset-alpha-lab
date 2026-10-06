@@ -27,14 +27,14 @@ def chart(ticker, closes, dividends=(), splits=()):
         'events': events}]}}).encode()
 
 
-def source(root):
+def source(root, gld_dividends=(), name='s'):
     charts = {
         # BIL-like 1:2 reverse split: Yahoo reports 0.406 per post-split share before the split.
         'BIL': chart('BIL', [90.] * 6 + [91.] * 4, [('2017-11-29', 0.406)], [('2017-12-05', 1, 2)]),
         'SPY': chart('SPY', [100.] * 10, [('2017-11-28', 0.5), ('2017-11-29', 0.7), ('2017-11-30', 1.0),
                                           ('2017-12-04', 0.3)]),
         'EFA': chart('EFA', [60.] * 10, [('2017-11-29', 0.648931)]),
-        'GLD': chart('GLD', [120.] * 10),
+        'GLD': chart('GLD', [120.] * 10, gld_dividends),
         # EEM-like 3:1 split; Yahoo amounts are per post-split share, as-traded = 3x before the split.
         'EEM': chart('EEM', [50.] * 10, [('2017-11-29', 0.649), ('2017-11-30', 0.5004), ('2017-12-01', 0.40053333333)],
                      [('2017-12-05', 3, 1)])}
@@ -45,7 +45,7 @@ def source(root):
             index_label='Date').encode()
     config = {'universe': list(charts), 'start': '2017-11-27', 'common_start': '2017-11-28', 'cutoff': '2017-12-08',
               'end_exclusive': '2017-12-09', 'pay_delay_days': 10, 'adjustment_factor_tolerance': 0.00005}
-    return freeze(root / 'data/snapshots/s', files, {'config': config, 'retrieved_at': '2026-10-06T00:00:00+00:00'})
+    return freeze(root / f'data/snapshots/{name}', files, {'config': config, 'retrieved_at': '2026-10-06T00:00:00+00:00'})
 
 
 SSGA = [
@@ -83,6 +83,24 @@ def run(root):
     return target, load('comparison.json'), load('payable.json')
 
 
+def gld_evidence(root, name):
+    """Same issuer sources as evidence(), plus a document source asserting GLD pays no distributions."""
+    files = {'ssga.xlsx': xlsx(SSGA), 'efa.html': page(EFA, EFA), 'eem.html': page(EEM, EEM),
+             'memo.pdf': b'%PDF memo', 'gld.pdf': b'%PDF gld prospectus'}
+    sources = [dict(id=i, file=f, url=f'https://issuer.test/{f}', kind=k, tickers=t, amount_basis=b,
+                    retrieved_at='2026-10-06T00:00:00', sha256=sha256(files[f]), http_status=200, status='completed')
+               for i, f, k, t, b in [('ssga', 'ssga.xlsx', 'ssga_xlsx', ['SPY', 'BIL'], 'as_traded'),
+                                     ('efa', 'efa.html', 'ishares_html', ['EFA'], 'current_units'),
+                                     ('eem', 'eem.html', 'ishares_html', ['EEM'], 'current_units'),
+                                     ('memo', 'memo.pdf', 'document', ['EEM'], None)]]
+    sources.append(dict(id='gld', file='gld.pdf', url='https://issuer.test/gld.pdf', kind='document',
+                        tickers=['GLD'], amount_basis=None, no_distributions=['GLD'],
+                        statement='the Trust will not make any distributions', page='p. 9',
+                        retrieved_at='2026-10-06T00:00:00', sha256=sha256(files['gld.pdf']), http_status=200,
+                        status='completed'))
+    return freeze(root / f'data/evidence/{name}', files, {'sources': sources})
+
+
 def test_split_adjusted_yahoo_matches_as_traded_issuer_and_zero_rows_are_not_events(tmp_path, no_network):
     _, c, _ = run(tmp_path)
     bil = c['tickers']['BIL']
@@ -96,6 +114,28 @@ def test_split_adjusted_yahoo_matches_as_traded_issuer_and_zero_rows_are_not_eve
     assert (m['issuer_raw_amount'], m['amount_basis'], m['split_factor'], m['tolerance']) == (
         0.203102, 'as_traded', 0.5, 0.0005)
     assert bil['materiality_bps'] == pytest.approx(0.000102 / 45 * 1e4)
+
+
+def test_issuer_zero_dates_recorded(tmp_path, no_network):
+    _, c, _ = run(tmp_path)
+    assert c['tickers']['BIL']['issuer_zero_dates'] == ['2017-11-30']
+    assert c['tickers']['SPY']['issuer_zero_dates'] == []
+
+
+def test_gld_no_distribution_status(tmp_path, no_network):
+    target = r.reconcile(tmp_path, source(tmp_path), gld_evidence(tmp_path, 'e-gld-clean'))
+    c = json.loads((target / 'comparison.json').read_bytes())
+    gld = c['tickers']['GLD']
+    assert gld['status'] == 'confirmed_no_distributions'
+    assert gld['counts']['yahoo_events'] == 0
+    assert gld['source']['id'] == 'gld'
+
+    target2 = r.reconcile(tmp_path, source(tmp_path, gld_dividends=[('2017-11-29', 0.01)], name='s2'),
+                          gld_evidence(tmp_path, 'e-gld-dividend'))
+    c2 = json.loads((target2 / 'comparison.json').read_bytes())
+    gld2 = c2['tickers']['GLD']
+    assert gld2['status'] == 'unresolved'
+    assert gld2['counts']['yahoo_events'] == 1
 
 
 def test_discrepancy_classes_coverage_and_materiality(tmp_path, no_network):

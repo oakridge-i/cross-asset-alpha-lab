@@ -6,7 +6,7 @@ import threading
 import zipfile
 import pytest
 from alpha_lab import evidence as e
-from alpha_lab.provenance import verify
+from alpha_lab.provenance import sha256, verify
 
 MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 HEADER = ['FUND NAME', 'TICKER', 'CUSIP', 'EX-DATE', 'RECORD DATE', 'PAYABLE DATE', 'DIVIDEND ($)',
@@ -199,7 +199,79 @@ def test_registered_evidence_config_is_well_formed():
     assert len(set(ids)) == len(ids)
     assert all(s['kind'] in e.EXTENSIONS and s['url'].startswith('https://') for s in cfg['sources'])
     covered = {t for s in cfg['sources'] if s['kind'] != 'document' for t in s['tickers']}
-    assert covered == {'SPY', 'BIL', 'EFA', 'EEM', 'IEF', 'TLT', 'LQD', 'HYG'}
-    assert all(len(s['tickers']) == 1 for s in cfg['sources'] if s['kind'] == 'ishares_html')
+    assert covered == {'SPY', 'BIL', 'EFA', 'EEM', 'IEF', 'TLT', 'LQD', 'HYG', 'DBC'}
+    assert all(len(s['tickers']) == 1 for s in cfg['sources'] if s['kind'] in {'ishares_html', 'invesco_json'})
     assert {s['kind']: s['amount_basis'] for s in cfg['sources'] if s['kind'] != 'document'} == {
-        'ssga_xlsx': 'as_traded', 'ishares_html': 'current_units'}
+        'ssga_xlsx': 'as_traded', 'ishares_html': 'current_units', 'invesco_json': 'as_traded'}
+    [invesco] = [s for s in cfg['sources'] if s['kind'] == 'invesco_json']
+    assert invesco['local_capture'] == 'data/manual/dbc-invesco-distribution.json'
+    assert len(invesco['sha256']) == 64
+    [gld] = [s for s in cfg['sources'] if s.get('no_distributions')]
+    assert gld['no_distributions'] == ['GLD']
+    assert gld['statement'] and len(gld['statement'].split()) <= 25
+    assert gld['page']
+
+
+INVESCO_ROWS = [
+    ('2007-12-17', '2007-12-19', '2007-12-28', 0.76),
+    ('2008-12-15', '2008-12-17', '2008-12-30', 0.34),
+    ('2018-12-24', '2018-12-26', '2018-12-31', 0.18853),
+    ('2019-12-23', '2019-12-24', '2019-12-31', 0.25383),
+    ('2022-12-19', '2022-12-20', '2022-12-23', 0.14467),
+    ('2023-12-18', '2023-12-19', '2023-12-22', 1.08926),
+    ('2024-12-23', '2024-12-23', '2024-12-27', 1.11582),
+    ('2025-12-22', '2025-12-22', '2025-12-26', 0.74424),
+]
+
+
+def invesco_json(rows=INVESCO_ROWS):
+    """Invesco distribution API response shape; a captured JSON body, never HTML/XLSX."""
+    return json.dumps({'cusip': '46138B103', 'currencyCode': 'USD', 'distributions': [
+        {'exDate': ex, 'recordDate': rec, 'payDate': pay, 'distributionAmountPerUnit': amount,
+         'ordinaryIncomeDistribution': None, 'shortTermCapitalGainsDistribution': 0,
+         'longTermCapitalGainsDistribution': 0, 'returnOfCapitalDistribution': amount,
+         'liquidationDistribution': None} for ex, rec, pay, amount in rows]}).encode()
+
+
+def test_parse_invesco_json():
+    assert e.parse_invesco_json(invesco_json()) == [
+        {'ex_date': ex, 'record_date': rec, 'payable_date': pay, 'amount': amount} for ex, rec, pay, amount in INVESCO_ROWS]
+
+
+def local_capture(tmp_path, body, captured_at='2026-10-06T16:25:00Z', name='capture.json'):
+    """A manually captured file plus its sibling .capture.json metadata, both inside the project root."""
+    manual = tmp_path / 'data/manual'
+    manual.mkdir(parents=True, exist_ok=True)
+    (manual / name).write_bytes(body)
+    (manual / name.replace('.json', '.capture.json')).write_text(
+        json.dumps({'captured_at_utc': captured_at}), encoding='utf-8')
+    return f'data/manual/{name}'
+
+
+def local_config(path, digest, url='https://issuer.test/local'):
+    return {'protocol_version': '1.0', 'sources': [
+        {'id': 'invesco', 'url': url, 'kind': 'invesco_json', 'tickers': ['DBC'], 'amount_basis': 'as_traded',
+         'local_capture': path, 'sha256': digest}]}
+
+
+def test_local_capture_copied_and_hash_checked(tmp_path, no_network):
+    body = invesco_json()
+    path = local_capture(tmp_path, body)
+    digest = sha256(body)
+    target = e.fetch_evidence(tmp_path, local_config(path, digest))
+    m = verify(target)
+    assert m['files'] == {'invesco.json': digest}
+    [entry] = m['metadata']['sources']
+    assert (entry['status'], entry['file'], entry['url'], entry['local_capture'], entry['sha256'],
+            entry['retrieved_at']) == ('completed', 'invesco.json', 'https://issuer.test/local', path, digest,
+                                       '2026-10-06T16:25:00Z')
+    assert entry['http_status'] is None  # never fetched over the network
+
+    # A mismatching declared sha256 fails the source but still freezes the partial evidence.
+    with pytest.raises(RuntimeError, match='invesco'):
+        e.fetch_evidence(tmp_path, local_config(path, '0' * 64, url='https://issuer.test/local2'))
+    [bad] = [p for p in (tmp_path / 'data/evidence').iterdir() if p != target]
+    bm = verify(bad)
+    [bad_entry] = bm['metadata']['sources']
+    assert bad_entry['status'] == 'failed'
+    assert (bad / 'invesco.json').read_bytes() == body
