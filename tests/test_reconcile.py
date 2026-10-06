@@ -84,9 +84,10 @@ def run(root):
 
 
 def gld_evidence(root, name):
-    """Same issuer sources as evidence(), plus a document source asserting GLD pays no distributions."""
+    """Same issuer sources as evidence(), plus two document sources corroborating that GLD pays no
+    distributions: a prospectus (which also carries the explicit `basis` for the status) and a FAQ."""
     files = {'ssga.xlsx': xlsx(SSGA), 'efa.html': page(EFA, EFA), 'eem.html': page(EEM, EEM),
-             'memo.pdf': b'%PDF memo', 'gld.pdf': b'%PDF gld prospectus'}
+             'memo.pdf': b'%PDF memo', 'gld.pdf': b'%PDF gld prospectus', 'gld-faq.pdf': b'%PDF gld faq'}
     sources = [dict(id=i, file=f, url=f'https://issuer.test/{f}', kind=k, tickers=t, amount_basis=b,
                     retrieved_at='2026-10-06T00:00:00', sha256=sha256(files[f]), http_status=200, status='completed')
                for i, f, k, t, b in [('ssga', 'ssga.xlsx', 'ssga_xlsx', ['SPY', 'BIL'], 'as_traded'),
@@ -95,8 +96,19 @@ def gld_evidence(root, name):
                                      ('memo', 'memo.pdf', 'document', ['EEM'], None)]]
     sources.append(dict(id='gld', file='gld.pdf', url='https://issuer.test/gld.pdf', kind='document',
                         tickers=['GLD'], amount_basis=None, no_distributions=['GLD'],
-                        statement='the Trust will not make any distributions', page='p. 9',
+                        statements=[{'quote': 'will not receive dividends', 'page': 'p. 9'},
+                                    {'quote': 'distributions to Shareholders in only two circumstances', 'page': 'p. 30'}],
+                        basis='Distributions are permitted only in two narrow indenture cases (excess cash '
+                              'reserve or trust termination); the GLD FAQ states no distributions of sale '
+                              'proceeds are made; GLD has not been terminated; Yahoo shows zero dividend '
+                              'events for GLD in the reconciliation window.',
                         retrieved_at='2026-10-06T00:00:00', sha256=sha256(files['gld.pdf']), http_status=200,
+                        status='completed'))
+    sources.append(dict(id='gld-faq', file='gld-faq.pdf', url='https://issuer.test/gld-faq.pdf', kind='document',
+                        tickers=['GLD'], amount_basis=None, no_distributions=['GLD'],
+                        statements=[{'quote': "makes no distributions of sale proceeds to the Trust's shareholders",
+                                    'page': 'p. 3'}],
+                        retrieved_at='2026-10-06T00:00:00', sha256=sha256(files['gld-faq.pdf']), http_status=200,
                         status='completed'))
     return freeze(root / f'data/evidence/{name}', files, {'sources': sources})
 
@@ -120,6 +132,9 @@ def test_issuer_zero_dates_recorded(tmp_path, no_network):
     _, c, _ = run(tmp_path)
     assert c['tickers']['BIL']['issuer_zero_dates'] == ['2017-11-30']
     assert c['tickers']['SPY']['issuer_zero_dates'] == []
+    # Present (possibly empty) on every ticker, including GLD's unverified_no_issuer_source, so a
+    # consumer (e.g. Task 2's correction rules) can index it uniformly without a status check first.
+    assert all('issuer_zero_dates' in t for t in c['tickers'].values())
 
 
 def test_gld_no_distribution_status(tmp_path, no_network):
@@ -128,7 +143,9 @@ def test_gld_no_distribution_status(tmp_path, no_network):
     gld = c['tickers']['GLD']
     assert gld['status'] == 'confirmed_no_distributions'
     assert gld['counts']['yahoo_events'] == 0
-    assert gld['source']['id'] == 'gld'
+    assert gld['issuer_zero_dates'] == []
+    assert {s['id'] for s in gld['source']} == {'gld', 'gld-faq'}  # both corroborating documents are listed
+    assert gld['basis'] and 'two' in gld['basis']  # the no-distribution scope is explicit, not just asserted
 
     target2 = r.reconcile(tmp_path, source(tmp_path, gld_dividends=[('2017-11-29', 0.01)], name='s2'),
                           gld_evidence(tmp_path, 'e-gld-dividend'))
@@ -136,6 +153,7 @@ def test_gld_no_distribution_status(tmp_path, no_network):
     gld2 = c2['tickers']['GLD']
     assert gld2['status'] == 'unresolved'
     assert gld2['counts']['yahoo_events'] == 1
+    assert gld2['issuer_zero_dates'] == []
 
 
 def test_discrepancy_classes_coverage_and_materiality(tmp_path, no_network):
@@ -156,6 +174,7 @@ def test_discrepancy_classes_coverage_and_materiality(tmp_path, no_network):
     assert c['tickers']['EFA']['status'] == 'confirmed'
     gld = c['tickers']['GLD']
     assert (gld['status'], gld['source'], gld['counts']['yahoo_events']) == ('unverified_no_issuer_source', None, 0)
+    assert gld['issuer_zero_dates'] == []  # present and empty, not absent, for a ticker without issuer events
     assert c['tolerance'] == r.TOLERANCE == 0.0005
 
 

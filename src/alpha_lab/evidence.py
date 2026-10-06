@@ -185,8 +185,8 @@ def fetch_evidence(root, config, parent=None):
             for s in config['sources']:
                 entry = dict(id=s['id'], file=None, url=s['url'], kind=s['kind'], tickers=s['tickers'],
                              amount_basis=s.get('amount_basis'), local_capture=s.get('local_capture'),
-                             no_distributions=s.get('no_distributions'), statement=s.get('statement'),
-                             page=s.get('page'), retrieved_at=None, sha256=None, http_status=None, status='failed')
+                             no_distributions=s.get('no_distributions'), statements=s.get('statements'),
+                             basis=s.get('basis'), retrieved_at=None, sha256=None, http_status=None, status='failed')
                 sources.append(entry)
                 if 'local_capture' in s:
                     # A manually captured file (e.g. a browser fetch of an API that refuses non-browser

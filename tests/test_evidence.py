@@ -206,10 +206,15 @@ def test_registered_evidence_config_is_well_formed():
     [invesco] = [s for s in cfg['sources'] if s['kind'] == 'invesco_json']
     assert invesco['local_capture'] == 'data/manual/dbc-invesco-distribution.json'
     assert len(invesco['sha256']) == 64
-    [gld] = [s for s in cfg['sources'] if s.get('no_distributions')]
-    assert gld['no_distributions'] == ['GLD']
-    assert gld['statement'] and len(gld['statement'].split()) <= 25
-    assert gld['page']
+    no_dist = [s for s in cfg['sources'] if s.get('no_distributions')]
+    assert len(no_dist) >= 2  # more than one independent document corroborates GLD
+    for s in no_dist:
+        assert s['no_distributions'] == ['GLD']
+        assert s['statements']
+        for stmt in s['statements']:
+            assert stmt['quote'] and len(stmt['quote'].split()) <= 25
+            assert stmt['page']
+    assert any(s.get('basis') for s in no_dist)  # the no-distribution scope/reasoning is explicit, not implied
 
 
 INVESCO_ROWS = [

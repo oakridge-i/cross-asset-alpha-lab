@@ -12,6 +12,15 @@
     {"id": "invesco-dbc-distribution", "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46138B103/distribution?idType=cusip&productType=ETF", "kind": "invesco_json", "tickers": ["DBC"], "amount_basis": "as_traded", "local_capture": "data/manual/dbc-invesco-distribution.json", "sha256": "7337eeb71802061102d85c051178c059507b8c07a75fea7a9718e775f374ae41"},
     {"id": "eem-2008-split-memo", "url": "https://classic.nasdaqtrader.com/content/phlxmemos/2008/Jul/1410-08.pdf", "kind": "document", "tickers": ["EEM"]},
     {"id": "bil-2017-form-8937", "url": "https://www.ssga.com/library-content/products/fund-docs/etfs/us/tax-documents/SPDR-Bloomberg-Barclays-1-3-Month-T-Bill-ETF-2017-Form-8937.pdf", "kind": "document", "tickers": ["BIL"]},
-    {"id": "gld-prospectus", "url": "https://www.ssga.com/library-content/pdfs/etf/us/SPDR_GOLD_TRUST_PROSPECTUS.pdf", "kind": "document", "tickers": ["GLD"], "no_distributions": ["GLD"], "statement": "Shareholders do not have the right to elect directors and will not receive dividends", "page": "p. 9 (PDF page 12) of SPDR Gold Trust prospectus"}
+    {"id": "gld-prospectus", "url": "https://www.ssga.com/library-content/pdfs/etf/us/SPDR_GOLD_TRUST_PROSPECTUS.pdf", "kind": "document", "tickers": ["GLD"], "no_distributions": ["GLD"],
+     "statements": [
+       {"quote": "Shareholders do not have the right to elect directors and will not receive dividends", "page": "p. 9 (PDF page 12) of SPDR Gold Trust prospectus"},
+       {"quote": "The Trust Indenture provides for distributions to Shareholders in only two circumstances.", "page": "p. 30 (PDF page 33) of SPDR Gold Trust prospectus, DISTRIBUTIONS section"}
+     ],
+     "basis": "Neither statement says the Trust has never distributed; the second only bounds when a distribution could occur (excess 12-month cash reserve above $0.01/share, or Trust termination/liquidation). Status confirmed_no_distributions rests on: this narrow indenture scope, the GLD FAQ statement below that the Trust makes no distributions of gold-sale proceeds, zero Yahoo dividend events for GLD in the reconciliation window, and GLD remaining an active, non-terminated trust over that window."},
+    {"id": "gld-faq", "url": "https://www.ssga.com/library-content/products/fund-docs/etfs/us/tax-documents/gld-faq.pdf", "kind": "document", "tickers": ["GLD"], "no_distributions": ["GLD"],
+     "statements": [
+       {"quote": "makes no distributions of sale proceeds to the Trust's shareholders", "page": "p. 3 of GLD FAQ (ssga.com), gold-sale-proceeds Q&A"}
+     ]}
   ]
 }

@@ -40,12 +40,13 @@ def issuer_events(evidence, manifest):
 
 
 def no_distribution_sources(manifest):
-    """{ticker: source} for document sources asserting the issuer makes no distributions."""
+    """{ticker: [source, ...]} for document sources asserting the issuer makes no distributions;
+    a ticker may be corroborated by more than one document."""
     out = {}
     for s in manifest['metadata']['sources']:
         if s['kind'] == 'document':
             for ticker in s.get('no_distributions') or []:
-                out[ticker] = s
+                out.setdefault(ticker, []).append(s)
     return out
 
 
@@ -110,14 +111,16 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None):
             if ticker not in issuer:
                 view = frame.loc[start:end]
                 yahoo_events = int((view.dividend > 0).sum())
-                if doc := no_distributions.get(ticker):
+                if docs := no_distributions.get(ticker):
                     status = 'confirmed_no_distributions' if yahoo_events == 0 else 'unresolved'
-                    tickers[ticker] = {'status': status,
-                                       'source': {k: doc[k] for k in ['id', 'url', 'file', 'sha256', 'kind']},
-                                       'counts': {'yahoo_events': yahoo_events}}
+                    basis = next((d['basis'] for d in docs if d.get('basis')), None)
+                    tickers[ticker] = {'status': status, 'basis': basis,
+                                       'source': [{k: d[k] for k in ['id', 'url', 'file', 'sha256', 'kind']}
+                                                  for d in docs],
+                                       'counts': {'yahoo_events': yahoo_events}, 'issuer_zero_dates': []}
                 else:
                     tickers[ticker] = {'status': 'unverified_no_issuer_source', 'source': None,
-                                       'counts': {'yahoo_events': yahoo_events}}
+                                       'counts': {'yahoo_events': yahoo_events}, 'issuer_zero_dates': []}
                 continue
             s, events = issuer[ticker]
             tickers[ticker] = c = compare(frame, s, events, start, end)
