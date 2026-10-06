@@ -45,6 +45,8 @@ def check_correction(ticker, ex_date, correction, actual, split_factor):
         if abs(actual) > 1e-9:
             raise ValueError(f'correction add conflicts with an existing Yahoo event: {where}')
         return
+    if abs(actual) <= 1e-9:
+        raise ValueError(f'{action} correction targets a session with no Yahoo event: {where}')
     stated = correction.get('yahoo_amount')
     if not finite_number(stated) or abs(actual - stated) > 1e-9:
         raise ValueError(f'correction yahoo_amount disagrees with the source event: {where}')

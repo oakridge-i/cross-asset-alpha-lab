@@ -224,3 +224,31 @@ def test_replace_tolerance_scales_with_future_split_factor():
     x = norm(g, corrections={'2017-11-29': {'action': 'replace', 'yahoo_amount': 1.0, 'issuer_amount': 1.001,
                                             'payable_date': None, 'source': 'ref'}})
     assert x['dividend'].tolist() == [0, 1.001, 0, 0]
+
+
+def test_remove_and_replace_need_a_nonzero_yahoo_event():
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0])
+    # A hand-written remove on a session without any Yahoo event removes nothing and is rejected.
+    with pytest.raises(ValueError, match='no Yahoo event'):
+        norm(f, corrections={'2017-11-30': {'action': 'remove', 'yahoo_amount': 0.0, 'issuer_amount': 0.0,
+                                            'payable_date': None, 'source': 'ref'}})
+    # Likewise a replace stating yahoo_amount 0 on an empty session (that is an add).
+    with pytest.raises(ValueError, match='no Yahoo event'):
+        norm(f, corrections={'2017-11-30': {'action': 'replace', 'yahoo_amount': 0.0, 'issuer_amount': 0.45,
+                                            'payable_date': None, 'source': 'ref'}})
+
+
+# The 7 corrections of data/corrections/20261006T172434-fbb5c9f554/corrections.json: (ticker, ex-date, action,
+# yahoo_amount, issuer_amount). Yahoo amounts are as traded; none of these tickers has a later split.
+REAL_CORRECTIONS = [('BIL', '2022-03-01', 'remove', 0.022, 0.0), ('BIL', '2022-09-01', 'replace', 0.139, 0.138459),
+                    ('HYG', '2012-11-01', 'add', None, 0.510521), ('HYG', '2023-12-14', 'replace', 0.379, 0.37847),
+                    ('LQD', '2012-11-01', 'add', None, 0.378397), ('SPY', '2021-12-17', 'replace', 1.633, 1.636431),
+                    ('TLT', '2012-11-01', 'add', None, 0.269553)]
+
+
+@pytest.mark.parametrize('ticker,ex_date,action,yahoo,issuer', REAL_CORRECTIONS,
+                         ids=[f'{r[0]}-{r[1]}-{r[2]}' for r in REAL_CORRECTIONS])
+def test_real_corrections_pass_validation(ticker, ex_date, action, yahoo, issuer):
+    correction = {'action': action, 'yahoo_amount': yahoo, 'issuer_amount': issuer, 'payable_date': None,
+                  'source': 'issuer reference'}
+    n.check_correction(ticker, ex_date, correction, 0.0 if yahoo is None else yahoo, 1.0)
