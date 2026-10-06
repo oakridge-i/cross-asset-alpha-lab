@@ -22,7 +22,7 @@ Python-пакет src/alpha_lab содержит конвейер данных N
 
 ## Окружение и проверки N1
 
-Окружение: Python 3.14.0, версии пакетов точно в requirements.lock (включая pip). Пакет alpha_lab не устанавливается; для CLI путь к src задаётся через PYTHONPATH=src, pytest находит его через pythonpath в pyproject.toml. Установка проверена 6 октября 2026 года в Git Bash на новом временном venv вне репозитория: после установки `pip freeze --all` совпал с requirements.lock, `pip check` без замечаний, тесты 66 passed на тот момент (на ветке закрытия 111 passed), `python -m alpha_lab --help` работает с PYTHONPATH=src и без него завершается ошибкой `No module named alpha_lab`.
+Окружение: Python 3.14.0, версии пакетов точно в requirements.lock (включая pip). Пакет alpha_lab не устанавливается; для CLI путь к src задаётся через PYTHONPATH=src, pytest находит его через pythonpath в pyproject.toml. Установка проверена 6 октября 2026 года в Git Bash на новом временном venv вне репозитория: после установки `pip freeze --all` совпал с requirements.lock, `pip check` без замечаний, тесты 66 passed на тот момент (на ветке закрытия 122 passed), `python -m alpha_lab --help` работает с PYTHONPATH=src и без него завершается ошибкой `No module named alpha_lab`.
 
 ```bash
 py -3.14 -m venv .venv
@@ -56,7 +56,7 @@ PYTHONPATH=src .venv/Scripts/python -m alpha_lab replay data/derived/20261006T17
 
 Снимок Yahoo создан командой `acquire` (запуск 20261006T103809-a4a22ec667) и в 3B не перезагружался. Повтор evidence и acquire обращается к сети и даёт новый vintage; replay работает без сети.
 
-Итог N1: база сплитов EEM 2008 и BIL 2017 подтверждена документами. На исходных данных Yahoo распределения подтверждены у EFA, EEM, IEF, DBC и GLD; на скорректированном vintage 20261006T172442-80ef993493 (7 исправлений по эмитенту) подтверждены у всех десяти (docs/n1/N1_REPORT.md). Точность всех цен не установлена; actual payable dates есть только у совпавших с эмитентом событий.
+Итог N1: база сплитов EEM 2008 и BIL 2017 подтверждена документами. На исходных данных Yahoo распределения подтверждены (confirmed) у EFA, EEM, IEF, DBC, у GLD статус confirmed_no_distributions; на скорректированном vintage 20261006T172442-80ef993493 (7 исправлений по эмитенту) confirmed или confirmed_no_distributions у всех десяти (docs/n1/N1_REPORT.md). Точность всех цен не установлена; actual payable dates есть только у совпавших с эмитентом событий.
 
 ## Проверки N0
 

@@ -1,6 +1,6 @@
 # Состояние проекта
 
-Дата: 6 октября 2026, Europe/Moscow. Этап N1 (данные): блокирующие пункты D015 закрыты на скорректированном vintage, предложен вердикт D019: данные готовы к N2 (предложен, утверждает контролёр; до утверждения N2 на реальных данных не начинается). Прежний вердикт D015 («не готовы») остаётся записью истории. Ветка claude/n1-closure (от codex/n1-data), не слита в main, remote отсутствует. Доходности H1/H2 не рассчитывались, гипотезы registered_not_tested, reserved performance не открыт.
+Дата: 6 октября 2026, Europe/Moscow. Этап N1 (данные): блокирующие пункты D015 закрыты на скорректированном vintage, предложен вердикт D019: данные готовы к N2 (предложен, утверждает контролёр; до утверждения N2 на реальных данных не начинается). Прежний вердикт D015 («не готовы») остаётся записью истории. Ветка claude/n1-closure (от main на коммите 799eef9; codex/n1-data слита и удалена), не слита в main, remote отсутствует. Доходности H1/H2 не рассчитывались, гипотезы registered_not_tested, reserved performance не открыт.
 
 N0 завершён ранее: протокол, проверка источников, receipt docs/n0/verification.json (35/35 на коммите N0).
 
@@ -25,7 +25,7 @@ N0 завершён ранее: протокол, проверка источн�
 
 | Проверка | Результат |
 |---|---|
-| pytest (`PYTHONPATH=src .venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=$TEMP/c3pt`) | 111 passed (ветка claude/n1-closure, перед коммитом документов закрытия; на коммите 977eaf6 было 79) |
+| pytest (`PYTHONPATH=src .venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=$TEMP/c5pt`) | 122 passed (ветка claude/n1-closure после правок финального ревью; на коммите 977eaf6 было 79) |
 | `.venv/Scripts/python -m pip check` | No broken requirements found |
 | Окружение | из .venv удалены openpyxl 3.1.5 и et_xmlfile 2.0.0: их нет в requirements.lock, закоммиченный код их не импортирует, они остались от раннего незакоммиченного скрипта; после удаления `pip freeze --all` совпадает с lock-файлом. Новый временный venv вне репозитория: установка из requirements.lock, pip check, 66 passed, `PYTHONPATH=src python -m alpha_lab --help` работает; venv удалён |
 | `git diff --check` | без замечаний |
@@ -35,7 +35,7 @@ N0 завершён ранее: протокол, проверка источн�
 | Распределения | исходные данные Yahoo: confirmed EFA, EEM, IEF, DBC, GLD (confirmed_no_distributions), unresolved SPY, TLT, LQD, HYG, BIL; скорректированный vintage: все десять confirmed или confirmed_no_distributions |
 | `python -X utf8 docs/n0/verify_n0.py --no-write` | ошибка: в worktree скрипт ищет quant-research-plan рядом с корнем (.worktrees/quant-research-plan) и падает с FileNotFoundError; проверка пустого журнала N0 после N1 также не может пройти. Скрипт N0 не менялся |
 
-Последний проверенный коммит кода: e4d1669 (тесты 111 passed, pip check, git diff --check; затем шесть коммитов журнала запусков закрытия и коммит документов закрытия).
+Последний проверенный коммит кода: 02af65e (тесты 122 passed, pip check, git diff --check; после него только документы). Правки финального ревью: проверка исправлений remove и replace на событие Yahoo в сессии, проверка происхождения vintage исправлений от аудируемого снимка в audit.
 
 ## Ограничения
 
