@@ -15,6 +15,7 @@
 | 20261006T122119-c6bfb5c69b | N1 issuer distribution reconciliation | completed | 20261006T104437-36dd8f9b4a | c78a319 | false | data/reconciliation/20261006T122119-c6bfb5c69b, cb69e4fc…; предупреждения: unresolved SPY, TLT, LQD, HYG, BIL; нет источника GLD, DBC |
 | 20261006T122144-73228a71eb | N1 offline QA | completed | 20261006T104336-dff9099c6b | 8e677d1 | false | data/derived/20261006T122144-73228a71eb, f9602513…; technical_pass true, data_ready_for_n2 false |
 | 20261006T122200-a9fd9ddbda | N1 offline replay | completed | 20261006T122144-73228a71eb | cdaaf85 | false | replay_equal true (data_sha256 равен хешу проверяемого QA-снимка по конструкции) |
+| 20261006T131812-09887a01da | N1 offline replay | completed | 20261006T122200-a9fd9ddbda | 977eaf6 | false | повтор после исправлений финального ревью; replay_equal true, source_manifest_sha256 09edd925… |
 
 Закоммиченный до исправления configs/n1.json не содержал ключа `"http_backend": "requests_verified_TLS"`, который есть в конфигурации запуска 20261006T103809-a4a22ec667 (config_sha256 285a4643…, у файла был 0cbb6d67…). Ключ добавлен в файл, канонический хеш файла теперь равен 285a4643….
 
@@ -31,6 +32,7 @@ PYTHONPATH=src .venv/Scripts/python -m alpha_lab evidence --root . --parent 2026
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab reconcile data/snapshots/20261006T103809-a4a22ec667 data/evidence/20261006T122017-3048321309 --root . --parent 20261006T104437-36dd8f9b4a
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab audit data/snapshots/20261006T103809-a4a22ec667 --payable data/reconciliation/20261006T122119-c6bfb5c69b/payable.json --root . --parent 20261006T104336-dff9099c6b
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab replay data/derived/20261006T122144-73228a71eb --root . --parent 20261006T122144-73228a71eb
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab replay data/derived/20261006T122144-73228a71eb --root . --parent 20261006T122200-a9fd9ddbda
 ```
 
 Первая попытка evidence без PYTHONPATH завершилась ошибкой интерпретатора `No module named alpha_lab` до входа в код проекта; запуск не начался и в журнал не попал.
