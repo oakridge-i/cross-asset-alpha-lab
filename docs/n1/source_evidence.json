@@ -189,7 +189,7 @@
      "explanation": "SSGA row for 2022-03-01 has 0.000000; Yahoo has 0.022. Neighbouring SSGA rows 2022-02..2022-05 are zero. Source disagreement, cause not established."
     }
    ],
-   "payable_note": "Matched event 2008-03-03: SSGA record 2008-02-05 and payable 2008-02-11 precede the ex-date (repeat of the 2008-02-01 row); actual payable rejected, proxy ex+10 used."
+   "payable_note": "Matched event 2008-03-03: SSGA record 2008-02-05 and payable 2008-02-11 precede the ex-date (record and payable dates repeat those of the 2008-02-01 row; amounts differ: 0.086739 vs 0.115251); actual payable rejected, proxy ex+10 used."
   },
   "DBC": {
    "status": "unverified_no_issuer_source",
@@ -417,7 +417,7 @@
    "ticker": "EEM",
    "yahoo_event": "2008-07-24 3:1",
    "document": "eem-2008-split-memo (PHLX series adjustment 1410-08, 2008-07-21)",
-   "document_states": "3 for 1 stock split, ex-distribution date 2008-07-24; pre-split option strikes 95-180",
+   "document_states": "3 for 1 stock split, ex-distribution date 2008-07-24; lists 82 pre-split EEM option series, strikes 70-185 (Aug08 95-165, Sep08 and Dec08 90-185, Jan09 70-180, Mar09 105-155)",
    "as_traded_close_2008_07_23": 131.769997,
    "source_close_2008_07_23": 43.923332,
    "as_traded_close_2008_07_24": 42.299999,

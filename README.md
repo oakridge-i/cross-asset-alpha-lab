@@ -22,22 +22,19 @@ Python-пакет src/alpha_lab содержит конвейер данных N
 
 ## Окружение и проверки N1
 
-Окружение: Python 3.14.0 в .venv, версии пакетов в requirements.lock. Исходная команда создания .venv не записана. Команды ниже соответствуют lock-файлу, но в задаче 3B не выполнялись; соответствие текущего .venv проверено `pip check` и хешем окружения в журнале:
+Окружение: Python 3.14.0, версии пакетов точно в requirements.lock (включая pip). Пакет alpha_lab не устанавливается; для CLI путь к src задаётся через PYTHONPATH=src, pytest находит его через pythonpath в pyproject.toml. Установка проверена 6 октября 2026 года в Git Bash на новом временном venv вне репозитория: после установки `pip freeze --all` совпал с requirements.lock, `pip check` без замечаний, тесты 66 passed, `python -m alpha_lab --help` работает с PYTHONPATH=src и без него завершается ошибкой `No module named alpha_lab`.
 
 ```bash
 py -3.14 -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.lock
-```
-
-Проверено 6 октября 2026 года в Git Bash из корня репозитория:
-
-```bash
-.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=$TEMP/n1pt
 .venv/Scripts/python -m pip check
-git diff --check
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=$TEMP/n1pt
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab --help
 ```
 
-Запуски N1 в том виде, в каком они выполнены. Пакет не установлен в окружение, поэтому нужен PYTHONPATH=src. Каждый запуск пишет started и completed/failed в experiments/EXPERIMENT_LOG.jsonl и создаёт новый каталог в data/ (не входит в Git):
+В рабочем .venv были лишние openpyxl 3.1.5 и et_xmlfile 2.0.0, которых нет в lock-файле. Их установили для раннего незакоммиченного скрипта; закоммиченный код их не импортирует. 6 октября 2026 года они удалены (`pip uninstall -y openpyxl et_xmlfile`); после этого `pip freeze --all` совпадает с requirements.lock. Запуски N1 начиная с 20261006T103809-a4a22ec667 выполнены до удаления, их environment hash включает эти пакеты.
+
+Запуски N1 в том виде, в каком они выполнены. Каждый запуск пишет started и completed/failed в experiments/EXPERIMENT_LOG.jsonl и создаёт новый каталог в data/ (не входит в Git):
 
 ```bash
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab evidence --root . --parent 20261006T103625-5202b05cbc
@@ -47,6 +44,8 @@ PYTHONPATH=src .venv/Scripts/python -m alpha_lab replay data/derived/20261006T12
 ```
 
 Снимок Yahoo создан командой `acquire` (запуск 20261006T103809-a4a22ec667) и в 3B не перезагружался. Повтор evidence и acquire обращается к сети и даёт новый vintage; replay работает без сети.
+
+Итог N1: база сплитов EEM 2008 и BIL 2017 подтверждена документами. Полнота распределений подтверждена у EFA, EEM и IEF, у остальных не установлена (docs/n1/N1_REPORT.md). Точность всех цен не установлена; actual payable dates есть только у совпавших с эмитентом событий.
 
 ## Проверки N0
 
@@ -71,6 +70,6 @@ python -X utf8 docs/n0/verify_n0.py --no-write
 
 Проверяются ссылки, точность копий, ограничения manifest, пустой журнал, состояние AAPL и иллюстративная арифметика формул. Это не тесты ещё отсутствующего портфельного движка. Проверка AAPL требует доступных исходных локальных каталогов; перенос проекта на другой компьютер потребует обновить этот аудиторский сценарий.
 
-База сплитов EEM 2008 и BIL 2017 подтверждена документами. Полнота распределений подтверждена у EFA, EEM и IEF, у остальных не установлена (docs/n1/N1_REPORT.md). Точность всех цен не установлена; actual payable dates есть только у совпавших с эмитентом событий. Сырые данные и окружения исключены из Git. Условия библиотеки не заменяют права на рыночные данные; внешняя публикация и платные источники требуют отдельного разрешения.
+Сырые данные и окружения исключены из Git. Условия библиотеки не заменяют права на рыночные данные; внешняя публикация и платные источники требуют отдельного разрешения.
 
 2023–2026 годы не объявлены независимым тестом: прежний просмотр H1/H2 неизвестен. Реально новые наблюдения начнутся только после будущей заморозки модели. Подробности — в протоколе.

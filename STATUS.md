@@ -18,6 +18,7 @@ N0 завершён ранее: протокол, проверка источн�
 |---|---|
 | pytest (`.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=$TEMP/n1pt`) | 66 passed |
 | `.venv/Scripts/python -m pip check` | No broken requirements found |
+| Окружение | из .venv удалены openpyxl 3.1.5 и et_xmlfile 2.0.0: их нет в requirements.lock, закоммиченный код их не импортирует, они остались от раннего незакоммиченного скрипта; после удаления `pip freeze --all` совпадает с lock-файлом. Новый временный venv вне репозитория: установка из requirements.lock, pip check, 66 passed, `PYTHONPATH=src python -m alpha_lab --help` работает; venv удалён |
 | `git diff --check` | без замечаний |
 | replay | replay_equal true, data_sha256 f9602513… совпадает с QA |
 | QA | technical_pass true, 4869/4869 сессий у всех ETF, adjustment_breaks 0 |
@@ -25,7 +26,7 @@ N0 завершён ранее: протокол, проверка источн�
 | Распределения | confirmed: EFA, EEM, IEF; unresolved: SPY, TLT, LQD, HYG, BIL; unverified_no_issuer_source: DBC, GLD |
 | `python -X utf8 docs/n0/verify_n0.py --no-write` | ошибка: в worktree скрипт ищет quant-research-plan рядом с корнем (.worktrees/quant-research-plan) и падает с FileNotFoundError; проверка пустого журнала N0 после N1 также не может пройти. Скрипт N0 не менялся |
 
-Последний проверенный коммит кода и журнала: fa8fe34. Документы N1 добавлены следующим коммитом.
+Последний проверенный коммит кода и журнала: fa8fe34. Документы N1 добавлены коммитом e0e312a и исправлены следующим коммитом.
 
 ## Ограничения
 
