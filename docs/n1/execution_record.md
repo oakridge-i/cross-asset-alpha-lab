@@ -14,7 +14,9 @@
 | 20261006T122017-3048321309 | N1 issuer evidence acquisition | completed | 20261006T103625-5202b05cbc | 590281e | false | data/evidence/20261006T122017-3048321309, 0a9bcea6…; 9 источников, все ok |
 | 20261006T122119-c6bfb5c69b | N1 issuer distribution reconciliation | completed | 20261006T104437-36dd8f9b4a | c78a319 | false | data/reconciliation/20261006T122119-c6bfb5c69b, cb69e4fc…; предупреждения: unresolved SPY, TLT, LQD, HYG, BIL; нет источника GLD, DBC |
 | 20261006T122144-73228a71eb | N1 offline QA | completed | 20261006T104336-dff9099c6b | 8e677d1 | false | data/derived/20261006T122144-73228a71eb, f9602513…; technical_pass true, data_ready_for_n2 false |
-| 20261006T122200-a9fd9ddbda | N1 offline replay | completed | 20261006T122144-73228a71eb | cdaaf85 | false | replay_equal true, data_sha256 совпадает с QA-запуском |
+| 20261006T122200-a9fd9ddbda | N1 offline replay | completed | 20261006T122144-73228a71eb | cdaaf85 | false | replay_equal true (data_sha256 равен хешу проверяемого QA-снимка по конструкции) |
+
+Закоммиченный до исправления configs/n1.json не содержал ключа `"http_backend": "requests_verified_TLS"`, который есть в конфигурации запуска 20261006T103809-a4a22ec667 (config_sha256 285a4643…, у файла был 0cbb6d67…). Ключ добавлен в файл, канонический хеш файла теперь равен 285a4643….
 
 Первые семь запусков выполнены кодом, который в момент запуска не был закоммичен (dirty_tree true, хеш патча в журнале). Снимок Yahoo 20261006T103809-a4a22ec667 остаётся входом: его байты проверяются по manifest при каждом audit/reconcile, повторная загрузка не делалась. Evidence, reconciliation и QA перезапущены закоммиченным кодом.
 

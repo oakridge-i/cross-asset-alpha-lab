@@ -18,7 +18,7 @@ yfinance с interval=1d, auto_adjust=False, back_adjust=False, actions=True, rep
 
 ## Единицы и выплаты
 
-OHLC Yahoo проверяются как split-adjusted, без dividend adjustment. После подтверждения базы raw OHLC умножаются на произведение строго последующих split ratios. День сплита уже на новой базе. Dividend также требует отдельной проверки единиц; наличие корректного split event не доказывает базу распределения.
+OHLC Yahoo проверяются как split-adjusted, без dividend adjustment. После подтверждения базы raw OHLC умножаются на произведение строго последующих split ratios. День сплита уже на новой базе. Если сплит и дивиденд приходятся на одну дату, дивиденд считается суммой на акцию после сплита, его множитель равен 1 (tests/test_normalize.py, test_forward_split_plus_same_day_dividend_no_double_count). Dividend также требует отдельной проверки единиц; наличие корректного split event не доказывает базу распределения.
 
 source_volume остаётся в единицах источника с меткой unconfirmed; не используется для исполнения, ликвидностных ограничений или выбора количества. Не выдаём неподтверждённое восстановление объёма за as-traded volume.
 

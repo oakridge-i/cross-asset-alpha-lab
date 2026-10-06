@@ -20,7 +20,7 @@ N0 завершён ранее: протокол, проверка источн�
 | `.venv/Scripts/python -m pip check` | No broken requirements found |
 | Окружение | из .venv удалены openpyxl 3.1.5 и et_xmlfile 2.0.0: их нет в requirements.lock, закоммиченный код их не импортирует, они остались от раннего незакоммиченного скрипта; после удаления `pip freeze --all` совпадает с lock-файлом. Новый временный venv вне репозитория: установка из requirements.lock, pip check, 66 passed, `PYTHONPATH=src python -m alpha_lab --help` работает; venv удалён |
 | `git diff --check` | без замечаний |
-| replay | replay_equal true, data_sha256 f9602513… совпадает с QA |
+| replay | replay_equal true: файлы, построенные заново, побайтно совпали с derived-снимком f9602513… |
 | QA | technical_pass true, 4869/4869 сессий у всех ETF, adjustment_breaks 0 |
 | База сплитов EEM 2008-07-24 3:1, BIL 2017-11-30 1:2 | confirmed оба |
 | Распределения | confirmed: EFA, EEM, IEF; unresolved: SPY, TLT, LQD, HYG, BIL; unverified_no_issuer_source: DBC, GLD |
