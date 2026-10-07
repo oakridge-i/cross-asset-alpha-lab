@@ -11,6 +11,7 @@ from alpha_lab.ledger import (CASH_TOLERANCE, Account, Order, Receivable, Trade,
                               credit_payouts, execute_orders, nav, receivables_total, size_orders)
 from alpha_lab.market import (LAST_OPEN_SESSION, PROXY_BASIS, VINTAGE_MANIFEST_SHA256, load_market,
                               check_pay_sessions, proxy_pay_session)
+from alpha_lab.metrics import compute_metrics
 from alpha_lab.normalize import calendar, finite_number
 from alpha_lab.pipeline import project_path, require_inside
 from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256
@@ -288,6 +289,7 @@ def result_files(result, config, provider_name, market):
         rows = [{**{f'w_{t}': w[t] for t in tickers}, 'decision_session': w['decision_session'],
                  'usd': 1 - math.fsum(w[t] for t in tickers)} for w in result.weights]
         files['weights.csv'] = csv_bytes(rows, weight_columns(tickers))
+        files['metrics.json'] = canonical_bytes(compute_metrics(market, result))
     return files
 
 

@@ -34,7 +34,7 @@ def test_benchmark_run_is_journaled_with_candidate(tmp_path, no_network):
 
 def test_benchmark_run_freezes_weights(tmp_path, no_network):
     run_dir = execute(tmp_path, 'B2')
-    assert set(json.loads((run_dir / 'manifest.json').read_text())['files']) == FILES | {'weights.csv'}
+    assert set(json.loads((run_dir / 'manifest.json').read_text())['files']) == FILES | {'weights.csv', 'metrics.json'}
     rows = lines(run_dir, 'weights.csv')
     tickers = sorted(benchmark_frames())
     assert rows[0] == ','.join(['decision_session', *(f'w_{t}' for t in tickers), 'usd'])
