@@ -3,16 +3,20 @@
 [--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH] --root PROJECT [--parent ATTEMPT]."""
 import argparse
 import json
+import sys
 from pathlib import Path
 from .corrections import corrections_run
 from .engine import PROVIDERS, RunConfig, Scenario, run_simulation
 from .evidence import fetch_evidence
 from .market import VINTAGE_MANIFEST_SHA256
-from .pipeline import acquire_snapshot, audit_snapshot, replay_snapshot
+from .pipeline import acquire_snapshot, audit_snapshot, project_path, replay_snapshot
 from .reconcile import reconcile
 
 
 def main(argv=None):
+    # A console that cannot encode a path must not turn a finished run into a traceback.
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(errors='backslashreplace')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['acquire', 'evidence', 'audit', 'replay', 'reconcile', 'corrections',
                                             'simulate'])
@@ -47,7 +51,8 @@ def main(argv=None):
             parser.error('derived snapshot, --provider, --start and --end required for simulate')
         scenario = Scenario(cost=args.cost, lag=args.lag, reserve=args.reserve, proxy_pay_days=args.proxy_days)
         config = RunConfig(args.start, args.end, scenario=scenario)
-        print(run_simulation(root, root / args.snapshot, args.provider, config, args.parent, args.expected_sha256))
+        run_dir = run_simulation(root, root / args.snapshot, args.provider, config, args.parent, args.expected_sha256)
+        print(project_path(root, run_dir))
     else:
         if not args.snapshot:
             parser.error('snapshot required for audit/replay/reconcile')

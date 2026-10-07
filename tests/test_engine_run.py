@@ -1,6 +1,8 @@
 """Journaled N2 runs: frozen result files, determinism, failure journaling, simulate CLI."""
+import io
 import json
 import math
+import sys
 from pathlib import Path
 import pytest
 from alpha_lab import engine
@@ -218,16 +220,32 @@ def cli(tmp_path, derived, digest, *extra):
 def test_cli_simulate(tmp_path, capsys, no_network):
     derived, digest = vintage(tmp_path, plain_frames())
     main(cli(tmp_path, derived, digest))
-    run_dir = Path(capsys.readouterr().out.strip())
-    assert run_dir.is_dir() and run_dir.parent == tmp_path.resolve() / 'data/runs'
+    printed = capsys.readouterr().out.strip()
+    run_dir = tmp_path / printed
+    assert printed.startswith('data/runs/') and '\\' not in printed and not Path(printed).is_absolute()
+    assert run_dir.is_dir() and run_dir.parent == tmp_path / 'data/runs'
     assert set(verify(run_dir)['files']) == FILES
+
+
+def test_cli_simulate_on_cp1252_console(tmp_path, monkeypatch, no_network):
+    root = tmp_path / 'проект'
+    derived, digest = vintage(root, plain_frames())
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding='cp1252')
+    monkeypatch.setattr(sys, 'stdout', console)
+    main(cli(root, derived, digest))
+    console.flush()
+    printed = raw.getvalue().decode('cp1252')
+    assert journal(root)[-1]['status'] == 'completed'
+    assert printed.startswith('data/runs/') and len(printed.splitlines()) == 1
+    assert (root / printed.strip()).is_dir()
 
 
 def test_cli_scenario_options_and_parent(tmp_path, capsys, no_network):
     derived, digest = vintage(tmp_path, plain_frames())
     main(cli(tmp_path, derived, digest, '--cost', '0.002', '--lag', '2', '--reserve', '0.02', '--proxy-days', '30',
              '--parent', 'attempt-1'))
-    run_dir = Path(capsys.readouterr().out.strip())
+    run_dir = tmp_path / capsys.readouterr().out.strip()
     assert json.loads((run_dir / 'config.json').read_bytes())['scenario'] == {
         'cost': 0.002, 'lag': 2, 'reserve': 0.02, 'proxy_pay_days': 30}
     assert journal(tmp_path)[-1]['parent_attempt_id'] == 'attempt-1'
