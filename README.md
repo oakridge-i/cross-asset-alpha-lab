@@ -42,7 +42,7 @@ These results establish that the accounting mechanics hold on real data under th
 
 N3 computes the protocol benchmarks B0 (BIL only), B1 (equal weights), B2 (inverse volatility), B3 (absolute trend) and the reference REF_SPY (a single SPY purchase) on the approved vintage, with the interpretations recorded in [D022](DECISIONS.md).
 
-- Registered runs of the five benchmarks and a report over them (window 2008-12-31 to 2022-12-30, 168 monthly decisions for B0-B3) passed all seven financial invariants. A repeat of every run and of the report produced identical output file hashes.
+- Registered runs of the five benchmarks (window 2008-12-31 to 2022-12-30, 168 monthly decisions for B0-B3) passed all seven financial invariants, and a report over them verifies those results. A repeat of every run and of the report produced identical output file hashes.
 - The [N3 report](docs/n3/N3_REPORT.md) publishes the section 11 metrics for 2009-2022 by period and by year, with weight-construction diagnostics. Realized volatility and cash shares differ across the benchmarks, and the actual weights of B2 and B3 drift above the 25% target cap between decisions.
 - The benchmarks are baselines. The report does not compare candidates, does not state which benchmark is better, and computes nothing for H1/H2 or after 2022-12-30. The branch `claude/n3-benchmarks` is not yet merged into `main`.
 

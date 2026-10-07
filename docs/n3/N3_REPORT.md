@@ -49,7 +49,7 @@ Repeat report `20261007T200847-cf60a2b2d9` (parent `20261007T200805-c75aa41980`,
 
 ## Reproducibility
 
-For all five benchmark pairs the `files` dictionaries of `manifest.json` (9 files each) are identical, so every result file has the same SHA-256 in the first run and in the repeat. The `files` of the two reports (`benchmarks.json`, `benchmarks.md`) are identical. The manifest bytes differ only by run identifiers and environment fields in the metadata, as expected (D022, item 16).
+For all five benchmark pairs the `files` dictionaries of `manifest.json` (9 files each) are identical, so every result file has the same SHA-256 in the first run and in the repeat. The `files` of the two reports (`benchmarks.json`, `benchmarks.md`) are identical. The manifest bytes differ only by run identifiers in the metadata (and, for the report manifests, the referenced run ids and run manifest hashes), as expected (D022, item 16).
 
 ## Invariants and counts
 
@@ -262,8 +262,8 @@ Window 2008-12-31 to 2022-12-30, initial cash 100000.00, scenario {"cost": 0.001
 - Realized volatility and cash shares differ across benchmarks. The 2009-2022 mean share of cash and BIL is 36.41% for B3, 7.89% for B1 and 4.80% for B2. Identical caps do not imply equal risk (protocol line 87).
 - Drift. Actual ETF weights between decisions can exceed the target caps (protocol line 73): the maximum actual weight of an ETF is 25.37% for B2 and 25.20% for B3, above the 25% target cap, while no target weight exceeded it. Group maxima stay below 50%.
 - REF_SPY has no risk controls. It holds 8.11% in cash and BIL on average because distributions are not reinvested after the single purchase (D022, item 7).
-- B0 differs from the theoretical BIL index only by costs, the 1% reserve and USD cash, so the standard deviation of its excess return is very small and its Sharpe ratios (for example -6.971 in 2017-2019 and -11.434 in 2019) are not economically meaningful.
-- The B3 turnover of about 2.9 times NAV a year comes from monthly re-sizing to integer targets (protocol line 120; D021, item 4).
+- B0 differs from the theoretical BIL index by costs, the 1% reserve, USD cash, whole-share rounding and the timing of reinvestment at monthly decisions (D022, item 10), so the standard deviation of its excess return is very small and its Sharpe ratios (for example -6.971 in 2017-2019 and -11.434 in 2019) are not economically meaningful.
+- B3 turnover of about 2.9 times NAV a year arises mainly from instruments entering and leaving the trend selection, with the offsetting trades in BIL (in B3, 35.2% of traded notional opens or closes a risky position and 39.3% is BIL, against 2.5% position openings and closings in B1 and B2, essentially the initial entry); the absence of a trade threshold (D021 item 4) adds small re-sizing orders in every benchmark.
 - Nothing after 2022-12-30 is computed or published. The report contains no comparison of candidates: no differences in utility, bootstrap, Holm adjustment or regressions, no H1/H2 values and no statement about which benchmark is better. H1/H2 remain `registered_not_tested`, and the reserved period remains closed.
 - This is a historical simulation on data that are not point-in-time; `available_at` is a modeling assumption. The seven Yahoo corrections were accepted by the user's decision that the issuer is authoritative and have no independent confirmation (D016). The `confirmed_no_distributions` basis for GLD is weaker than a statement that distributions never occurred (D018). The completeness of DBC before 2007-12-17 is not proven by the issuer document (D017). The universe is retrospective. The data readiness conditions and their disclosure: D019, D020.
 - Costs are modeled at 10 bps per side, not measured, and Open is a modeled price; the results do not reflect settlement, auction fills, liquidity or brokerage constraints. The payable-date contract check starts at 2007-05-30 (D021, item 13).
