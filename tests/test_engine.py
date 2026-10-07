@@ -1,5 +1,6 @@
 """Simulation loop: hand-checked reconciliations (docs/n2/manual_reconciliation.md), validation, invariants."""
 import math
+import numpy as np
 import pytest
 from alpha_lab import engine
 from alpha_lab.engine import RunConfig, Scenario, month_end_sessions, simulate
@@ -387,6 +388,20 @@ def test_review_focus_invalid_run_configuration(config):
     market = market_from_frames({'AAA': frame(flat(10.0))})
     with pytest.raises(ValueError):
         simulate(market, lambda t, h: {'AAA': 1.0}, config)
+
+
+@pytest.mark.parametrize('cash', [0, 0.0, -1.0, float('nan'), float('inf'), True])
+def test_run_config_rejects_bad_initial_cash(cash):
+    with pytest.raises(ValueError, match='initial_cash'):
+        RunConfig('2017-11-28', END, initial_cash=cash)
+
+
+def test_provider_numpy_weights_are_accepted(no_network):
+    market = market_from_frames({'AAA': frame(flat(10.0)), 'BBB': frame(flat(10.0))})
+    config = RunConfig('2017-11-28', END, ('2017-11-28',))
+    weights = {'AAA': np.float32(0.5), 'BBB': np.int64(0)}
+    result = simulate(market, bad_weights(weights), config)
+    assert result.trades
 
 
 def test_execution_after_end_session_is_rejected():

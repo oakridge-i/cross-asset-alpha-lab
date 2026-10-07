@@ -39,6 +39,10 @@ class RunConfig:
     scenario: Scenario = Scenario()
     initial_cash: float = 100000.0
 
+    def __post_init__(self):
+        if not (finite_number(self.initial_cash) and self.initial_cash > 0):
+            raise ValueError(f'initial_cash must be a finite number > 0: {self.initial_cash!r}')
+
 
 @dataclass
 class Result:

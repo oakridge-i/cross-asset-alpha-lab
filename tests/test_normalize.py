@@ -1,4 +1,5 @@
 """Hand-derived wealth and timing fixtures; no strategy returns."""
+import numpy as np
 import pandas as pd
 import pytest
 from alpha_lab import normalize as n
@@ -288,3 +289,13 @@ def test_correction_payable_date_must_be_none_or_an_iso_date(payable_date):
                                   'payable_date': payable_date, 'source': 'issuer-ref'}}
     with pytest.raises(ValueError, match='payable_date must be None or an ISO date'):
         norm(f, corrections=corrections)
+
+
+@pytest.mark.parametrize('value', [1, 1.5, np.int64(2), np.float32(0.5), np.float64(0.25), 0])
+def test_finite_number_accepts_reals(value):
+    assert n.finite_number(value)
+
+
+@pytest.mark.parametrize('value', [True, np.bool_(True), float('nan'), float('inf'), np.float64('nan'), '1', None])
+def test_finite_number_rejects_non_reals(value):
+    assert not n.finite_number(value)
