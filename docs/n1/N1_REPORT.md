@@ -222,7 +222,7 @@ Actual payable берутся из payable.json vintage исправлений. 
 - В comparison.json сверки скорректированного vintage поле yahoo_amount хранит скорректированную сумму, а не исходную сумму Yahoo; исходная сумма есть в corrections.json (yahoo_amount) и в сверке исходных данных.
 - Поле data_ready_for_n2 в quality.json равно false: код QA записывает его константой, решение о готовности принимается этим отчётом и записью D019.
 
-### Вердикт (предложен, DECISIONS D019; утверждает контролёр)
+### Вердикт (DECISIONS D019, утверждён D020 7 октября 2026)
 
 Правило готовности задано до сверки и не менялось: оба сплита confirmed и каждый распределяющий тикер confirmed или confirmed_no_distributions на скорректированном vintage.
 
