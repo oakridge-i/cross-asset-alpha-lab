@@ -1,6 +1,7 @@
 """Usage: python -m alpha_lab {acquire,evidence,audit,replay,reconcile,corrections} [snapshot] [evidence]
 --root PROJECT; python -m alpha_lab simulate DERIVED --provider NAME --start DATE --end DATE
-[--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH] --root PROJECT [--parent ATTEMPT].
+[--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH] --root PROJECT [--parent ATTEMPT];
+python -m alpha_lab report --runs DIR [DIR ...] --root PROJECT [--parent ATTEMPT] [--expected-sha256 HASH].
 Exit codes: 0 completed; 3 simulate finished with failed invariants or audit with failed QA; 1 exception; 2 usage."""
 import argparse
 import json
@@ -12,6 +13,7 @@ from .evidence import fetch_evidence
 from .market import VINTAGE_MANIFEST_SHA256
 from .pipeline import acquire_snapshot, audit_snapshot, project_path, replay_snapshot
 from .reconcile import reconcile
+from .report import build_report
 
 EXIT_CHECKS_FAILED = 3
 
@@ -22,9 +24,10 @@ def main(argv=None):
         sys.stdout.reconfigure(errors='backslashreplace')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['acquire', 'evidence', 'audit', 'replay', 'reconcile', 'corrections',
-                                            'simulate'])
+                                            'simulate', 'report'])
     parser.add_argument('snapshot', nargs='?')
     parser.add_argument('evidence', nargs='?')
+    parser.add_argument('--runs', nargs='+')
     parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--parent')
     parser.add_argument('--payable', type=Path)
@@ -49,6 +52,10 @@ def main(argv=None):
         if not args.snapshot:
             parser.error('reconciliation snapshot required for corrections')
         print(corrections_run(root, root / args.snapshot, args.parent))
+    elif args.command == 'report':
+        if not args.runs:
+            parser.error('--runs required for report')
+        print(project_path(root, build_report(root, [Path(r) for r in args.runs], args.parent, args.expected_sha256)))
     elif args.command == 'simulate':
         if not (args.snapshot and args.provider and args.start and args.end):
             parser.error('derived snapshot, --provider, --start and --end required for simulate')
