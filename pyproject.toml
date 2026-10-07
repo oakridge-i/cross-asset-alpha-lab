@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "cross-asset-alpha-lab"
 version = "0.1.0"
 requires-python = ">=3.14,<3.15"
-description = "Auditable research data pipeline; no trading engine yet"
+description = "Auditable research data pipeline and account/execution engine; no strategies yet"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

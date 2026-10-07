@@ -2,7 +2,7 @@
 
 На N0 EXPERIMENT_LOG.jsonl имеет ноль строк. Проверки доступности/метаданных находятся в docs/n0; результатов стратегий нет. Реальные N1 data-runs и все дальнейшие расчёты регистрируются здесь.
 
-Append-only JSONL, UTF-8, одна запись на событие. Один run_id имеет started и completed/failed события. При аварии оставшийся started сохраняется, добавляется interrupted/recovered. Ошибка не удаляется, повтор имеет новый run_id и ссылку на прежний. Идентичный повтор не считается независимым экспериментом.
+Append-only JSONL, UTF-8, одна запись на событие. Один run_id имеет started и одно завершающее событие: completed, failed, quality_failed (аудит N1: выходные файлы заморожены, провалы проверок записаны) или invariants_failed (запуск N2: результат заморожен, нарушенные инварианты перечислены в quality_warnings). Код, который отбирает неуспешные запуски, должен учитывать все три статуса, а не только failed. При аварии оставшийся started сохраняется, добавляется interrupted/recovered. Ошибка не удаляется, повтор имеет новый run_id и ссылку на прежний. Идентичный повтор не считается независимым экспериментом.
 
 Обязательные поля каждой записи: schema_version, event, run_id, attempt_id, parent_attempt_id (null допустим), created_at_utc, protocol_version, git_sha, dirty_tree, dirty_patch_sha256 (null при clean), config_sha256, data_sha256, environment_manifest_sha256, seed, purpose, candidate_ids, universe, splits, status, output_paths, quality_warnings. Для started до получения данных data_sha256=null с причиной data_not_acquired; завершённая запись содержит hash снимка либо объяснение ошибки. Все отсутствующие применимые значения явно null + reason, не пустая имитация проверенной среды.
 
