@@ -141,6 +141,21 @@ Summary: all seven invariants passed in every run; 168 decisions for B0-B3 and o
 
 N2 deferred items closed by N3: (a) events and payments outside the common calendar, `9b8a721`; numeric weights and non-positive initial cash, `874beb2`; exit code 3 on failed checks, `74af51a` (D022, items 1-5).
 
+## N4: hypotheses H1/H2 (in progress)
+
+Branch `claude/n4-hypotheses`, created from `main` at `a1d734e`; not merged. The design is in [the N4 specification](docs/superpowers/specs/2026-10-08-n4-hypotheses-design.md). No H1/H2 run has been registered, the journal is unchanged since `a1d734e`, and H1/H2 remain `registered_not_tested`.
+
+Completed, with commits:
+
+- Specification: `ce45e89` to `4616b06`.
+- Turnover denominator check and N3 report corrections (proxy payment lag in calendar days; turnover divided by NAV at the decision close): `3256697`. `docs/n4/turnover_denominator.py` reproduces the published B3 `turnover_annual` for `full` (2.92743488022618 from the CSV files against 2.927434880273802 in `metrics.json`) and gives 2.9257729824764995 with NAV at the execution Open; B3 run manifest SHA-256 `d1f9ee7d1e9b0de0f744b30693966ce77d6fa3da4bf8f19aee573b85c2536db4`. D023, which records this, is not yet written.
+- Momentum and month-end features: `68dd450`.
+- `common_risk` split into `capped` and `risk_detail` with bit-identical results: `8b224b4`.
+
+Checks: pytest 398 passed on `8b224b4`. Approved vintage manifest SHA-256 and environment manifest SHA-256 verified in the worktree on 8 October 2026.
+
+Next action: H1/H2 providers (`src/alpha_lab/hypotheses.py`), then engine integration, real-vintage checks, the N4 report command, D023, review of the branch, and the registered runs.
+
 ## Limitations and next milestone
 
 The data are not point-in-time; `available_at` is an assumption. Issuer records may be revised, and the seven corrections lack independent confirmation. GLD's evidence is weaker than an explicit assertion that distributions never occurred. DBC issuer coverage before 2007-12-17 is unproven. iShares expresses pre-split distributions in current units. Volume is unverified and unused; the universe is retrospective. D013's tolerance followed observation of rounding differences. Original Yahoo acquisition used uncommitted code, with its patch hash retained. Yahoo data rights are unestablished, and source snapshots are local rather than included in Git.
