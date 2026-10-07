@@ -1,11 +1,17 @@
-"""Simulation loop: events of one session in spec order, orders at decision closes, scenarios, run invariants."""
-from dataclasses import dataclass, field
+"""Simulation loop: events of one session in spec order, orders at decision closes, scenarios, run invariants;
+result files and the journaled, frozen run."""
+from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 import math
+from pathlib import Path
+import pandas as pd
 from alpha_lab.ledger import (CASH_TOLERANCE, Account, Order, Receivable, Trade, accrue_dividends, apply_splits,
                               credit_payouts, execute_orders, nav, receivables_total, size_orders)
-from alpha_lab.market import LAST_OPEN_SESSION, PROXY_BASIS, proxy_pay_session
+from alpha_lab.market import (LAST_OPEN_SESSION, PROXY_BASIS, VINTAGE_MANIFEST_SHA256, load_market,
+                              proxy_pay_session)
 from alpha_lab.normalize import calendar, finite_number
+from alpha_lab.pipeline import project_path, require_inside
+from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256
 
 GRID = {'cost': (0, 0.001, 0.002, 0.005), 'lag': (1, 2), 'reserve': (0, 0.01, 0.02), 'proxy_pay_days': (0, 10, 30)}
 WEIGHT_SUM_TOLERANCE = 1e-12
@@ -209,3 +215,73 @@ def run_invariants(market, scenario, result, tally, remaining, at):
     return {**checks, 'passed': all(c['passed'] for c in checks.values()), 'split_events': tally.split_events,
             'proxy_payouts': [[r.ticker, r.ex_session, r.pay_session] for r in result.payouts
                               if (r.ticker, r.ex_session) in proxy]}
+
+
+def invariant_rotation(t, history):
+    """Test provider, not a strategy: every ticker is held and the weights rotate with the month (spec §10)."""
+    day = date.fromisoformat(t)
+    month = 12 * day.year + day.month
+    raw = {ticker: 1 + (month + i) % 3 for i, ticker in enumerate(sorted(history.tickers))}
+    total = sum(raw.values())
+    return {ticker: r / total for ticker, r in raw.items()}
+
+
+PROVIDERS = {'invariant_rotation': (invariant_rotation, '1')}  # name -> (function, version)
+DECISION_COLUMNS = ['decision_session', 'execution_session', 'nav', 'buy_fill', 'turnover', 'costs_usd']
+ORDER_COLUMNS = ['decision_session', 'execution_session', 'ticker', 'weight', 'close', 'target_qty', 'held_qty',
+                 'order_qty', 'filled_qty', 'status', 'cancel_reason']
+TRADE_COLUMNS = ['session', 'ticker', 'side', 'qty', 'price', 'notional', 'cost', 'cash_after']
+PAYOUT_COLUMNS = ['ticker', 'ex_session', 'pay_session', 'pay_basis', 'qty', 'amount_per_share', 'amount', 'status']
+DAILY_COLUMNS = ['session', 'cash', 'receivables', 'positions_value', 'nav']
+
+
+def config_record(config, provider_name):
+    """JSON form of the run parameters, journaled with the run and frozen in config.json."""
+    sessions = config.decision_sessions
+    return {**asdict(config), 'decision_sessions': None if sessions is None else list(sessions),
+            'provider': {'name': provider_name, 'version': PROVIDERS[provider_name][1]}}
+
+
+def csv_bytes(rows, columns):
+    """Fixed columns, LF line ends and 10 significant digits, so equal results give equal bytes."""
+    return pd.DataFrame(rows, columns=columns).to_csv(index=False, lineterminator='\n',
+                                                      float_format='%.10g').encode()
+
+
+def result_files(result, config, provider_name, market):
+    """The seven frozen files; none holds a run id, timestamp or absolute path."""
+    tickers = market.tickers
+    orders = [{**asdict(o), 'order_qty': o.qty} for o in result.orders]  # qty at execution, after split conversion
+    payouts = [{**asdict(r), 'pay_basis': r.basis, 'amount': r.amount} for r in result.payouts]
+    daily = [{**d, **{f'qty_{t}': d[t] for t in tickers}} for d in result.daily]
+    record = {**config_record(config, provider_name), 'vintage': market.vintage,
+              'manifest_sha256': market.manifest_sha256}
+    return {'config.json': canonical_bytes(record),
+            'decisions.csv': csv_bytes(result.decisions, DECISION_COLUMNS),
+            'orders.csv': csv_bytes(orders, ORDER_COLUMNS),
+            'trades.csv': csv_bytes([asdict(t) for t in result.trades], TRADE_COLUMNS),
+            'payouts.csv': csv_bytes(payouts, PAYOUT_COLUMNS),
+            'daily.csv': csv_bytes(daily, [*DAILY_COLUMNS, *(f'qty_{t}' for t in tickers)]),
+            'invariants.json': canonical_bytes(result.invariants)}
+
+
+def run_simulation(root, derived, provider_name, config, parent=None, expected_sha256=VINTAGE_MANIFEST_SHA256):
+    """Journaled N2 run on a verified vintage; data/runs/<run_id> is frozen only after simulate succeeds."""
+    root = Path(root).resolve()
+    derived = (root / derived).resolve()
+    provider = PROVIDERS[provider_name][0]
+    cfg = {**config_record(config, provider_name), 'derived_snapshot': project_path(root, derived),
+           'expected_sha256': expected_sha256}
+    with Run(root, 'N2 execution run', cfg, parent) as run:
+        require_inside(root, derived)
+        market = load_market(root, derived, expected_sha256)
+        run.base['universe'] = list(market.tickers)
+        result = simulate(market, provider, config)
+        target = root / 'data/runs' / run.run_id
+        freeze(target, result_files(result, config, provider_name, market),
+               {'derived_snapshot': cfg['derived_snapshot'], 'derived_manifest_sha256': market.manifest_sha256,
+                'environment': run.env, 'run_id': run.run_id})
+        failed = [name for name, c in result.invariants.items() if isinstance(c, dict) and not c['passed']]
+        run.finish('completed' if result.invariants['passed'] else 'invariants_failed', [project_path(root, target)],
+                   sha256((target / 'manifest.json').read_bytes()), failed)
+    return target
