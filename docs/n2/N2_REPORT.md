@@ -1,6 +1,6 @@
 # N2 report: account and execution engine
 
-Date: 7 October 2026. Branch `claude/n2-execution`.
+Date: 7 October 2026, Europe/Moscow. Branch `claude/n2-execution`.
 
 ## Purpose
 
