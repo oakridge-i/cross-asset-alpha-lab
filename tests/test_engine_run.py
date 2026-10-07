@@ -4,6 +4,7 @@ import json
 import math
 import sys
 from pathlib import Path
+import numpy as np
 import pytest
 from alpha_lab import engine
 from alpha_lab.__main__ import main
@@ -73,6 +74,16 @@ def test_run_is_journaled_and_frozen(tmp_path, no_network):
     assert started['config']['derived_snapshot'] == 'data/derived/synthetic'
     assert started['config']['decision_sessions'] is None
     assert started['config']['scenario'] == {'cost': 0.001, 'lag': 1, 'reserve': 0.01, 'proxy_pay_days': 10}
+
+
+@pytest.mark.parametrize('cash', [np.int64(100000), np.float32(100000)])
+def test_numpy_initial_cash_is_normalised_to_float(tmp_path, no_network, cash):
+    config = RunConfig('2017-11-28', END, initial_cash=cash)
+    assert type(config.initial_cash) is float and config.initial_cash == 100000.0
+    run_dir = execute(tmp_path, config=config)
+    started = journal(tmp_path)[0]
+    assert started['config']['initial_cash'] == 100000.0
+    assert json.loads((run_dir / 'config.json').read_bytes())['initial_cash'] == 100000.0
 
 
 def test_run_is_deterministic(tmp_path, no_network):

@@ -1,6 +1,7 @@
 """Journaled N3 benchmark report: verifies the five benchmark runs and freezes deterministic summary tables."""
 from contextlib import contextmanager
 import json
+import math
 from pathlib import Path
 import subprocess
 from alpha_lab.engine import PROVIDERS
@@ -19,7 +20,7 @@ SUMMARY = ('total_return', 'cagr', 'volatility', 'mean_excess', 'sharpe_bil', 'u
            'mean_target_risky')
 ANNUAL = ('total_return', 'volatility', 'mean_excess', 'sharpe_bil', 'max_drawdown')
 DECIMALS = {'sharpe_bil': 3, 'utility': 3}
-PLAIN = {'decisions': '{:d}', 'costs_usd': '{:.2f}'}
+PLAIN = {'decisions': '{:d}', 'costs_usd': '{:.2f}', 'turnover_annual': '{:.2f}x'}
 ORDER = [name for name, _, _ in PERIODS]
 
 
@@ -142,6 +143,12 @@ def number(key, value):
     return f'{value * 100:.2f}%'
 
 
+def largest(values):
+    """Largest finite value, or None when there is none."""
+    finite = [v for v in values if v is not None and math.isfinite(v)]
+    return max(finite) if finite else None
+
+
 def table(header, rows):
     lines = ['| ' + ' | '.join(header) + ' |', '|' + '|'.join(['---'] * len(header)) + '|']
     lines += ['| ' + ' | '.join(row) + ' |' for row in rows]
@@ -171,7 +178,7 @@ def render_markdown(document):
             full = benchmarks[n]['periods']['full']
             rows.append([n, *(number('x', full['mean_group'][g]) for g in groups),
                          *(number('x', full['max_group'][g]) for g in groups),
-                         number('x', max(full['max_weight'].values()))])
+                         number('x', largest(full['max_weight'].values()))])
         out += ['## Groups (full)', '', table(header, rows), '']
     return '\n'.join(out)
 
@@ -184,7 +191,9 @@ def build_report(root, run_dirs, parent=None, expected_sha256=VINTAGE_MANIFEST_S
         runs = verified_runs(root, run_dirs, expected_sha256, run.base)
         first = runs[BENCHMARKS[0]][2]
         document = {'window': {k: first[k] for k in ('start_session', 'end_session')}, 'scenario': first['scenario'],
-                    'initial_cash': first['initial_cash'], 'benchmarks': {n: runs[n][3] for n in BENCHMARKS}}
+                    'initial_cash': first['initial_cash'], 'manifest_sha256': first['manifest_sha256'],
+                    'provider_versions': {n: runs[n][2]['provider']['version'] for n in BENCHMARKS},
+                    'benchmarks': {n: runs[n][3] for n in BENCHMARKS}}
         files = {'benchmarks.json': canonical_bytes(document),
                  'benchmarks.md': render_markdown(document).encode('utf-8')}
         sources = [{'candidate': n, 'run_id': runs[n][0].name,

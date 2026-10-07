@@ -103,6 +103,8 @@ def test_report_freezes_tables_without_run_ids(project):
     assert document['scenario'] == {'cost': Scenario().cost, 'lag': Scenario().lag, 'reserve': Scenario().reserve,
                                     'proxy_pay_days': Scenario().proxy_pay_days}
     assert document['initial_cash'] == RunConfig(START, END).initial_cash
+    assert document['manifest_sha256'] == project.digest
+    assert document['provider_versions'] == {n: engine.PROVIDERS[n].version for n in BENCHMARKS}
     assert all(d['schema_version'] == 1 for d in document['benchmarks'].values())
     assert (target / 'benchmarks.md').read_text(encoding='utf-8') == render_markdown(document)
     meta = manifest['metadata']
@@ -130,6 +132,17 @@ def test_markdown_tables_and_formats(project):
     assert render_markdown(json.loads(json.dumps(document))) == text
     document['benchmarks']['B1']['periods']['full']['sharpe_bil'] = None
     assert 'n/a' in render_markdown(document)
+
+
+def test_markdown_turnover_is_a_multiple_and_max_weight_is_none_safe(project):
+    document = document_of(make(project))
+    full = document['benchmarks']['B0']['periods']['full']
+    assert f"{full['turnover_annual']:.2f}x" in render_markdown(document)
+    assert f"{full['turnover_annual'] * 100:.2f}%" not in render_markdown(document)
+    full['max_weight'] = {t: None for t in full['max_weight']}
+    assert render_markdown(document).count('n/a') > 0
+    full['max_weight'] = {}
+    assert '| B0 |' in render_markdown(document)
 
 
 def test_report_is_reproducible(project, twin, tmp_path, monkeypatch):
