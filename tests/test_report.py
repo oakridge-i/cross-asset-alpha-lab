@@ -13,6 +13,7 @@ from test_engine_run import journal
 
 START, END = '2008-12-31', '2009-03-31'
 CLEAN = ('a' * 40, False, None)
+SRC_TREE = 'b' * 40
 Project = namedtuple('Project', 'root derived digest runs')
 
 
@@ -23,6 +24,7 @@ def simulate(root, derived, digest, name, config=None):
 def build_project(root):
     mp = pytest.MonkeyPatch()
     mp.setattr(provenance, 'git_state', lambda r: CLEAN)
+    mp.setattr(report, 'src_tree', lambda r, sha: SRC_TREE)
     try:
         derived, digest = benchmark_vintage(root)
         runs = {n: simulate(root, derived, digest, n) for n in BENCHMARKS}
@@ -45,6 +47,7 @@ def clone(source, dest, monkeypatch):
     """Private copy of a five-run project, with a clean git state."""
     shutil.copytree(source.root, dest)
     monkeypatch.setattr(provenance, 'git_state', lambda r: CLEAN)
+    monkeypatch.setattr(report, 'src_tree', lambda r, sha: SRC_TREE)
     return Project(dest, dest / source.derived.relative_to(source.root), source.digest,
                    {n: dest / 'data/runs' / d.name for n, d in source.runs.items()})
 
@@ -270,6 +273,39 @@ def test_report_rejects_journal_config_disagreeing_with_config_json(project, key
                 r['config_sha256'] = provenance.sha256(provenance.canonical_bytes(r['config']))
     rewrite_journal(project, edit)
     reject(project, 'differs from config.json')
+
+
+def test_report_rejects_environment_mismatch(project):
+    edit_run(project, 'B1', 'started', environment_manifest_sha256='0' * 64)
+    reject(project, 'environment differs')
+
+
+def test_report_rejects_src_tree_mismatch(project, monkeypatch):
+    def tree(root, sha):
+        return SRC_TREE if sha == CLEAN[0] else 'c' * 40
+
+    edit_run(project, 'B2', 'started', git_sha='d' * 40)
+    monkeypatch.setattr(report, 'src_tree', tree)
+    reject(project, 'src tree differs')
+
+
+def test_src_tree_resolves_a_commit_and_rejects_an_unknown_one(tmp_path):
+    import subprocess
+    (tmp_path / 'src').mkdir()
+    (tmp_path / 'src/a.py').write_text('x = 1')
+    for args in (['init', '-q'], ['add', '.'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'm']):
+        subprocess.run(['git', *args], cwd=tmp_path, check=True)
+    head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=tmp_path, capture_output=True, check=True).stdout.decode().strip()
+    expected = subprocess.run(['git', 'rev-parse', 'HEAD:src'], cwd=tmp_path, capture_output=True, check=True).stdout.decode().strip()
+    assert report.src_tree(tmp_path, head) == expected
+    with pytest.raises(ValueError, match='src tree'):
+        report.src_tree(tmp_path, 'f' * 40)
+
+
+@pytest.mark.parametrize('changes', [{'purpose': 'N2 execution run'}, {'candidate_ids': ['B2']}])
+def test_report_rejects_purpose_or_candidate_mismatch(project, changes):
+    edit_run(project, 'B1', 'started', **changes)
+    reject(project, 'purpose or candidate_ids')
 
 
 def test_report_rejects_malformed_run_data_with_value_error(project):

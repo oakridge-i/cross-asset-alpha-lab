@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 import json
 from pathlib import Path
+import subprocess
 from alpha_lab.engine import PROVIDERS
 from alpha_lab.market import VINTAGE_MANIFEST_SHA256
 from alpha_lab.metrics import METRICS_SCHEMA, PERIODS
@@ -45,8 +46,18 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def check_journal(root, run_dir, rows, config):
-    """Check 3: one started and one completed record, clean tree, outputs, data hash and config agreement."""
+def src_tree(root, sha):
+    """Git tree hash of the src directory at a commit."""
+    done = subprocess.run(['git', 'rev-parse', f'{sha}:src'], cwd=root, capture_output=True, check=False)
+    tree = done.stdout.decode().strip()
+    if done.returncode != 0 or not tree:
+        raise ValueError(f'cannot resolve the src tree of {sha}')
+    return tree
+
+
+def check_journal(root, run_dir, rows, config, base):
+    """Check 3: one started and one completed record, clean tree, outputs, data hash, config and environment
+    agreement; returns the started record."""
     mine = [r for r in rows if r.get('run_id') == run_dir.name]
     started = [r for r in mine if r['event'] == 'started']
     terminal = [r for r in mine if r['event'] != 'started']
@@ -64,6 +75,12 @@ def check_journal(root, run_dir, rows, config):
             f'{run_dir.name}: config_sha256 differs from the journaled config')
     for key in AGREE:
         require(started['config'].get(key) == config.get(key), f'{run_dir.name}: journaled {key} differs from config.json')
+    name = config['provider']['name']
+    require(started['purpose'] == 'N3 benchmark run' and started['candidate_ids'] == [name],
+            f'{run_dir.name}: journaled purpose or candidate_ids is not that of a {name} benchmark run')
+    require(started['environment_manifest_sha256'] == base['environment_manifest_sha256'],
+            f'{run_dir.name}: environment differs from the report environment')
+    return started
 
 
 def common_periods(metrics):
@@ -73,7 +90,7 @@ def common_periods(metrics):
     return sorted(keys[0], key=lambda k: (ORDER.index(k) if k in ORDER else len(ORDER), k))
 
 
-def verified_runs(root, run_dirs, expected_sha256):
+def verified_runs(root, run_dirs, expected_sha256, base):
     """Checks 1-5 in order; returns {benchmark: (run_dir, manifest, config, metrics)}."""
     require(len(run_dirs) == len(BENCHMARKS), f'exactly five run directories required, got {len(run_dirs)}')
     dirs = []
@@ -95,7 +112,9 @@ def verified_runs(root, run_dirs, expected_sha256):
     for name in BENCHMARKS:
         path, manifest, config = found[name][0]
         with well_formed(path.name):
-            check_journal(root, path, rows, config)
+            started = check_journal(root, path, rows, config, base)
+            require(src_tree(root, started['git_sha']) == src_tree(root, base['git_sha']),
+                    f'{path.name}: src tree differs from the report commit')
             require(read_json(path / 'invariants.json')['passed'] is True, f'{path.name}: invariants did not pass')
             metrics = read_json(path / 'metrics.json')
             require(config['provider']['version'] == PROVIDERS[name].version, f'{name}: provider version is not current')
@@ -162,7 +181,7 @@ def build_report(root, run_dirs, parent=None, expected_sha256=VINTAGE_MANIFEST_S
     root = Path(root).resolve()
     config = {'runs': [project_path(root, (root / d).resolve()) for d in run_dirs], 'expected_sha256': expected_sha256}
     with Run(root, 'N3 benchmark report', config, parent, candidate_ids=BENCHMARKS) as run:
-        runs = verified_runs(root, run_dirs, expected_sha256)
+        runs = verified_runs(root, run_dirs, expected_sha256, run.base)
         first = runs[BENCHMARKS[0]][2]
         document = {'window': {k: first[k] for k in ('start_session', 'end_session')}, 'scenario': first['scenario'],
                     'initial_cash': first['initial_cash'], 'benchmarks': {n: runs[n][3] for n in BENCHMARKS}}
