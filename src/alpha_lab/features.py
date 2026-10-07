@@ -1,5 +1,8 @@
-"""Causal features: theoretical total-return index, sigma and excess-return covariance (protocol lines 40, 52-60)."""
+"""Causal features: theoretical total-return index, sigma, excess-return covariance, momentum and month-end levels
+(protocol lines 40, 52-60, 93-107)."""
+from datetime import date
 import numpy as np
+from alpha_lab.normalize import calendar
 
 WARMUP_CLOSES = 253
 SIGMA_RETURNS = 63
@@ -7,6 +10,8 @@ COV_RETURNS = 126
 ANNUAL = 252
 RISKY = ('SPY', 'EFA', 'EEM', 'IEF', 'TLT', 'LQD', 'HYG', 'GLD', 'DBC')
 CASH = 'BIL'
+MOMENTUM_SKIP = 21
+MONTH_LEVELS = 7
 _TOLERANCE = 1e-12
 
 
@@ -69,3 +74,57 @@ def covariance(market):
     matrix = ANNUAL * np.cov(excess.T, ddof=1)
     check_covariance(matrix)
     return matrix
+
+
+def momentum(index, lookback, skip=MOMENTUM_SKIP):
+    """M_i = (T_i[t-skip] / T_i[t-L]) / (T_BIL[t-skip] / T_BIL[t-L]) - 1 per risky ticker; t is the last row.
+
+    The window holds the L - skip returns from T[t-L] = index.iloc[-(L+1)] to T[t-skip] = index.iloc[-(skip+1)]."""
+    if not 0 <= skip < lookback:
+        raise ValueError(f'momentum needs 0 <= skip < lookback, got skip {skip} and lookback {lookback}')
+    if len(index) < lookback + 1:
+        raise ValueError(f'momentum needs {lookback + 1} sessions, got {len(index)}')
+    growth = index.iloc[-(skip + 1)] / index.iloc[-(lookback + 1)]
+    return {ticker: float(growth[ticker] / growth[CASH] - 1) for ticker in RISKY}
+
+
+def _month_number(month):
+    year, number = month.split('-')
+    return 12 * int(year) + int(number)
+
+
+def month_end_levels(market, index, count=MONTH_LEVELS):
+    """Index rows at the last session of each of the latest `count` calendar months of the history, ascending.
+
+    Each of these sessions must be the last XNYS session of its month and the months must be consecutive;
+    the month of t contributes t, so a t that is not the last XNYS session of its month raises."""
+    sessions = tuple(market.sessions)
+    if tuple(index.index) != sessions:
+        raise ValueError('index rows do not match the market sessions')
+    last = {}
+    for session in sessions:
+        last[session[:7]] = session
+    months = sorted(last)[-count:]
+    if len(months) < count:
+        raise ValueError(f'need {count} calendar months, got {len(months)}')
+    numbers = [_month_number(m) for m in months]
+    if any(b - a != 1 for a, b in zip(numbers, numbers[1:])):
+        raise ValueError(f'month-end months are not consecutive: {months[0]} to {months[-1]}')
+    year, number = divmod(numbers[-1], 12)  # first day of the month after the last month
+    xnys = calendar(f'{months[0]}-01', date(year, number + 1, 1).isoformat())
+    month_end = {}
+    for day in xnys.sessions:
+        month_end[day.date().isoformat()[:7]] = day.date().isoformat()
+    for m in months:
+        if last[m] != month_end[m]:
+            raise ValueError(f'{last[m]} is not the last XNYS session of {m}')
+    return index.loc[[last[m] for m in months]].copy()
+
+
+def monthly_excess(levels):
+    """E_i,j = (T_i,end(j) / T_i,end(j-1)) / (T_BIL,end(j) / T_BIL,end(j-1)) - 1 for consecutive month-end rows,
+    oldest first, indexed by end(j), columns RISKY."""
+    if len(levels) < 2:
+        raise ValueError(f'monthly excess needs at least 2 month-end levels, got {len(levels)}')
+    growth = (levels / levels.shift(1)).iloc[1:]
+    return growth[list(RISKY)].div(growth[CASH], axis=0) - 1
