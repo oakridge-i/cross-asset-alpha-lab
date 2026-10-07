@@ -27,6 +27,13 @@ def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def iso_date(text):
+    try:
+        return date.fromisoformat(text).isoformat() == text
+    except ValueError:
+        return False
+
+
 def check_correction(ticker, ex_date, correction, actual, split_factor):
     """Validate one correction regardless of its origin against the as-traded Yahoo amount `actual`."""
     where = f'{ticker}/{ex_date}'
@@ -85,10 +92,14 @@ def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_del
     for ex_date, correction in (corrections or {}).items():
         if not isinstance(correction, dict) or correction.get('action') not in ('add', 'replace'):
             continue
-        if when := correction.get('payable_date'):
-            if ex_date in payable and payable[ex_date].get('date') != when:
-                raise ValueError(f'conflicting actual payable dates: {ticker}/{ex_date}')
-            payable.setdefault(ex_date, {'date': when, 'source': correction.get('source')})
+        when = correction.get('payable_date')
+        if when is None:
+            continue
+        if not isinstance(when, str) or not iso_date(when):
+            raise ValueError(f'correction payable_date must be None or an ISO date: {ticker}/{ex_date}')
+        if ex_date in payable and payable[ex_date].get('date') != when:
+            raise ValueError(f'conflicting actual payable dates: {ticker}/{ex_date}')
+        payable.setdefault(ex_date, {'date': when, 'source': correction.get('source')})
     bound = f.index[-1].date() + timedelta(days=pay_delay_days + 370)
     for value in payable.values():
         bound = max(bound, date.fromisoformat(value['date']) + timedelta(days=15))

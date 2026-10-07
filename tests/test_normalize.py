@@ -279,3 +279,12 @@ def test_correction_payable_date_is_validated(payable_date, payable, match):
                                   'payable_date': payable_date, 'source': 'issuer-ref'}}
     with pytest.raises(ValueError, match=match):
         norm(f, payable=payable, corrections=corrections)
+
+
+@pytest.mark.parametrize('payable_date', [False, 0, '', [], {}, True, 1, ['2017-12-01'], 'invalid', '2017-02-30'])
+def test_correction_payable_date_must_be_none_or_an_iso_date(payable_date):
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0])
+    corrections = {'2017-11-29': {'action': 'replace', 'yahoo_amount': 0.4, 'issuer_amount': 0.45,
+                                  'payable_date': payable_date, 'source': 'issuer-ref'}}
+    with pytest.raises(ValueError, match='payable_date must be None or an ISO date'):
+        norm(f, corrections=corrections)

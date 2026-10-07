@@ -102,11 +102,31 @@ def corrections_info(root, corrections, path):
 
 def check_vintage_lineage(root, source_hash, corrections_path, payable_path):
     """A corrections vintage must descend from the audited source snapshot (through its reconciliation), and a
-    payable file taken from a vintage directory must come from the same vintage as the corrections file."""
-    vintage = corrections_path.parent
-    if not (vintage / 'manifest.json').exists():
+    payable file taken from a vintage directory must come from the same vintage as the corrections file.
+    A derived snapshot's corrections.json copy is accepted when that snapshot was built from the same source
+    and its copy equals the corrections vintage it cites; that vintage is then checked the same way."""
+    holder = corrections_path.parent
+    if not (holder / 'manifest.json').exists():
         return
-    meta = verify(vintage)['metadata']
+    manifest = verify(holder)
+    meta = manifest['metadata']
+    if 'reconciliation_snapshot' not in meta:
+        if 'source_manifest_sha256' not in meta or 'corrections_vintage' not in meta:
+            raise ValueError('corrections file sits in neither a corrections vintage nor a derived snapshot')
+        if meta['source_manifest_sha256'] != source_hash:
+            raise ValueError('corrections derived snapshot was built from another source snapshot')
+        if payable_path is not None and (payable_path.parent / 'manifest.json').exists() \
+                and payable_path.parent != holder:
+            raise ValueError('payable and corrections belong to different snapshots')
+        if meta['corrections_vintage'] is None:
+            return  # built from corrections outside any vintage; nothing further to trace
+        vintage = (root / meta['corrections_vintage']).resolve()
+        require_inside(root, vintage)
+        verify(vintage)
+        if sha256((vintage / 'corrections.json').read_bytes()) != manifest['files'].get('corrections.json'):
+            raise ValueError('derived snapshot corrections differ from the corrections vintage it cites')
+        return check_vintage_lineage(root, source_hash, vintage / 'corrections.json', None)
+    vintage = holder
     reconciliation = (root / meta['reconciliation_snapshot']).resolve()
     require_inside(root, reconciliation)
     rm = verify(reconciliation)

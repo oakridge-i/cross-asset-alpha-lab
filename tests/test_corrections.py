@@ -244,3 +244,53 @@ def test_reconcile_refuses_corrections_of_another_source_snapshot(tmp_path, no_n
     assert len(list((tmp_path / 'data/reconciliation').iterdir())) == 1
     # The snapshot the corrections descend from is still accepted.
     reconcile(tmp_path, source(tmp_path, 'cd2'), evidence(tmp_path, 'cd3'), corrections=derived / 'corrections.json')
+
+
+def corrected_derived(root):
+    """source -> reconcile -> corrections vintage -> audit; returns (vintage, derived snapshot)."""
+    vintage = co.corrections_run(root, reconcile(root, source(root), evidence(root)))
+    derived = audit_snapshot(root, source(root, 'cd2'), payable=vintage / 'payable.json',
+                             corrections=vintage / 'corrections.json')
+    return vintage, derived
+
+
+def test_corrections_copy_in_a_derived_snapshot_is_accepted(tmp_path, no_network):
+    _, derived = corrected_derived(tmp_path)
+    target = reconcile(tmp_path, source(tmp_path, 'cd3'), evidence(tmp_path, 'cd3'),
+                       corrections=derived / 'corrections.json')
+    assert json.loads((target / 'comparison.json').read_bytes())['tickers']['CCC']['status'] == 'confirmed'
+    audit_snapshot(tmp_path, source(tmp_path, 'cd4'), payable=derived / 'payable.json',
+                   corrections=derived / 'corrections.json')
+
+
+def test_corrections_copy_in_a_derived_snapshot_of_another_source_is_refused(tmp_path, no_network):
+    _, derived = corrected_derived(tmp_path)
+    other = source(tmp_path, 'other', retrieved_at='2026-10-07T00:00:00+00:00')
+    with pytest.raises(ValueError, match='derived snapshot was built from another source snapshot'):
+        reconcile(tmp_path, other, evidence(tmp_path, 'cd3'), corrections=derived / 'corrections.json')
+    assert [r['event'] for r in journal(tmp_path)][-2:] == ['started', 'failed']
+
+
+def test_derived_snapshot_disagreeing_with_its_corrections_vintage_is_refused(tmp_path, no_network):
+    vintage, derived = corrected_derived(tmp_path)
+    meta = verify(derived)['metadata']
+    # A hand-made derived-like snapshot citing the real vintage, but holding other corrections.
+    fake = freeze(tmp_path / 'data/derived/fake', {'corrections.json': canonical_bytes({})},
+                  {k: meta[k] for k in ['source_snapshot', 'source_manifest_sha256', 'corrections_vintage']})
+    with pytest.raises(ValueError, match='corrections differ from the corrections vintage'):
+        reconcile(tmp_path, source(tmp_path, 'cd3'), evidence(tmp_path, 'cd3'), corrections=fake / 'corrections.json')
+
+
+def test_corrections_in_an_unrecognized_snapshot_are_refused(tmp_path, no_network):
+    unknown = freeze(tmp_path / 'data/other/u', {'corrections.json': canonical_bytes({})}, {'note': 'x'})
+    with pytest.raises(ValueError, match='neither a corrections vintage nor a derived snapshot'):
+        reconcile(tmp_path, source(tmp_path), evidence(tmp_path), corrections=unknown / 'corrections.json')
+    assert [r['event'] for r in journal(tmp_path)][-2:] == ['started', 'failed']
+
+
+def test_derived_corrections_with_payable_of_another_snapshot_are_refused(tmp_path, no_network):
+    vintage, derived = corrected_derived(tmp_path)
+    with pytest.raises(ValueError, match='payable and corrections belong to different snapshots'):
+        audit_snapshot(tmp_path, source(tmp_path, 'cd3'), payable=vintage / 'payable.json',
+                       corrections=derived / 'corrections.json')
+    assert [r['event'] for r in journal(tmp_path)][-2:] == ['started', 'failed']
