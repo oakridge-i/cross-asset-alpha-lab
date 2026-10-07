@@ -77,6 +77,23 @@ def check_payable(ticker, f, cal):
     return out
 
 
+def check_pay_sessions(payable, sessions):
+    """Payments not later than the last session must fall on a session of the calendar."""
+    common = set(sessions)
+    for (t, ex), (pay, _) in payable.items():
+        if pay <= sessions[-1] and pay not in common:
+            raise ValueError(f'payment on a session outside the common calendar: {t}/{ex} -> {pay}')
+
+
+def check_events(ticker, f, sessions, start):
+    """Dividends and splits on sessions in [start, last session] that are not common sessions."""
+    common = set(sessions)
+    for s, dividend, split in zip(f.index, f.dividend, f.split_ratio):
+        if (start is None or s >= start) and s <= sessions[-1] and s not in common:
+            if (np.isfinite(dividend) and dividend > 0) or (np.isfinite(split) and split != 1):
+                raise ValueError(f'event on a session outside the common calendar: {ticker}/{s}')
+
+
 def market_from_frames(frames, vintage='synthetic', manifest_sha256='', start=None):
     """Common calendar = sessions present for every ticker (from `start`); validates the frames."""
     tickers = tuple(sorted(frames))
@@ -92,12 +109,14 @@ def market_from_frames(frames, vintage='synthetic', manifest_sha256='', start=No
     nonnegative = lambda s: np.isfinite(s) & (s >= 0)
     payable = {}
     for t in tickers:
+        check_events(t, frames[t], sessions, start)
         f = frames[t].loc[list(sessions), COLUMNS]
         require(t, f, 'close', positive)
         require(t, f, 'open', lambda s: s.isna() | positive(s))
         require(t, f, 'dividend', nonnegative)
         require(t, f, 'split_ratio', positive)
         payable |= check_payable(t, f[f.dividend > 0], cal)
+    check_pay_sessions(payable, sessions)
 
     def table(column):
         data = {t: frames[t].loc[list(sessions), column].astype(float).to_numpy() for t in tickers}

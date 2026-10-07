@@ -8,7 +8,7 @@ import pandas as pd
 from alpha_lab.ledger import (CASH_TOLERANCE, Account, Order, Receivable, Trade, accrue_dividends, apply_splits,
                               credit_payouts, execute_orders, nav, receivables_total, size_orders)
 from alpha_lab.market import (LAST_OPEN_SESSION, PROXY_BASIS, VINTAGE_MANIFEST_SHA256, load_market,
-                              proxy_pay_session)
+                              check_pay_sessions, proxy_pay_session)
 from alpha_lab.normalize import calendar, finite_number
 from alpha_lab.pipeline import project_path, require_inside
 from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256
@@ -95,8 +95,10 @@ def validate(market, config, at):
 def pay_map(market, scenario):
     """(ticker, ex_session) -> (pay_session, basis); proxy rows are recomputed for the scenario's days."""
     k = scenario.proxy_pay_days
-    return {key: (proxy_pay_session(key[1], k), f'proxy_ex_plus_{k}_calendar_days') if basis == PROXY_BASIS
-            else (pay, basis) for key, (pay, basis) in market.payable.items()}
+    out = {key: (proxy_pay_session(key[1], k), f'proxy_ex_plus_{k}_calendar_days') if basis == PROXY_BASIS
+           else (pay, basis) for key, (pay, basis) in market.payable.items()}
+    check_pay_sessions(out, market.sessions)
+    return out
 
 
 def provider_weights(provider, market, session):

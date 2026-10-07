@@ -127,3 +127,47 @@ def test_real_vintage_loads(no_network):
     assert market.payable[('BIL', '2008-03-03')][1] == m.PROXY_BASIS
     assert market.split_ratio.loc['2008-07-24', 'EEM'] == 3.0
     assert market.split_ratio.loc['2017-11-30', 'BIL'] == 0.5
+
+
+def series(changes):
+    return [changes.get(s, 0.) for s in SESSIONS]
+
+
+def test_dividend_on_dropped_session_is_rejected():
+    frames = {'AAA': frame(PRICES, dividend=series({'2017-12-01': 1.0}), payable={'2017-12-01': ('2017-12-05', m.ACTUAL_BASIS)}),
+              'BBB': frame(PRICES).drop(index='2017-12-01')}
+    with pytest.raises(ValueError, match='event on a session outside the common calendar: AAA/2017-12-01'):
+        m.market_from_frames(frames)
+
+
+def test_split_on_dropped_session_is_rejected():
+    split = [2.0 if s == '2017-12-01' else 1.0 for s in SESSIONS]
+    frames = {'AAA': frame(PRICES, split=split), 'BBB': frame(PRICES).drop(index='2017-12-01')}
+    with pytest.raises(ValueError, match='event on a session outside the common calendar: AAA/2017-12-01'):
+        m.market_from_frames(frames)
+
+
+def test_events_before_start_are_not_checked():
+    frames = {'AAA': frame(PRICES, dividend=series({'2017-11-27': 1.0}),
+                           payable={'2017-11-27': ('2017-11-28', m.ACTUAL_BASIS)}),
+              'BBB': frame(PRICES).drop(index='2017-11-27')}
+    assert m.market_from_frames(frames, start='2017-11-28').sessions[0] == '2017-11-28'
+
+
+def test_payment_on_dropped_session_is_rejected():
+    frames = {'AAA': frame(PRICES, dividend=series({'2017-11-28': 1.0}),
+                           payable={'2017-11-28': ('2017-12-01', m.ACTUAL_BASIS)}),
+              'BBB': frame(PRICES).drop(index='2017-12-01')}
+    with pytest.raises(ValueError, match='payment on a session outside the common calendar: AAA/2017-11-28 -> 2017-12-01'):
+        m.market_from_frames(frames)
+
+
+def test_payment_after_last_session_is_allowed():
+    market = with_payable({EX: ('2017-12-14', m.ACTUAL_BASIS)})
+    assert market.payable[('AAA', EX)] == ('2017-12-14', m.ACTUAL_BASIS)
+
+
+def test_nan_dividend_on_dropped_session_is_ignored():
+    dividend = [float('nan') if s == '2017-12-01' else 0. for s in SESSIONS]
+    frames = {'AAA': frame(PRICES, dividend=dividend), 'BBB': frame(PRICES).drop(index='2017-12-01')}
+    assert '2017-12-01' not in m.market_from_frames(frames).sessions

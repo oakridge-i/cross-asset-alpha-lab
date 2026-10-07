@@ -449,3 +449,23 @@ def test_provider_sees_history_up_to_the_decision_only():
 
     simulate(market, spy, RunConfig('2017-11-28', END, ('2017-11-28', '2017-12-04')))
     assert seen == [('2017-11-28', '2017-11-28', 2), ('2017-12-04', '2017-12-04', 6)]
+
+
+def test_recomputed_proxy_payment_on_missing_session_fails():
+    import pandas as pd
+    from alpha_lab.normalize import calendar
+    ex, gone = '2017-11-28', '2017-12-28'
+    days = [d.date().isoformat() for d in calendar('2017-11-27', '2018-01-12').sessions]
+    assert engine.proxy_pay_session(ex, 30) == gone and gone in days
+    f = frame(flat(10.0)).reindex(days)
+    f[['open', 'close']] = 10.0
+    f[['dividend']] = 0.0
+    f[['split_ratio']] = 1.0
+    f[['payable_date', 'payable_basis']] = ''
+    f.loc[ex, ['dividend', 'payable_date', 'payable_basis']] = [0.5, engine.proxy_pay_session(ex, 10), PROXY_BASIS]
+    f.index.name = 'session'
+    market = market_from_frames({'AAA': f.drop(index=gone)})
+    assert gone not in market.sessions and market.sessions[-1] > gone
+    with pytest.raises(ValueError, match='payment on a session outside the common calendar'):
+        engine.pay_map(market, Scenario(proxy_pay_days=30))
+    assert engine.pay_map(market, Scenario(proxy_pay_days=10))[('AAA', ex)][0] == '2017-12-08'
