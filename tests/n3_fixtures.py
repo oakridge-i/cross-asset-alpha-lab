@@ -11,8 +11,9 @@ SPY_EX, SPY_PAY = '2008-06-20', '2008-06-30'
 BIL_EX = '2008-07-01'
 
 
-def benchmark_frames(start='2007-12-03', end='2009-03-31', seed=20261007, drift=None):
-    """Ten tickers (RISKY + BIL) on XNYS sessions; `drift` overrides the daily log drift per ticker."""
+def benchmark_frames(start='2007-12-03', end='2009-03-31', seed=20261007, drift=None, spy_dividends=()):
+    """Ten tickers (RISKY + BIL) on XNYS sessions; `drift` overrides the daily log drift per ticker and
+    `spy_dividends` adds (ex, pay, amount) SPY distributions."""
     sessions = [d.date().isoformat() for d in calendar('2007-11-01', end).sessions if d.date().isoformat() >= start]
     rng = np.random.default_rng(seed)
     drift = {**{t: 0.0003 for t in RISKY}, 'BIL': 0.00015, **(drift or {})}
@@ -26,6 +27,8 @@ def benchmark_frames(start='2007-12-03', end='2009-03-31', seed=20261007, drift=
                           'payable_date': '', 'payable_basis': ''}, index=pd.Index(sessions, name='session'))
         frames[t] = f
     frames['SPY'].loc[SPY_EX, ['dividend', 'payable_date', 'payable_basis']] = [0.5, SPY_PAY, 'actual']
+    for ex, pay, amount in spy_dividends:
+        frames['SPY'].loc[ex, ['dividend', 'payable_date', 'payable_basis']] = [amount, pay, 'actual']
     frames['BIL'].loc[BIL_EX, ['dividend', 'payable_date', 'payable_basis']] = [
         0.1, proxy_pay_session(BIL_EX, 10), PROXY_BASIS]
     return frames

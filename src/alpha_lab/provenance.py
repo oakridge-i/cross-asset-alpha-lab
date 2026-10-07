@@ -99,7 +99,7 @@ def git_state(root):
 class Run:
     """Single-writer run journal. A crash leaves started for explicit recovery."""
 
-    def __init__(self, root, purpose, config, parent=None):
+    def __init__(self, root, purpose, config, parent=None, candidate_ids=None):
         self.root = Path(root)
         self.run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:10]
         self.journal = self.root / 'experiments/EXPERIMENT_LOG.jsonl'
@@ -113,7 +113,7 @@ class Run:
                          environment_manifest_sha256=sha256(canonical_bytes(env)), seed=None,
                          null_reasons={'seed': 'deterministic_data_pipeline', 'data_sha256': 'data_not_acquired',
                                        'git_sha': None if head else 'unborn_repository'},
-                         purpose=purpose, candidate_ids=[], universe=config.get('universe', []),
+                         purpose=purpose, candidate_ids=list(candidate_ids or []), universe=config.get('universe', []),
                          splits=config.get('splits', {}), output_paths=[], quality_warnings=[])
         self.done = False
         self.env = env

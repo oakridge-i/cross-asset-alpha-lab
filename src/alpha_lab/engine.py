@@ -1,10 +1,12 @@
 """Simulation loop: events of one session in spec order, orders at decision closes, scenarios, run invariants;
 result files and the journaled, frozen run."""
-from dataclasses import asdict, dataclass, field
+from collections import namedtuple
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
 import math
 from pathlib import Path
 import pandas as pd
+from alpha_lab.benchmarks import b0, b1, b2, b3, ref_spy
 from alpha_lab.ledger import (CASH_TOLERANCE, Account, Order, Receivable, Trade, accrue_dividends, apply_splits,
                               credit_payouts, execute_orders, nav, receivables_total, size_orders)
 from alpha_lab.market import (LAST_OPEN_SESSION, PROXY_BASIS, VINTAGE_MANIFEST_SHA256, load_market,
@@ -52,6 +54,7 @@ class Result:
     payouts: list[Receivable]
     daily: list[dict]
     invariants: dict
+    weights: list[dict] = field(default_factory=list)
 
 
 def month_end_sessions(market, start, end, lag):
@@ -176,6 +179,7 @@ def simulate(market, provider, config):
         if session in decisions:
             execution = market.sessions[at[session] + scenario.lag]
             weights = provider_weights(provider, market, session)
+            result.weights.append({'decision_session': session, **weights})
             result.orders += size_orders(account, session, execution, weights, closes[session], value,
                                          scenario.reserve)
             row = {'decision_session': session, 'execution_session': execution, 'nav': value,
@@ -232,7 +236,14 @@ def invariant_rotation(t, history):
     return {ticker: r / total for ticker, r in raw.items()}
 
 
-PROVIDERS = {'invariant_rotation': (invariant_rotation, '1')}  # name -> (function, version)
+# schedule: monthly | first_only; kind: test | benchmark
+Provider = namedtuple('Provider', 'function version schedule kind')
+PROVIDERS = {'invariant_rotation': Provider(invariant_rotation, '1', 'monthly', 'test'),
+             'B0': Provider(b0, '1', 'monthly', 'benchmark'),
+             'B1': Provider(b1, '1', 'monthly', 'benchmark'),
+             'B2': Provider(b2, '1', 'monthly', 'benchmark'),
+             'B3': Provider(b3, '1', 'monthly', 'benchmark'),
+             'REF_SPY': Provider(ref_spy, '1', 'first_only', 'benchmark')}
 DECISION_COLUMNS = ['decision_session', 'execution_session', 'nav', 'buy_fill', 'turnover', 'costs_usd']
 ORDER_COLUMNS = ['decision_session', 'execution_session', 'ticker', 'weight', 'close', 'target_qty', 'held_qty',
                  'order_qty', 'filled_qty', 'status', 'cancel_reason']
@@ -241,11 +252,15 @@ PAYOUT_COLUMNS = ['ticker', 'ex_session', 'pay_session', 'pay_basis', 'qty', 'am
 DAILY_COLUMNS = ['session', 'cash', 'receivables', 'positions_value', 'nav']
 
 
+def weight_columns(tickers):
+    return ['decision_session', *(f'w_{t}' for t in sorted(tickers)), 'usd']
+
+
 def config_record(config, provider_name):
     """JSON form of the run parameters, journaled with the run and frozen in config.json."""
     sessions = config.decision_sessions
     return {**asdict(config), 'decision_sessions': None if sessions is None else list(sessions),
-            'provider': {'name': provider_name, 'version': PROVIDERS[provider_name][1]}}
+            'provider': {'name': provider_name, 'version': PROVIDERS[provider_name].version}}
 
 
 def csv_bytes(rows, columns):
@@ -255,34 +270,43 @@ def csv_bytes(rows, columns):
 
 
 def result_files(result, config, provider_name, market):
-    """The seven frozen files; none holds a run id, timestamp or absolute path."""
+    """The seven frozen files, plus weights.csv for a benchmark provider; none holds a run id, timestamp or path."""
     tickers = market.tickers
     orders = [{**asdict(o), 'order_qty': o.qty} for o in result.orders]  # qty at execution, after split conversion
     payouts = [{**asdict(r), 'pay_basis': r.basis, 'amount': r.amount} for r in result.payouts]
     daily = [{**d, **{f'qty_{t}': d[t] for t in tickers}} for d in result.daily]
     record = {**config_record(config, provider_name), 'vintage': market.vintage,
               'manifest_sha256': market.manifest_sha256}
-    return {'config.json': canonical_bytes(record),
-            'decisions.csv': csv_bytes(result.decisions, DECISION_COLUMNS),
-            'orders.csv': csv_bytes(orders, ORDER_COLUMNS),
-            'trades.csv': csv_bytes([asdict(t) for t in result.trades], TRADE_COLUMNS),
-            'payouts.csv': csv_bytes(payouts, PAYOUT_COLUMNS),
-            'daily.csv': csv_bytes(daily, [*DAILY_COLUMNS, *(f'qty_{t}' for t in tickers)]),
-            'invariants.json': canonical_bytes(result.invariants)}
+    files = {'config.json': canonical_bytes(record),
+             'decisions.csv': csv_bytes(result.decisions, DECISION_COLUMNS),
+             'orders.csv': csv_bytes(orders, ORDER_COLUMNS),
+             'trades.csv': csv_bytes([asdict(t) for t in result.trades], TRADE_COLUMNS),
+             'payouts.csv': csv_bytes(payouts, PAYOUT_COLUMNS),
+             'daily.csv': csv_bytes(daily, [*DAILY_COLUMNS, *(f'qty_{t}' for t in tickers)]),
+             'invariants.json': canonical_bytes(result.invariants)}
+    if PROVIDERS[provider_name].kind == 'benchmark':
+        rows = [{**{f'w_{t}': w[t] for t in tickers}, 'decision_session': w['decision_session'],
+                 'usd': 1 - math.fsum(w[t] for t in tickers)} for w in result.weights]
+        files['weights.csv'] = csv_bytes(rows, weight_columns(tickers))
+    return files
 
 
 def run_simulation(root, derived, provider_name, config, parent=None, expected_sha256=VINTAGE_MANIFEST_SHA256):
     """Journaled N2 run on a verified vintage; data/runs/<run_id> is frozen only after simulate succeeds."""
     root = Path(root).resolve()
     derived = (root / derived).resolve()
-    provider = PROVIDERS[provider_name][0]
+    entry = PROVIDERS[provider_name]
+    if entry.schedule == 'first_only':
+        config = replace(config, decision_sessions=(config.start_session,))
     cfg = {**config_record(config, provider_name), 'derived_snapshot': project_path(root, derived),
            'expected_sha256': expected_sha256}
-    with Run(root, 'N2 execution run', cfg, parent) as run:
+    benchmark = entry.kind == 'benchmark'
+    with Run(root, 'N3 benchmark run' if benchmark else 'N2 execution run', cfg, parent,
+             candidate_ids=[provider_name] if benchmark else None) as run:
         require_inside(root, derived)
         market = load_market(root, derived, expected_sha256)
         run.base['universe'] = list(market.tickers)
-        result = simulate(market, provider, config)
+        result = simulate(market, entry.function, config)
         target = root / 'data/runs' / run.run_id
         freeze(target, result_files(result, config, provider_name, market),
                {'derived_snapshot': cfg['derived_snapshot'], 'derived_manifest_sha256': market.manifest_sha256,
