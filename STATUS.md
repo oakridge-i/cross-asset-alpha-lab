@@ -99,7 +99,7 @@ Decisions made during implementation (all recorded in D021): `execute_orders` re
 
 Final review of the whole branch (`4516269..af59031`): Critical 0, Important 3, Minor 7. Six external review comments were also checked: one confirmed for N1 (deferred, item (b) below), one confirmed as four test failures under a Cyrillic TEMP path, one partly confirmed, one confirmed as a wording issue, one already resolved, and one confirmed. Fixes `af59031..fa9da85` (6 commits); a limited re-review closed all five fix items and found no new Critical/Important findings. pytest 265 passed on `fa9da85`, including with TEMP/TMP set to a directory with a Cyrillic name. The branch was ready to merge; merging into `main` and pushing wait for the user's explicit approval.
 
-This documentation edition of the branch (merge of `main` at `02beaee`, removal of the local plan from tracking, and translation of the N2 documents into English) changed no source code or tests. The full suite was run again after the merge; see the verification record in the commit history.
+This documentation edition of the branch (merge of `main` at `02beaee`, removal of the local plan from tracking, and translation of the N2 documents into English) changed no source code or tests. The full suite was run again after the merge: 265 passed.
 
 Minor review findings deferred (examined at the final review; some are carried to the "Deferred" list below):
 

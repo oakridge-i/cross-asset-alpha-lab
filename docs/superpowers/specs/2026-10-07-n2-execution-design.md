@@ -1,110 +1,110 @@
-# N2: движок счёта и исполнения — спецификация
+# N2: account and execution engine - specification
 
-Дата: 7 октября 2026. Ветка claude/n2-execution. Основание: RESEARCH_PROTOCOL.md §8 (строки 118–126), §4 (строки 40–54), DATA_CONTRACT.md, docs/MASTER_PLAN.md (строки 184–199, 305), решение D020. Согласовано с пользователем 7 октября 2026: N2 включает только исполнение; алгоритм весов §5, метрики §11, B0–B3 и REF_SPY относятся к N3.
+Date: 7 October 2026. Branch `claude/n2-execution`. Basis: RESEARCH_PROTOCOL.md section 8 (lines 118-126) and sections 3 and 4 (lines 40-54), DATA_CONTRACT.md, docs/MASTER_PLAN.md section 4.4 (lines 184-199) and section 5 (line 305), decision D020. Agreed with the user on 7 October 2026: N2 covers execution only; the weight algorithm (protocol section 5), the metrics (section 11), B0-B3 and REF_SPY belong to N3.
 
-## 1. Цель и границы
+## 1. Goal and boundaries
 
-N2 создаёт проверенный движок, который по целевым весам на дату решения строит заявки, исполняет их по Open, учитывает издержки, сплиты, дивиденды и деньги, ведёт журнал и даёт ручные сверки механики. Успех N2: все ручные сверки совпадают с расчётом движка, прогон проверки инвариантов на реальных данных завершён и зарегистрирован, механика описана в EXECUTION_MODEL.md.
+N2 creates a tested engine that, from target weights on a decision date, builds orders, executes them at Open, accounts for costs, splits, dividends and cash, keeps a journal, and provides manual reconciliations of the mechanics. N2 succeeds when all manual reconciliations agree with the engine's calculation, a run checking the invariants on real data is completed and registered, and the mechanics are described in EXECUTION_MODEL.md.
 
-Вне N2: расчёт целевых весов (§5), метрики (§11), B0–B3, REF_SPY, H1/H2, любые таблицы доходности. Новых зависимостей нет (numpy, pandas, exchange_calendars уже в requirements.lock).
+Outside N2: target-weight calculation (section 5), metrics (section 11), B0-B3, REF_SPY, H1/H2, and any return tables. There are no new dependencies (numpy, pandas and exchange_calendars are already in requirements.lock).
 
-## 2. Входные данные
+## 2. Input data
 
-Только vintage data/derived/20261006T172442-80ef993493 (D020). Загрузчик проверяет manifest (provenance.verify) и совпадение SHA-256 manifest с f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2; другой vintage отклоняется, пока нет нового решения.
+Only the vintage `data/derived/20261006T172442-80ef993493` (D020). The loader verifies the manifest (`provenance.verify`) and that the SHA-256 of the manifest equals `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2`; another vintage is rejected until a new decision exists.
 
-Используемые колонки normalized/<TICKER>.csv: session, open, close, dividend (as-traded на акцию, включая capital gains), split_ratio (новое/старое на дату сплита, иначе 1), payable_date (сессия зачисления, задана на строке ex-date при dividend > 0), payable_basis.
+Columns used from `normalized/<TICKER>.csv`: `session`, `open`, `close`, `dividend` (as-traded per share, including capital gains), `split_ratio` (new/old on the split date, otherwise 1), `payable_date` (the crediting session, set on the ex-date row when dividend > 0), `payable_basis`.
 
-Контракт payable_basis. На строке с dividend > 0 загрузчик принимает ровно два значения: `actual` и `proxy_ex_plus_10_calendar_days` (так normalize.py записывает расчётную дату при pay_delay_days = 10 из конфигурации снимка). Любое другое значение, пустое значение при dividend > 0 или payable_date раньше ex-date — ошибка загрузки. Для строк `proxy_ex_plus_10_calendar_days` загрузчик проверяет, что payable_date равна первой сессии общего календаря не раньше ex-date + 10 календарных дней; расхождение — ошибка. Далее в спецификации «proxy-строка» означает строку с payable_basis = `proxy_ex_plus_10_calendar_days`. В журнале выплат основание даты записывается как `actual` или `proxy_ex_plus_<k>_calendar_days` для фактического k сценария. В окне N2 такая строка одна: BIL 2008-03-03. Общий календарь: сессии, где есть бары у всех десяти тикеров, начиная с 2007-05-30. Сессия, у которой хотя бы один тикер не имеет строки, в общий календарь не входит; в текущем vintage таких сессий нет (4869/4869).
+The `payable_basis` contract. On a row with dividend > 0 the loader accepts exactly two values: `actual` and `proxy_ex_plus_10_calendar_days` (this is how normalize.py records the computed date with pay_delay_days = 10 from the snapshot configuration). Any other value, an empty value when dividend > 0, or a `payable_date` earlier than the ex-date is a load error. For `proxy_ex_plus_10_calendar_days` rows the loader checks that `payable_date` equals the first session of the common calendar no earlier than ex-date + 10 calendar days; a mismatch is an error. Below in this specification, "proxy row" means a row with payable_basis = `proxy_ex_plus_10_calendar_days`. In the payout journal the date basis is recorded as `actual` or `proxy_ex_plus_<k>_calendar_days` for the scenario's actual k. In the N2 window there is one such row: BIL 2008-03-03. The common calendar consists of the sessions where all ten tickers have bars, starting 2007-05-30. A session for which at least one ticker has no row is not in the common calendar; the current vintage has no such sessions (4869/4869).
 
-## 3. Модули
+## 3. Modules
 
-- `src/alpha_lab/market.py` — загрузка и проверка vintage, общий календарь, таблицы open/close/dividend/split_ratio/pay_session по тикерам. `history(t)` возвращает данные только по сессиям ≤ t.
-- `src/alpha_lab/ledger.py` — состояние счёта (`Account`: cash, positions, receivables, pending orders) и чистые функции событий: сплит, начисление дебиторки, зачисление выплат, продажи, покупки, оценка по Close. Без ввода-вывода.
-- `src/alpha_lab/engine.py` — дневной цикл, расчёт заявок на датах решения, сценарии, журнал, проверка инвариантов, запись результата и регистрация запуска.
-- Поставщик весов: функция `provider(t, history) -> dict[str, float]` по всем десяти тикерам (включая BIL). Веса ≥ 0, сумма ≤ 1 + 1e-12, иначе ошибка. Остаток до 1 остаётся в USD. В N2 есть только тестовые поставщики; алгоритм §5 появится в N3 в этом же интерфейсе.
+- `src/alpha_lab/market.py` - loading and validation of the vintage, the common calendar, and per-ticker tables of open/close/dividend/split_ratio/pay_session. `history(t)` returns data only for sessions <= t.
+- `src/alpha_lab/ledger.py` - the account state (`Account`: cash, positions, receivables, pending orders) and pure event functions: split, receivable accrual, payout crediting, sales, purchases, valuation at Close. No input or output.
+- `src/alpha_lab/engine.py` - the day loop, order calculation on decision dates, scenarios, the journal, invariant checks, result writing and run registration.
+- Weight provider: a function `provider(t, history) -> dict[str, float]` over all ten tickers (including BIL). Weights >= 0 and sum <= 1 + 1e-12, otherwise an error. The remainder up to 1 stays in USD. N2 has only test providers; the section 5 algorithm will appear in N3 through the same interface.
 
-## 4. Счёт и параметры
+## 4. Account and parameters
 
-Начальное состояние: 100000 USD, позиций нет. Параметры запуска: start_session (первая дата решения), end_session, decision_sessions (по умолчанию последняя сессия каждого месяца в общем календаре между start и end), cost c ∈ {0, 0.001, 0.002, 0.005} (база 0.001), lag ∈ {1, 2} сессии (база 1), reserve r ∈ {0, 0.01, 0.02} (база 0.01), proxy_pay_days ∈ {0, 10, 30} (база 10).
+Initial state: 100000 USD, no positions. Run parameters: start_session (the first decision date), end_session, decision_sessions (by default the last session of each month in the common calendar between start and end), cost c in {0, 0.001, 0.002, 0.005} (base 0.001), lag in {1, 2} sessions (base 1), reserve r in {0, 0.01, 0.02} (base 0.01), proxy_pay_days in {0, 10, 30} (base 10).
 
-Защита периода: end_session не позже 2022-12-30 (последняя сессия 2022 года); период 2023-01-01 и позже закрыт до N6 (RESEARCH_PROTOCOL.md, строки 137 и 143). Движок отклоняет такой запуск; снятие запрета требует отдельного решения.
+Period guard: end_session no later than 2022-12-30 (the last session of 2022); the period from 2023-01-01 on is closed until N6 (RESEARCH_PROTOCOL.md, lines 137 and 143). The engine rejects such a run; lifting the prohibition requires a separate decision.
 
-## 5. Порядок событий в сессии s
+## 5. Order of events in session s
 
-На открытии s, строго в этом порядке:
+At the open of s, strictly in this order:
 
-1. Сплит: для тикера с split_ratio ≠ 1 количество позиции и количество висящей заявки умножаются на коэффициент. Дробный результат не округляется (RESEARCH_PROTOCOL.md, строка 120). Деньги не меняются.
-2. Начисление дебиторки: для тикера с dividend > 0 на s право имеет количество после шага 1, то есть позиция на закрытие предыдущей сессии в новых единицах. Сумма = количество × dividend; сессия выплаты = payable_date строки, а для proxy-строк (раздел 2) при сценарии proxy_pay_days = k — первая сессия общего календаря не раньше ex-date + k календарных дней (при k = 10 совпадает с payable_date). Строки `actual` сценарием не меняются. Нулевое количество начислений не создаёт.
-3. Зачисление: дебиторка с сессией выплаты s переходит в деньги, включая начисленную на шаге 2.
-4. Продажи висящих заявок с исполнением в s (раздел 6).
-5. Покупки висящих заявок с исполнением в s.
+1. Split: for a ticker with split_ratio != 1, the position quantity and the quantity of a pending order are multiplied by the ratio. A fractional result is not rounded (RESEARCH_PROTOCOL.md, line 120). Cash does not change.
+2. Receivable accrual: for a ticker with dividend > 0 on s, the entitled quantity is the quantity after step 1, that is, the position at the previous session's close in new units. Amount = quantity × dividend; the payment session = the row's `payable_date`, and for proxy rows (section 2) under the scenario proxy_pay_days = k, the first session of the common calendar no earlier than ex-date + k calendar days (for k = 10 it equals `payable_date`). `actual` rows are not changed by the scenario. A zero quantity creates no accrual.
+3. Crediting: a receivable whose payment session is s becomes cash, including one accrued in step 2.
+4. Sales of pending orders with execution in s (section 6).
+5. Purchases of pending orders with execution in s.
 
-На закрытии s: NAV = cash + Σ qty × close + сумма невыплаченной дебиторки. Если s — дата решения, после оценки создаются заявки.
+At the close of s: NAV = cash + Σ qty × close + the sum of unpaid receivables. If s is a decision date, orders are created after valuation.
 
-Деньги, зачисленные на шагах 3–4, доступны для покупок в той же сессии. Покупка на открытии ex-date права на выплату не даёт, продажа на открытии ex-date право сохраняет: начисление идёт до сделок.
+Cash credited in steps 3-4 is available for purchases in the same session. A purchase at the ex-date open does not earn the payout entitlement, and a sale at the ex-date open retains it: accrual comes before trades.
 
-## 6. Заявки и исполнение
+## 6. Orders and execution
 
-Решение в сессию t (закрытие, 18:00 America/New_York): по весам w_i от поставщика и NAV_t целевое количество Q_i = floor((1 − r) × w_i × NAV_t / close_i,t), целое, включая BIL. Заявка q_i = Q_i − h_i,t, где h_i,t — позиция на закрытие t; q_i может быть дробным, если позиция содержит дробный остаток после сплита. q_i = 0 заявки не создаёт. Порога минимальной сделки нет.
+Decision in session t (the close, 18:00 America/New_York): from the weights w_i supplied by the provider and NAV_t, the target quantity is Q_i = floor((1 - r) × w_i × NAV_t / close_i,t), an integer, including BIL. The order is q_i = Q_i - h_i,t, where h_i,t is the position at the close of t; q_i may be fractional if the position contains a fractional residual after a split. q_i = 0 creates no order. There is no minimum trade size.
 
-Исполнение в сессии e = t + lag сессий общего календаря. Заявка живёт одно открытие. Между t и e количество заявки меняется только сплитом (шаг 1). Новое решение до исполнения предыдущего не допускается (ошибка).
+Execution is in session e = t + lag sessions of the common calendar. An order lives for one open. Between t and e the order quantity changes only through a split (step 1). A new decision before the previous one has executed is not allowed (an error).
 
-Валидный Open: конечное число > 0. Без валидного Open заявка по тикеру отменяется с причиной `no_valid_open`.
+A valid Open is a finite number > 0. Without a valid Open, the order for that ticker is cancelled with reason `no_valid_open`.
 
-Продажи (q_i < 0): продаётся min(|q_i|, позиция) по Open; выручка qty × open × (1 − c) поступает сразу. Превышение позиции отменяется с причиной `exceeds_position` (защитная ветка; при корректном расчёте не возникает).
+Sales (q_i < 0): min(|q_i|, position) is sold at Open; proceeds qty × open × (1 - c) arrive immediately. An excess over the position is cancelled with reason `exceeds_position` (a defensive branch that does not arise when the calculation is correct).
 
-Покупки (q_i > 0): требуемая сумма R = Σ q_i × open_i × (1 + c). fill = min(1, cash / R); при R = 0 fill = 1. Покупается floor(fill × q_i) акций каждого тикера; деньги уменьшаются на qty × open × (1 + c). Остаток не перераспределяется; неисполненная часть отменяется с причиной `insufficient_cash`. После покупок cash ≥ −1e-8, иначе ошибка запуска.
+Purchases (q_i > 0): the required amount is R = Σ q_i × open_i × (1 + c). fill = min(1, cash / R); if R = 0, fill = 1. floor(fill × q_i) shares of each ticker are bought; cash decreases by qty × open × (1 + c). The remainder is not redistributed; the unfilled part is cancelled with reason `insufficient_cash`. After the purchases, cash >= -1e-8, otherwise the run fails with an error.
 
-Издержки: c × |qty| × open на каждой стороне; корпоративные события бесплатны. Деньги и количества хранятся в float64 без округления до центов.
+Costs: c × |qty| × open on each side; corporate events are free. Cash and quantities are stored as float64 without rounding to cents.
 
-## 7. Журнал результата
+## 7. Result journal
 
-Запуск регистрируется через provenance.Run (purpose `N2 execution run`, started и completed/failed). Результат замораживается через provenance.freeze в data/runs/<run_id>/ (data/ исключена из Git: производные данные Yahoo):
+The run is registered through `provenance.Run` (purpose `N2 execution run`, `started` and `completed`/`failed`). The result is frozen through `provenance.freeze` in `data/runs/<run_id>/` (`data/` is excluded from Git: derived Yahoo data):
 
-- `config.json` — параметры, поставщик (имя и версия), путь и SHA-256 manifest vintage.
-- `decisions.csv` — decision_session, execution_session, nav, buy_fill, turnover (Σ |исполненный notional| / nav решения), costs_usd.
-- `orders.csv` — decision_session, execution_session, ticker, weight, close, target_qty, held_qty, order_qty (после сплита на момент исполнения), filled_qty, status (filled / partial / cancelled), cancel_reason.
-- `trades.csv` — session, ticker, side, qty, price, notional, cost, cash_after.
-- `payouts.csv` — ticker, ex_session, pay_session, pay_basis, qty, amount_per_share, amount, status (paid / receivable).
-- `daily.csv` — session, cash, receivables, positions_value, nav, количество по каждому тикеру.
-- `invariants.json` — результаты проверок раздела 8.
+- `config.json` - parameters, provider (name and version), path and SHA-256 of the vintage manifest.
+- `decisions.csv` - decision_session, execution_session, nav, buy_fill, turnover (Σ |executed notional| / decision nav), costs_usd.
+- `orders.csv` - decision_session, execution_session, ticker, weight, close, target_qty, held_qty, order_qty (after the split, at the moment of execution), filled_qty, status (filled / partial / cancelled), cancel_reason.
+- `trades.csv` - session, ticker, side, qty, price, notional, cost, cash_after.
+- `payouts.csv` - ticker, ex_session, pay_session, pay_basis, qty, amount_per_share, amount, status (paid / receivable).
+- `daily.csv` - session, cash, receivables, positions_value, nav, the quantity of each ticker.
+- `invariants.json` - the results of the section 8 checks.
 
-## 8. Инварианты прогона
+## 8. Run invariants
 
-Проверяются на каждом прогоне и записываются в invariants.json; нарушение делает запуск failed:
+Checked on every run and written to invariants.json; a violation makes the run `failed`:
 
-- cash ≥ −1e-8 во все сессии;
-- NAV = cash + Σ qty × close + receivables (абсолютное расхождение ≤ 1e-6);
-- изменение денег за сессию = выплаты + выручка продаж − стоимость покупок (≤ 1e-6);
-- сплит меняет только количество: деньги и дебиторка в шаге 1 не меняются, количество умножено ровно на коэффициент;
-- Σ начисленной дебиторки = Σ выплаченной + остаток дебиторки;
-- каждая сделка исполнена в сессию decision + lag по Open этой сессии; размер заявки рассчитан по close сессии решения;
-- издержки = c × Σ |notional|.
+- cash >= -1e-8 in all sessions;
+- NAV = cash + Σ qty × close + receivables (absolute discrepancy <= 1e-6);
+- the change in cash over a session = payouts + sale proceeds - purchase cost (<= 1e-6);
+- a split changes only the quantity: cash and receivables in step 1 do not change, and the quantity is multiplied by exactly the ratio;
+- Σ accrued receivables = Σ paid + remaining receivables;
+- every trade is executed in session decision + lag at the Open of that session; the order size was computed from the close of the decision session;
+- costs = c × Σ |notional|.
 
-## 9. Ручные сверки (§8 протокола)
+## 9. Manual reconciliations (protocol section 8)
 
-Синтетический рынок из 2–3 тикеров на реальном календаре XNYS, числа посчитаны вручную и записаны в docs/n2/manual_reconciliation.md; каждый случай — тест с точным сравнением (допуск 1e-9):
+A synthetic market of 2-3 tickers on the real XNYS calendar, with numbers calculated by hand and recorded in docs/n2/manual_reconciliation.md; each case is a test with exact comparison (tolerance 1e-9):
 
-1. До и после открытия: размер по close решения, исполнение по Open следующей сессии; изменение строк после t не меняет заявок.
-2. Сплит 1:2 (как BIL 2017) и 3:1 (как EEM 2008) с позицией и висящей заявкой; дробный остаток и его продажа.
-3. Ex/pay: покупка на открытии ex-date без права, продажа на открытии ex-date с правом; дебиторка в NAV до выплаты; зачисление и покупка в одну сессию; сценарий proxy +0.
-4. Гэп: Open выше close решения, fill < 1, отмена остатка с причиной, деньги не отрицательны.
-5. Замена ETF A на B: продажа финансирует покупку в то же открытие, издержки на обеих сторонах.
-6. Задержка lag = 2 и отмена заявки без валидного Open.
+1. Before and after the open: sizing at the decision close, execution at the next session's Open; changing rows after t does not change the orders.
+2. A 1:2 split (like BIL 2017) and a 3:1 split (like EEM 2008) with a position and a pending order; the fractional residual and its sale.
+3. Ex/pay: a purchase at the ex-date open without entitlement, a sale at the ex-date open with entitlement; a receivable in NAV before payment; crediting and purchase in the same session; scenario proxy +0.
+4. Gap: Open above the decision close, fill < 1, cancellation of the remainder with a reason, cash not negative.
+5. Replacing ETF A with B: the sale funds the purchase at the same open, costs on both sides.
+6. Delay lag = 2 and cancellation of an order without a valid Open.
 
-Дополнительно: защита периода (end_session после 2022-12-30 отклоняется), запись failed в журнал, детерминизм (два прогона дают побайтно одинаковые файлы).
+In addition: the period guard (end_session after 2022-12-30 is rejected), recording `failed` in the journal, and determinism (two runs produce byte-identical files).
 
-## 10. Прогон проверки инвариантов на реальных данных
+## 10. Run checking the invariants on real data
 
-Поставщик `invariant_rotation` (тестовый, не стратегия): каждый из десяти тикеров всегда в портфеле, вес меняется по номеру месяца, w_i = (1 + (m + i) mod 3) / Σ, где i — номер тикера в алфавитном порядке. Это даёт сделки каждый месяц, держит EEM на сплите 2008-07-24 и BIL на сплите 2017-11-30 и проходит через все выплаты. Окно: первая дата решения 2007-05-31 (последняя сессия мая 2007 года в общем календаре, начинающемся 2007-05-30), конец 2022-12-30, базовые параметры. Поставщик не использует историю, поэтому период разогрева протокола (253 закрытия) к этому прогону не относится; прогон не является оценкой и не задаёт начало оценочного окна. Окно покрывает сплит EEM 2008-07-24, сплит BIL 2017-11-30 и proxy-выплату BIL 2008-03-03; прогон проверяет, что все три события прошли через движок (запись в invariants.json). Ограничение D017 (полнота истории DBC до 2007-12-17) раскрывается в отчёте. Публикуются только результаты инвариантов, число решений, сделок, отмен по причинам и проверка двух сплитов; NAV и доходность как результат не публикуются.
+Provider `invariant_rotation` (a test provider, not a strategy): each of the ten tickers is always in the portfolio and the weight varies with the month number, w_i = (1 + (m + i) mod 3) / Σ, where i is the ticker's index in alphabetical order. This produces trades every month, holds EEM through the split of 2008-07-24 and BIL through the split of 2017-11-30, and passes through all payouts. Window: the first decision date is 2007-05-31 (the last session of May 2007 in the common calendar, which begins 2007-05-30), the end is 2022-12-30, base parameters. The provider does not use history, so the protocol's warmup period (253 closes) does not apply to this run; the run is not an evaluation and does not set the start of an evaluation window. The window covers the EEM split of 2008-07-24, the BIL split of 2017-11-30 and the BIL proxy payout of 2008-03-03; the run checks that all three events passed through the engine (a record in invariants.json). The D017 limitation (completeness of DBC history before 2007-12-17) is disclosed in the report. Only the invariant results, the number of decisions, trades, cancellations by reason, and the check of the two splits are published; NAV and returns are not published as results.
 
-## 11. Документы
+## 11. Documents
 
-- EXECUTION_MODEL.md (корень, русский) — нормативное описание разделов 4–8 со ссылками на протокол.
-- docs/n2/manual_reconciliation.md — шесть случаев с ручными расчётами.
-- DECISIONS.md, D021 — толкования, которых нет в протоколе: порядок шагов 1–5, дробный пересчёт заявки при сплите, фиксация количества при lag = 2 и fill по фактическим деньгам, отсутствие порога сделки, сценарий proxy как пересчёт только proxy-строк без нового vintage, float64 без центов, защита периода.
-- docs/n2/N2_REPORT.md, STATUS.md, README.md (команды после проверки).
+- EXECUTION_MODEL.md (repository root) - the normative description of sections 4-8 with references to the protocol.
+- docs/n2/manual_reconciliation.md - six cases with manual calculations.
+- DECISIONS.md, D021 - interpretations absent from the protocol: the order of steps 1-5, fractional rescaling of an order at a split, fixing the quantity at lag = 2 and fill from actual cash, the absence of a trade threshold, the proxy scenario as a recomputation of proxy rows only without a new vintage, float64 without cents, the period guard.
+- docs/n2/N2_REPORT.md, STATUS.md, README.md (commands after verification).
 
-## 12. Проверка готовности N2
+## 12. N2 readiness check
 
-Все тесты проходят, включая шесть ручных сверок; прогон раздела 10 completed в журнале на чистом дереве; два прогона дают одинаковые SHA-256 файлов; code review ветки без замечаний уровня Critical/Important; D021 записан. После этого N3 подключает алгоритм весов §5 как поставщика.
+All tests pass, including the six manual reconciliations; the section 10 run is `completed` in the journal on a clean tree; two runs produce identical file SHA-256 values; the branch code review has no Critical/Important findings; D021 is recorded. After that, N3 connects the section 5 weight algorithm as a provider.
