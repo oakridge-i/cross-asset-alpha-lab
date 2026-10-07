@@ -32,7 +32,7 @@ class Order:
     qty: float  # signed, in current units (split-adjusted)
     filled_qty: float = 0.0  # executed magnitude, always >= 0
     status: str = 'pending'  # filled / partial / cancelled
-    cancel_reason: str = ''  # no_valid_open / insufficient_cash / exceeds_position
+    cancel_reason: str = ''  # no_valid_open / insufficient_cash / fractional_quantity / exceeds_position
 
 
 @dataclass
@@ -153,7 +153,8 @@ def execute_orders(account, session, opens, cost):
         if qty > 0:
             account.positions[o.ticker] = account.positions.get(o.ticker, 0.0) + qty
             trades.append(_trade(account, session, o.ticker, 'buy', qty, opens[o.ticker], cost))
-        _settle(o, qty, 'insufficient_cash')
+        # whole shares only: a shortfall below floor(q) is cash, the fractional part alone is not
+        _settle(o, qty, 'insufficient_cash' if qty < math.floor(o.qty) else 'fractional_quantity')
     if account.cash < -CASH_TOLERANCE:
         raise ValueError(f'cash {account.cash} below tolerance after execution on {session}')
     return trades, fill

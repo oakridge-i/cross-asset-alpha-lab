@@ -91,6 +91,23 @@ def test_full_fill_and_no_buys_report_unit_fill():
     assert lg.execute_orders(idle, EXECUTION, {'AAA': 100.0}, 0.001) == ([], 1.0)
 
 
+def test_fractional_buy_remainder_is_not_a_cash_shortfall():
+    buy = order('AAA', 456.5)
+    acc = account(cash=10000.0, pending=[buy])
+    trades, fill = lg.execute_orders(acc, EXECUTION, {'AAA': 10.0}, 0.0)
+    assert fill == 1.0 and [(t.ticker, t.qty) for t in trades] == [('AAA', 456.0)]
+    assert (buy.status, buy.filled_qty, buy.cancel_reason) == ('partial', 456.0, 'fractional_quantity')
+    assert acc.positions == {'AAA': 456.0} and acc.cash == pytest.approx(5440.0, abs=1e-9)
+
+
+def test_fractional_buy_with_cash_shortfall_reports_insufficient_cash():
+    buy = order('AAA', 456.5)
+    acc = account(cash=1000.0, pending=[buy])
+    trades, fill = lg.execute_orders(acc, EXECUTION, {'AAA': 10.0}, 0.0)
+    assert fill == pytest.approx(1000 / 4565, abs=1e-12) and [(t.ticker, t.qty) for t in trades] == [('AAA', 100.0)]
+    assert (buy.status, buy.filled_qty, buy.cancel_reason) == ('partial', 100.0, 'insufficient_cash')
+
+
 def test_no_cash_cancels_buy_without_trade():
     buy = order('AAA', 5)
     acc = account(cash=0.0, pending=[buy])
