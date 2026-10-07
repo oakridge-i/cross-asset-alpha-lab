@@ -125,3 +125,11 @@ Deferred:
 - (c) N0: four broken local `aapl-finalization` links in docs/n0/AAPL_REUSE_AUDIT.md, line 15. The English edition from `main` replaced them with GitHub links to the AAPL release; whether those external links resolve was not checked here.
 - (d) The cp1252 test prints an ASCII path and does not exercise the `backslashreplace` branch.
 - (e) Other minor findings of the final review that are not yet fixed: exit code 0 on `invariants_failed` (for N3, consider a nonzero code together with `quality_failed`) and the small items in the list above (style, additional tests, diagnostics for rejections before a Run exists). Fixed in `c18e904`: references and wording in DECISIONS.md, EXECUTION_MODEL.md and N2_REPORT.md.
+
+## N3: benchmarks (in progress, 7 October 2026)
+
+Branch `claude/n3-benchmarks` from `main` at `d8458b4`; not merged. Specification: [docs/superpowers/specs/2026-10-07-n3-benchmarks-design.md](docs/superpowers/specs/2026-10-07-n3-benchmarks-design.md); interpretations: D022. Implemented and tested (378 passed on `dfebc42`): the N2 deferred items (a), numeric weights, initial cash and exit code 3; `features.py`, `portfolio.py`, `benchmarks.py`, `metrics.py`, `report.py` and the `report` command.
+
+Registered runs on the approved vintage, window 2008-12-31 to 2022-12-30, main scenario, all `completed` with `dirty_tree` false and journal lines committed after each run: B0 `20261007T180004-12aae80084`, B1 `20261007T180018-b6c98bd0aa`, B2 `20261007T180026-dffe07154c`, B3 `20261007T180033-bba99392df`, REF_SPY `20261007T180039-be7dd8f43a`. No results are published yet.
+
+Remaining: the `report` run over these five directories (default expected hash); repeats of the five runs with `--parent` and a repeat report; comparison of manifest `files`; docs/n3/N3_REPORT.md; this file's exit-code statements above (now code 3, D022); README; final review. Merge only after approval.
