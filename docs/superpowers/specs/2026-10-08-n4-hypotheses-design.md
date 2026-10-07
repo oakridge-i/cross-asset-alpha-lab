@@ -54,7 +54,7 @@ This excludes incomplete months (protocol line 52). Month t is included because 
 
 4.1. Return type. A hypothesis provider returns `Decision(weights, signals)`: `weights` is a dictionary over the ten tickers as for the benchmarks; `signals` is a list of nine rows, one per risky ticker in ASCII order. Both come from one computation.
 
-4.2. `portfolio.common_risk` is split without a change of results: `capped(q)` performs steps 1 and 2 of protocol lines 68-69 and returns v; `common_risk(q, cov)` calls `capped` and then performs steps 3 and 4. A second function returns the scale a together with w so that the signal rows can record it; `common_risk` keeps its signature and return value. The N3 regression test (section 5.5) confirms that benchmark results are unchanged.
+4.2. `portfolio.common_risk` is split without a change of results: `capped(q)` performs steps 1 and 2 of protocol lines 68-69 and returns v; `risk_detail(q, cov)` returns `(v, a, w)`, performing steps 3 and 4 on `capped(q)`; `common_risk(q, cov)` returns the w of `risk_detail` and keeps its signature and return value. The N3 regression test (section 5.5) confirms that benchmark results are unchanged.
 
 4.3. H1(L, K), decision at the close of t:
 
