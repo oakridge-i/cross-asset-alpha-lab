@@ -153,7 +153,7 @@ def config(url, *extra):
 
 
 def events(root):
-    return [json.loads(x)['event'] for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    return [json.loads(x)['event'] for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
 
 
 def test_fetch_freezes_sources_with_metadata(tmp_path, server):
@@ -197,7 +197,7 @@ def test_fetch_failure_freezes_partial_evidence_and_logs_failed(tmp_path, server
     assert all(s['sha256'] == m['files'][s['file']] for s in m['metadata']['sources'])
     assert status['fake'] == ('failed', 200, 'fake.pdf')
     assert status['ssga'] == ('completed', 200, 'ssga.xlsx')
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [r['event'] for r in rows] == ['started', 'failed']
     assert rows[-1]['output_paths'] == [target.relative_to(tmp_path).as_posix()]
     assert rows[-1]['data_sha256'] is not None

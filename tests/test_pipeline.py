@@ -26,7 +26,7 @@ def test_offline_audit_and_exact_replay(tmp_path,no_network):
     assert report['technical_pass'] is True
     assert report['data_ready_for_n2'] is False
     assert p.replay_snapshot(tmp_path,derived) is True
-    rows=[json.loads(x) for x in (tmp_path/'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows=[json.loads(x) for x in (tmp_path/'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [r['event'] for r in rows] == ['started','completed','started','completed']
 
 
@@ -34,7 +34,7 @@ def test_corrupt_snapshot_creates_failed_audit(tmp_path):
     s=source(tmp_path)
     (s/'raw/TEST-0.json').write_bytes(b'corrupt')
     with pytest.raises(ValueError): p.audit_snapshot(tmp_path,s)
-    rows=[json.loads(x) for x in (tmp_path/'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows=[json.loads(x) for x in (tmp_path/'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [r['event'] for r in rows] == ['started','failed']
 
 
@@ -48,7 +48,7 @@ def test_adapter_disagreement_is_not_silently_accepted(tmp_path):
 
 
 def journal(root):
-    return [json.loads(x) for x in (root/'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    return [json.loads(x) for x in (root/'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
 
 
 def capital_gain_source(root, adapter_column):
@@ -111,7 +111,7 @@ def test_replay_with_corrections_and_tampered_corrections_fails(tmp_path, no_net
     corrections = {'TEST': {'2017-11-29': {'action': 'replace', 'yahoo_amount': 1.0, 'issuer_amount': 1.5,
                                            'payable_date': None, 'source': 'issuer-ref'}}}
     derived = p.audit_snapshot(tmp_path, s, corrections=corrections)
-    csv_text = (derived / 'normalized/TEST.csv').read_text()
+    csv_text = (derived / 'normalized/TEST.csv').read_text(encoding='utf-8')
     assert 'issuer_correction' in csv_text  # the correction is baked into the frozen vintage
     stored_corrections = json.loads((derived / 'corrections.json').read_bytes())
     assert stored_corrections == corrections

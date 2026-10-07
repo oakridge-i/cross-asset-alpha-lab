@@ -52,11 +52,11 @@ def execute(root, frames=None, config=BASE, **kwargs):
 
 
 def journal(root):
-    return [json.loads(line) for line in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    return [json.loads(line) for line in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
 
 
 def lines(run_dir, name):
-    return (run_dir / name).read_text().splitlines()
+    return (run_dir / name).read_text(encoding='utf-8').splitlines()
 
 
 def test_run_is_journaled_and_frozen(tmp_path, no_network):

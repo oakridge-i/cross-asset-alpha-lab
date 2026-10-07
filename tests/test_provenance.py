@@ -54,7 +54,7 @@ def repo(tmp_path):
 def test_run_logs_success_and_untracked_code_hash(repo):
     with p.Run(repo, 'synthetic', {'universe': ['TEST'], 'splits': {}}, None) as run:
         run.finish('completed', ['output.json'], 'abc', [])
-    rows = [json.loads(x) for x in (repo / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (repo / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows] == ['started', 'completed']
     assert rows[0]['run_id'] == rows[1]['run_id']
     assert rows[0]['dirty_tree'] is True
@@ -72,7 +72,7 @@ def test_run_keeps_failure_and_links_retry(repo):
             raise RuntimeError('broken fixture')
     with p.Run(repo, 'synthetic', {}, first):
         pass
-    rows = [json.loads(x) for x in (repo / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (repo / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed', 'started', 'failed']
     assert rows[-1]['parent_attempt_id'] == first
     assert 'broken fixture' in rows[1]['error']

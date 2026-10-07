@@ -206,7 +206,7 @@ def test_payable_only_for_matched_events_and_audit_accepts_it(tmp_path, no_netwo
     bil = pd.read_csv(derived / 'normalized/BIL.csv', index_col=0, keep_default_na=False)
     assert bil.loc['2017-11-29', ['payable_date', 'payable_basis', 'payable_source']].tolist() == [
         '2017-12-05', 'actual', ref]
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows[:2]] == ['started', 'completed']
     assert rows[1]['output_paths'] == [target.relative_to(tmp_path).as_posix()]
     assert rows[1]['quality_warnings'] == ['Unresolved issuer reconciliation: SPY, EEM',
@@ -222,14 +222,14 @@ def test_altered_evidence_bytes_are_refused(tmp_path, no_network):
     (e / 'ssga.xlsx').write_bytes(xlsx(SSGA[:1]))
     with pytest.raises(ValueError, match='content hash mismatch'):
         r.reconcile(tmp_path, source(tmp_path), e)
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed']
 
 
 def test_failed_evidence_source_is_refused_and_logged(tmp_path, no_network):
     with pytest.raises(ValueError, match='failed evidence source'):
         r.reconcile(tmp_path, source(tmp_path), evidence(tmp_path, failed=True))
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed']
 
 
@@ -238,7 +238,7 @@ def test_failed_evidence_source_is_refused_and_logged(tmp_path, no_network):
 def test_evidence_metadata_must_agree_with_manifest(tmp_path, change, no_network):
     with pytest.raises(ValueError):
         r.reconcile(tmp_path, source(tmp_path), evidence(tmp_path, change=change))
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed']
 
 
@@ -247,7 +247,7 @@ def test_evidence_metadata_must_agree_with_manifest(tmp_path, change, no_network
 def test_no_distribution_documents_must_be_in_the_manifest(tmp_path, drop, change, no_network):
     with pytest.raises(ValueError, match='evidence source gld does not match the manifest'):
         r.reconcile(tmp_path, source(tmp_path), gld_evidence(tmp_path, 'e-gld', drop=drop, change=change))
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed']
     assert not (tmp_path / 'data/reconciliation').exists()
 
@@ -261,7 +261,7 @@ def test_out_of_project_snapshots_are_logged_as_failed_runs(tmp_path, no_network
         audit_snapshot(root, source(tmp_path / 'other'))
     with pytest.raises(ValueError, match='outside project'):
         replay_snapshot(root, outside)
-    rows = [json.loads(x) for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed'] * 3
     assert rows[0]['config']['evidence_snapshot'] == outside.as_posix()
 

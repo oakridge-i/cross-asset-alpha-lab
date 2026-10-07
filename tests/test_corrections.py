@@ -125,7 +125,7 @@ def test_cli_corrections_output_feeds_reconcile(tmp_path, capsys, no_network):
     out = capsys.readouterr().out.strip()
     derived = Path(out)
     assert (derived / 'corrections.json').exists()
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [r['event'] for r in rows] == ['started', 'completed', 'started', 'completed']
 
 
@@ -143,7 +143,7 @@ def test_corrections_run_rejects_payable_before_ex_date(tmp_path, ticker, kind, 
     c['tickers'][ticker][kind][0]['payable_date'] = date
     with pytest.raises(ValueError, match='payable date precedes the ex-date'):
         co.corrections_run(tmp_path, hand_reconciliation(tmp_path, c))
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     assert [r['event'] for r in rows] == ['started', 'failed']
     assert not (tmp_path / 'data/corrections').exists()
 
@@ -163,7 +163,7 @@ def test_corrections_provenance_and_corrected_reconciliation_is_refused(tmp_path
     assert m2['corrections_sha256'] == sha256(cfile.read_bytes())
     assert (m2['corrections_path'], m2['corrections_vintage'], m2['corrections_vintage_run_id']) == (
         f'{vintage}/corrections.json', vintage, derived.name)
-    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
     done = [r for r in rows if r['event'] == 'completed' and r['purpose'] == 'N1 issuer distribution reconciliation'][-1]
     assert (done['corrections_sha256'], done['corrections_path']) == (m2['corrections_sha256'], f'{vintage}/corrections.json')
 
@@ -171,7 +171,7 @@ def test_corrections_provenance_and_corrected_reconciliation_is_refused(tmp_path
     with pytest.raises(ValueError, match='produced with corrections'):
         co.corrections_run(tmp_path, second)
     assert [r['event'] for r in [json.loads(x) for x in (
-        tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]][-2:] == ['started', 'failed']
+        tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]][-2:] == ['started', 'failed']
 
     # The derived snapshot records the same provenance, and the hash equals its frozen corrections.json.
     d = audit_snapshot(tmp_path, s2, payable=derived / 'payable.json', corrections=cfile)
@@ -187,7 +187,7 @@ def test_corrections_provenance_and_corrected_reconciliation_is_refused(tmp_path
 
 
 def journal(root):
-    return [json.loads(x) for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    return [json.loads(x) for x in (root / 'experiments/EXPERIMENT_LOG.jsonl').read_text(encoding='utf-8').splitlines()]
 
 
 def test_audit_refuses_corrections_of_another_source_snapshot(tmp_path, no_network):
