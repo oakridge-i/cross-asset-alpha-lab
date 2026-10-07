@@ -1,4 +1,5 @@
 """Ledger: account state and event functions (split, accrue, credit, sells, buys, NAV)."""
+import math
 import pytest
 from alpha_lab import ledger as lg
 
@@ -79,6 +80,21 @@ def test_sell_then_buy_with_fill_ratio():
     assert (sell.status, sell.filled_qty, sell.cancel_reason) == ('filled', 10.0, '')
     assert (buy.status, buy.filled_qty, buy.cancel_reason) == ('partial', 16.0, 'insufficient_cash')
     assert acc.pending == []
+
+
+def test_fill_ratio_applies_equally_to_several_buys():
+    orders = [order('AAA', 10), order('BBB', 7), order('CCC', 9)]
+    prices = {'AAA': 50.0, 'BBB': 30.0, 'CCC': 20.0}
+    acc = account(cash=500.0, pending=list(orders))
+    trades, fill = lg.execute_orders(acc, EXECUTION, prices, 0.001)
+    assert fill == pytest.approx(500.0 / (890.0 * 1.001), abs=1e-12) and fill < 1.0
+    expected = {'AAA': math.floor(fill * 10), 'BBB': math.floor(fill * 7), 'CCC': math.floor(fill * 9)}
+    assert expected == {'AAA': 5, 'BBB': 3, 'CCC': 5}
+    # one common ratio, each quantity floored, the unspent remainder is not redistributed
+    assert {t.ticker: t.qty for t in trades} == {k: float(v) for k, v in expected.items()}
+    assert acc.positions == {k: float(v) for k, v in expected.items()}
+    assert [(o.status, o.cancel_reason) for o in orders] == [('partial', 'insufficient_cash')] * 3
+    assert acc.cash == pytest.approx(500.0 - 440.0 * 1.001, abs=1e-9) and acc.cash >= 0
 
 
 def test_full_fill_and_no_buys_report_unit_fill():

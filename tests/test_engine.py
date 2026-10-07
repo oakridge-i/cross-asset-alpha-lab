@@ -284,6 +284,39 @@ def test_cost_and_cash_flow_violations_are_reported(monkeypatch):
     assert invariants['nav_identity']['passed'] is True
 
 
+def test_execution_timing_violation_is_reported(monkeypatch):
+    real = engine.execute_orders
+
+    def off_open(account, session, opens, cost):
+        trades, fill = real(account, session, opens, cost)
+        for t in trades:
+            t.price += 0.01
+            t.notional = t.qty * t.price
+            t.cost = cost * t.notional
+        return trades, fill
+
+    monkeypatch.setattr(engine, 'execute_orders', off_open)
+    invariants = case1().invariants
+    assert invariants['passed'] is False
+    assert invariants['execution_timing']['passed'] is False and invariants['costs']['passed'] is True
+    assert invariants['nav_identity']['passed'] is True
+
+
+def test_receivable_conservation_violation_is_reported(monkeypatch):
+    def unmarked(account, session):
+        due = [r for r in account.receivables if r.pay_session == session]
+        for r in due:
+            account.cash += r.amount  # cash arrives but the payout is never marked paid
+        account.receivables[:] = [r for r in account.receivables if r.pay_session != session]
+        return due
+
+    monkeypatch.setattr(engine, 'credit_payouts', unmarked)
+    invariants = case3().invariants
+    assert invariants['passed'] is False
+    assert invariants['receivable_conservation']['passed'] is False
+    assert invariants['nav_identity']['passed'] is True and invariants['execution_timing']['passed'] is True
+
+
 def test_split_that_moves_money_is_reported(monkeypatch):
     real = engine.apply_splits
 
