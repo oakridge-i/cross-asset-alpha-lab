@@ -271,6 +271,9 @@ def test_cli_reconcile_output_feeds_audit_payable_unchanged(tmp_path, capsys, no
     source(tmp_path), evidence(tmp_path)
     main(['reconcile', 'data/snapshots/s', 'data/evidence/e', '--root', str(tmp_path)])
     target = Path(capsys.readouterr().out.strip())
-    main(['audit', 'data/snapshots/s', '--root', str(tmp_path), '--payable', str(target / 'payable.json')])
+    # The synthetic snapshot fails technical QA, which is exit code 3; the payable pass-through is what is checked.
+    with pytest.raises(SystemExit) as exc:
+        main(['audit', 'data/snapshots/s', '--root', str(tmp_path), '--payable', str(target / 'payable.json')])
+    assert exc.value.code == 3
     derived = Path(capsys.readouterr().out.strip())
     assert (derived / 'payable.json').read_bytes() == (target / 'payable.json').read_bytes()

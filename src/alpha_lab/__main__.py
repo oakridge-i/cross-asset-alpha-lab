@@ -1,6 +1,7 @@
 """Usage: python -m alpha_lab {acquire,evidence,audit,replay,reconcile,corrections} [snapshot] [evidence]
 --root PROJECT; python -m alpha_lab simulate DERIVED --provider NAME --start DATE --end DATE
-[--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH] --root PROJECT [--parent ATTEMPT]."""
+[--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH] --root PROJECT [--parent ATTEMPT].
+Exit codes: 0 completed; 3 simulate finished with failed invariants or audit with failed QA; 1 exception; 2 usage."""
 import argparse
 import json
 import sys
@@ -11,6 +12,8 @@ from .evidence import fetch_evidence
 from .market import VINTAGE_MANIFEST_SHA256
 from .pipeline import acquire_snapshot, audit_snapshot, project_path, replay_snapshot
 from .reconcile import reconcile
+
+EXIT_CHECKS_FAILED = 3
 
 
 def main(argv=None):
@@ -53,13 +56,18 @@ def main(argv=None):
         config = RunConfig(args.start, args.end, scenario=scenario)
         run_dir = run_simulation(root, root / args.snapshot, args.provider, config, args.parent, args.expected_sha256)
         print(project_path(root, run_dir))
+        if not json.loads((run_dir / 'invariants.json').read_bytes())['passed']:
+            raise SystemExit(EXIT_CHECKS_FAILED)
     else:
         if not args.snapshot:
             parser.error('snapshot required for audit/replay/reconcile')
         snapshot = root / args.snapshot
         if args.command == 'audit':
             # --payable and --corrections resolve against --root, like the snapshot paths.
-            print(audit_snapshot(root, snapshot, args.parent, args.payable or {}, args.corrections or {}))
+            derived = audit_snapshot(root, snapshot, args.parent, args.payable or {}, args.corrections or {})
+            print(derived)
+            if not json.loads((Path(derived) / 'quality.json').read_bytes())['technical_pass']:
+                raise SystemExit(EXIT_CHECKS_FAILED)
         elif args.command == 'reconcile':
             if not args.evidence:
                 parser.error('evidence snapshot required for reconcile')

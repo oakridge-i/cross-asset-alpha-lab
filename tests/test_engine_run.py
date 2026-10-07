@@ -227,6 +227,17 @@ def test_cli_simulate(tmp_path, capsys, no_network):
     assert set(verify(run_dir)['files']) == FILES
 
 
+def test_cli_simulate_exit_code_3_on_failed_invariants(tmp_path, capsys, monkeypatch, no_network):
+    derived, digest = vintage(tmp_path, plain_frames())
+    real = engine.nav
+    monkeypatch.setattr(engine, 'nav', lambda account, closes: real(account, closes) + 1.0)
+    with pytest.raises(SystemExit) as exc:
+        main(cli(tmp_path, derived, digest))
+    assert exc.value.code == 3
+    assert (tmp_path / capsys.readouterr().out.strip()).is_dir()
+    assert journal(tmp_path)[-1]['status'] == 'invariants_failed'
+
+
 def test_cli_simulate_on_cp1252_console(tmp_path, monkeypatch, no_network):
     root = tmp_path / 'проект'
     derived, digest = vintage(root, plain_frames())

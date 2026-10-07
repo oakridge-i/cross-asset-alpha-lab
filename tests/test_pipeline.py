@@ -178,3 +178,20 @@ def test_unreadable_cli_inputs_are_logged_as_failed_runs(tmp_path, no_network):
     assert rows[0]['purpose'] == 'N1 offline QA'
     assert rows[0]['config']['unreadable_input'] == 'missing.json'
     assert rows[2]['config']['unreadable_input'] == 'configs/n1_evidence.json'
+
+
+@pytest.mark.parametrize('technical_pass', [False, True])
+def test_cli_audit_exit_code_3_on_quality_failed(tmp_path, monkeypatch, capsys, technical_pass):
+    from alpha_lab.__main__ import main
+    derived = tmp_path / 'data/derived/fake'
+    derived.mkdir(parents=True)
+    (derived / 'quality.json').write_text(json.dumps({'technical_pass': technical_pass}))
+    monkeypatch.setattr('alpha_lab.__main__.audit_snapshot', lambda *args: derived)
+    argv = ['audit', 'data/snapshots/x', '--root', str(tmp_path)]
+    if technical_pass:
+        main(argv)
+    else:
+        with pytest.raises(SystemExit) as exc:
+            main(argv)
+        assert exc.value.code == 3
+    assert capsys.readouterr().out.strip() == str(derived)
