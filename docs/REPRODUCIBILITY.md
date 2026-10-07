@@ -62,17 +62,30 @@ The run needs the local approved vintage and a clean working tree. It appends jo
 
 ## N3 benchmark runs
 
-The N3 runs use the approved vintage, the locked environment and a clean working tree. Before the first run, `provenance.verify` on `data/derived/20261006T172442-80ef993493` and its manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2` must match. The window is 2008-12-31 to 2022-12-30 in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000); the first decision is the close of 2008-12-31 (D022, item 6).
+The N3 runs use the approved vintage, the locked environment of `requirements.lock` and a clean working tree. The interpreter is `.venv/Scripts/python` in a checkout that has its own environment; the registered N3 runs used the environment of the N2 runs. All five runs and the report must come from the same environment and from commits with the same `src` tree (D022, item 16). Before the first run, `provenance.verify` on `data/derived/20261006T172442-80ef993493` and its manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2` must match. The window is 2008-12-31 to 2022-12-30 in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000); the first decision is the close of 2008-12-31 (D022, item 6).
 
 ```bash
-for p in B0 B1 B2 B3 REF_SPY; do
-  PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider $p --start 2008-12-31 --end 2022-12-30 --root .
-  # commit the new EXPERIMENT_LOG.jsonl lines before the next command
-done
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B0 --start 2008-12-31 --end 2022-12-30 --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: B0 benchmark run"
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B1 --start 2008-12-31 --end 2022-12-30 --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: B1 benchmark run"
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B2 --start 2008-12-31 --end 2022-12-30 --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: B2 benchmark run"
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B3 --start 2008-12-31 --end 2022-12-30 --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: B3 benchmark run"
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider REF_SPY --start 2008-12-31 --end 2022-12-30 --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: REF_SPY benchmark run"
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab report --runs data/runs/<B0 dir> data/runs/<B1 dir> data/runs/<B2 dir> data/runs/<B3 dir> data/runs/<REF_SPY dir> --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: benchmark report"
 ```
 
-Each `simulate` prints `data/runs/<run_id>`; substitute the five printed directories in `report`. The commands are shown as a sequence, not an unattended batch: each run must start on a clean tree and the journal lines of the previous run are committed first, because the report rejects a run whose records have `dirty_tree` true or no `git_sha`. A command that exits with code 3 has frozen its result and journaled `invariants_failed`; it stays in the journal and its cause is fixed before a repeat with `--parent`.
+Each `simulate` prints `data/runs/<run_id>`; substitute the five printed directories in `report`. The commands are shown as a sequence, not an unattended batch: each run must start on a clean tree and the journal lines of the previous run are committed first, because the report rejects a run whose records have `dirty_tree` true or no `git_sha`. A run started on a dirty tree is rejected by the report and remains in the append-only journal. A command that exits with code 3 has frozen its result and journaled `invariants_failed`; it stays in the journal and its cause is fixed before a repeat with `--parent`.
 
 A repeat uses `--parent <run id of the first run>` for each of the five runs and for the report. A repeated benchmark run and a repeated report are compared by the `files` dictionaries of their `manifest.json` (per-file SHA-256), not by the manifest bytes, which contain run identifiers. The report files `benchmarks.json` and `benchmarks.md` in `data/reports/<run_id>/` contain no run id. The `--expected-sha256` option of `simulate` and `report` exists for tests on synthetic vintages; registered runs use the default, the approved hash. Run identifiers and results are added to the repository after the runs; none is recorded here.
 
