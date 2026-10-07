@@ -203,6 +203,84 @@ def test_report_rejects_tampered_config(project):
     reject(project, 'invalid snapshot|mismatch')
 
 
+def refreeze(p, name, files=None, metadata=None):
+    """Replace a run with a validly frozen copy whose files or manifest metadata are edited; the journal follows."""
+    old = p.runs[name]
+    manifest = verify(old)
+    body = {n: (old / n).read_bytes() for n in manifest['files']}
+    body.update(files or {})
+    shutil.rmtree(old)
+    provenance.freeze(old, body, {**manifest['metadata'], **(metadata or {})})
+    edit_run(p, name, 'completed', data_sha256=provenance.sha256((old / 'manifest.json').read_bytes()))
+
+
+def test_report_rejects_failed_invariants_in_a_completed_run(project):
+    refreeze(project, 'B2', {'invariants.json': provenance.canonical_bytes({'passed': False})})
+    reject(project, 'invariants did not pass')
+
+
+def test_report_rejects_stale_metrics_schema(project):
+    path = project.runs['B2'] / 'metrics.json'
+    refreeze(project, 'B2', {'metrics.json': provenance.canonical_bytes({**json.loads(path.read_bytes()),
+                                                                          'schema_version': 0})})
+    reject(project, 'metrics schema')
+
+
+def test_report_rejects_manifest_metadata_hash_mismatch(project):
+    refreeze(project, 'B2', metadata={'derived_manifest_sha256': '0' * 64})
+    reject(project, 'vintage manifest hash')
+
+
+def test_report_rejects_seven_file_test_provider_run(project):
+    test_run = simulate(project.root, project.derived, project.digest, 'invariant_rotation')
+    reject(project, 'not a benchmark run', runs=[test_run, *(project.runs[n] for n in BENCHMARKS[1:])])
+
+
+def journal_rows_of(p, name):
+    return [r for r in journal(p.root) if r['run_id'] == p.runs[name].name]
+
+
+@pytest.mark.parametrize('event, match', [('started', 'one started'), ('completed', 'one terminal')])
+def test_report_rejects_repeated_journal_records(project, event, match):
+    row = next(r for r in journal_rows_of(project, 'B1') if r['event'] == event)
+    rewrite_journal(project, lambda rows: rows.append(row))
+    reject(project, match)
+
+
+@pytest.mark.parametrize('field, value, match', [('dirty_tree', True, 'dirty_tree'), ('git_sha', None, 'git_sha')])
+def test_report_rejects_unclean_terminal_record(project, field, value, match):
+    edit_run(project, 'B1', 'completed', **{field: value})
+    reject(project, match)
+
+
+@pytest.mark.parametrize('change', [{'initial_cash': 50000.0}, {'start_session': '2009-01-02'}])
+def test_report_rejects_other_cash_or_start(project, change):
+    other = simulate(project.root, project.derived, project.digest, 'B3', RunConfig(**{'start_session': START, 'end_session': END, **change}))
+    runs = [project.runs[n] for n in BENCHMARKS]
+    reject(project, f'{next(iter(change))} differs', runs=[*runs[:3], other, runs[4]])
+
+
+@pytest.mark.parametrize('key, value', [('initial_cash', 1.0), ('decision_sessions', ['2009-01-02']),
+                                        ('provider', {'name': 'B1', 'version': '9'})])
+def test_report_rejects_journal_config_disagreeing_with_config_json(project, key, value):
+    def edit(rows):
+        for r in rows:
+            if r['run_id'] == project.runs['B1'].name and r['event'] == 'started':
+                r['config'][key] = value
+                r['config_sha256'] = provenance.sha256(provenance.canonical_bytes(r['config']))
+    rewrite_journal(project, edit)
+    reject(project, 'differs from config.json')
+
+
+def test_report_rejects_malformed_run_data_with_value_error(project):
+    config = json.loads((project.runs['B2'] / 'config.json').read_bytes())
+    del config['manifest_sha256']
+    refreeze(project, 'B2', {'config.json': provenance.canonical_bytes(config)})
+    reject(project, 'malformed run data')
+    rewrite_journal(project, lambda rows: [r.pop('dirty_tree', None) for r in rows])
+    reject(project, 'malformed run data')
+
+
 def test_report_rejects_tampered_journal_config(project):
     def edit(rows):
         for r in rows:

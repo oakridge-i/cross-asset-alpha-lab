@@ -1,4 +1,5 @@
 """Journaled N3 benchmark report: verifies the five benchmark runs and freezes deterministic summary tables."""
+from contextlib import contextmanager
 import json
 from pathlib import Path
 from alpha_lab.engine import PROVIDERS
@@ -28,6 +29,15 @@ def journal_rows(root):
 
 def read_json(path):
     return json.loads(path.read_bytes())
+
+
+@contextmanager
+def well_formed(label):
+    """Missing keys or wrong types in a run's files or journal rows are a failed check, not a crash."""
+    try:
+        yield
+    except (KeyError, TypeError, AttributeError, IndexError) as exc:
+        raise ValueError(f'{label}: malformed run data ({type(exc).__name__}: {exc})') from exc
 
 
 def require(condition, message):
@@ -73,29 +83,33 @@ def verified_runs(root, run_dirs, expected_sha256):
         dirs.append(path)
     found = {}
     for path in dirs:
-        manifest = verify(path)
-        require(set(manifest['files']) == RUN_FILES, f'{path.name}: not a benchmark run')
-        config = read_json(path / 'config.json')
-        found.setdefault(config['provider']['name'], []).append((path, manifest, config))
+        with well_formed(path.name):
+            manifest = verify(path)
+            require(set(manifest['files']) == RUN_FILES, f'{path.name}: not a benchmark run')
+            config = read_json(path / 'config.json')
+            found.setdefault(config['provider']['name'], []).append((path, manifest, config))
     require(sorted(found) == sorted(BENCHMARKS) and all(len(v) == 1 for v in found.values()),
             'each of B0, B1, B2, B3 and REF_SPY is required exactly once')
     rows = journal_rows(root)
     out = {}
     for name in BENCHMARKS:
         path, manifest, config = found[name][0]
-        check_journal(root, path, rows, config)
-        require(read_json(path / 'invariants.json')['passed'] is True, f'{path.name}: invariants did not pass')
-        metrics = read_json(path / 'metrics.json')
-        require(config['provider']['version'] == PROVIDERS[name].version, f'{name}: provider version is not current')
-        require(metrics['schema_version'] == METRICS_SCHEMA, f'{name}: metrics schema version is not current')
-        require(config['manifest_sha256'] == expected_sha256 == manifest['metadata']['derived_manifest_sha256'],
-                f'{name}: vintage manifest hash is not the approved one')
-        out[name] = (path, manifest, config, metrics)
+        with well_formed(path.name):
+            check_journal(root, path, rows, config)
+            require(read_json(path / 'invariants.json')['passed'] is True, f'{path.name}: invariants did not pass')
+            metrics = read_json(path / 'metrics.json')
+            require(config['provider']['version'] == PROVIDERS[name].version, f'{name}: provider version is not current')
+            require(metrics['schema_version'] == METRICS_SCHEMA, f'{name}: metrics schema version is not current')
+            require(config['manifest_sha256'] == expected_sha256 == manifest['metadata']['derived_manifest_sha256'],
+                    f'{name}: vintage manifest hash is not the approved one')
+            out[name] = (path, manifest, config, metrics)
     first = out[BENCHMARKS[0]][2]
     for name, (_, _, config, _) in out.items():
-        for key in SHARED:
-            require(config[key] == first[key], f'{name}: {key} differs from B0')
-    common_periods({n: v[3] for n, v in out.items()})
+        with well_formed(name):
+            for key in SHARED:
+                require(config[key] == first[key], f'{name}: {key} differs from B0')
+    with well_formed('metrics'):
+        common_periods({n: v[3] for n, v in out.items()})
     return out
 
 
