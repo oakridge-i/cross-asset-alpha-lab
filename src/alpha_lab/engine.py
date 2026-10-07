@@ -5,7 +5,7 @@ import math
 from alpha_lab.ledger import (CASH_TOLERANCE, Account, Order, Receivable, Trade, accrue_dividends, apply_splits,
                               credit_payouts, execute_orders, nav, receivables_total, size_orders)
 from alpha_lab.market import LAST_OPEN_SESSION, PROXY_BASIS, proxy_pay_session
-from alpha_lab.normalize import calendar
+from alpha_lab.normalize import calendar, finite_number
 
 GRID = {'cost': (0, 0.001, 0.002, 0.005), 'lag': (1, 2), 'reserve': (0, 0.01, 0.02), 'proxy_pay_days': (0, 10, 30)}
 WEIGHT_SUM_TOLERANCE = 1e-12
@@ -94,7 +94,7 @@ def provider_weights(provider, market, session):
     if set(raw) != set(market.tickers):
         raise ValueError(f'weights on {session} must cover exactly {list(market.tickers)}: got {sorted(raw)}')
     weights = {t: raw[t] for t in market.tickers}
-    bad = [t for t, w in weights.items() if not (math.isfinite(w) and w >= 0)]
+    bad = [t for t, w in weights.items() if not (finite_number(w) and w >= 0)]
     if bad:
         raise ValueError(f'weights on {session} must be finite and >= 0: {bad}')
     if math.fsum(weights.values()) > 1 + WEIGHT_SUM_TOLERANCE:

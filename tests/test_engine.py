@@ -59,6 +59,12 @@ def case2():
     return run({'BBB': f}, plan)
 
 
+def case2b():
+    price = put(flat(61.0), since('2017-12-05', 20.0))
+    f = frame(price, split=put(flat(1.0), {'2017-12-05': 3.0}))
+    return run({'CCC': f}, {'2017-11-28': {'CCC': 0.5}, '2017-12-04': {'CCC': 1.0}})
+
+
 def case3():
     pay = {'2017-11-30': ('2017-12-05', 'actual')}
     f = lambda: frame(flat(49.0), dividend=put(flat(0.0), {'2017-11-30': 1.0}), payable=pay)
@@ -130,6 +136,27 @@ def test_case2_reverse_split_with_pending_order():
     assert cash_on(result, '2017-12-07') == pytest.approx(99802.166, abs=1e-9)
     assert row_on(result, '2017-12-07')['BBB'] == 0.0
     assert result.invariants['split_events'] == [['BBB', '2017-12-05']]
+
+
+def test_case2b_forward_split_with_pending_order():
+    result = case2b()
+    [buy] = trades_of(result, '2017-11-29')
+    assert (buy.side, buy.qty, buy.price) == ('buy', 811.0, 61.0)
+    assert cash_on(result, '2017-11-29') == pytest.approx(50479.529, abs=1e-9)
+    first, second = result.orders
+    assert first.target_qty == 811
+    decision = next(d for d in result.decisions if d['decision_session'] == '2017-12-04')
+    assert decision['nav'] == pytest.approx(99950.529, abs=1e-9)
+    assert (second.target_qty, second.held_qty) == (1622, 811.0)
+    assert second.qty == 2433.0 and second.filled_qty == 2433.0 and second.status == 'filled'
+    [late] = trades_of(result, '2017-12-05')
+    assert (late.side, late.qty, late.price) == ('buy', 2433.0, 20.0)
+    assert late.notional * 1.001 == pytest.approx(48708.66, abs=1e-9)
+    assert result.decisions[1]['buy_fill'] == 1.0
+    day = row_on(result, '2017-12-05')
+    assert day['CCC'] == 4866.0 and day['cash'] == pytest.approx(1770.869, abs=1e-9)
+    assert day['nav'] == pytest.approx(99090.869, abs=1e-9)
+    assert result.invariants['split_events'] == [['CCC', '2017-12-05']]
 
 
 def test_case3_ex_and_pay():
@@ -225,7 +252,7 @@ def test_case6b_order_without_valid_open_is_cancelled():
     assert cash_on(result, END) == 100000.0
 
 
-@pytest.mark.parametrize('case', [case1, case2, case3, case3b, case4, case5, case6, case6b])
+@pytest.mark.parametrize('case', [case1, case2, case2b, case3, case3b, case4, case5, case6, case6b])
 def test_invariants_pass_on_cases(case):
     invariants = case().invariants
     assert invariants['passed'] is True
@@ -297,6 +324,8 @@ def bad_weights(weights):
 @pytest.mark.parametrize('weights', [
     {'AAA': -0.1, 'BBB': 0.5},
     {'AAA': math.nan, 'BBB': 0.5},
+    {'AAA': None, 'BBB': 0.5},
+    {'AAA': 'x', 'BBB': 0.5},
     {'AAA': 0.5},
     {'AAA': 0.5, 'BBB': 0.5, 'ZZZ': 0.0},
     {'AAA': 0.5, 'BBB': 0.51},
@@ -325,6 +354,22 @@ def test_review_focus_invalid_run_configuration(config):
     market = market_from_frames({'AAA': frame(flat(10.0))})
     with pytest.raises(ValueError):
         simulate(market, lambda t, h: {'AAA': 1.0}, config)
+
+
+def test_execution_after_end_session_is_rejected():
+    market = market_from_frames({'AAA': frame(flat(10.0))})
+    config = RunConfig('2017-11-28', '2017-12-07', ('2017-12-07',))
+    with pytest.raises(ValueError, match='execution of decision .* is after end_session'):
+        simulate(market, lambda t, h: {'AAA': 1.0}, config)
+
+
+def test_reserved_period_guard(monkeypatch):
+    market = market_from_frames({'AAA': frame(flat(10.0))})
+    monkeypatch.setattr(engine, 'LAST_OPEN_SESSION', '2017-12-06')
+    with pytest.raises(ValueError, match='after the last open session'):
+        simulate(market, lambda t, h: {'AAA': 1.0}, RunConfig('2017-11-28', END, ('2017-11-28',)))
+    config = RunConfig('2017-11-28', '2017-12-06', ('2017-11-28',))
+    assert simulate(market, lambda t, h: {'AAA': 1.0}, config).invariants['passed'] is True
 
 
 def test_decision_on_last_session_with_room_for_execution_is_accepted():
