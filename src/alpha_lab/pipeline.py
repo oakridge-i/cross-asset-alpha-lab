@@ -120,9 +120,13 @@ def check_vintage_lineage(root, source_hash, corrections_path, payable_path):
             raise ValueError('payable and corrections belong to different snapshots')
         if meta['corrections_vintage'] is None:
             return  # built from corrections outside any vintage; nothing further to trace
+        if not isinstance(meta['corrections_vintage'], str):
+            raise ValueError('derived snapshot corrections_vintage must be a project path or None')
         vintage = (root / meta['corrections_vintage']).resolve()
         require_inside(root, vintage)
-        verify(vintage)
+        # Only one derived hop: the cited directory must itself be a vintage, so the trace terminates.
+        if 'reconciliation_snapshot' not in verify(vintage)['metadata']:
+            raise ValueError('derived snapshot does not cite a corrections vintage')
         if sha256((vintage / 'corrections.json').read_bytes()) != manifest['files'].get('corrections.json'):
             raise ValueError('derived snapshot corrections differ from the corrections vintage it cites')
         return check_vintage_lineage(root, source_hash, vintage / 'corrections.json', None)

@@ -294,3 +294,27 @@ def test_derived_corrections_with_payable_of_another_snapshot_are_refused(tmp_pa
         audit_snapshot(tmp_path, source(tmp_path, 'cd3'), payable=vintage / 'payable.json',
                        corrections=derived / 'corrections.json')
     assert [r['event'] for r in journal(tmp_path)][-2:] == ['started', 'failed']
+
+
+def fake_derived(root, name, corrections, vintage_ref):
+    """Derived-like snapshot for the cited source, holding `corrections` and citing `vintage_ref`."""
+    s = source(root, name)
+    return s, freeze(root / f'data/derived/{name}', {'corrections.json': canonical_bytes(corrections)},
+                     {'source_snapshot': f'data/snapshots/{name}', 'corrections_vintage': vintage_ref,
+                      'source_manifest_sha256': sha256((s / 'manifest.json').read_bytes())})
+
+
+@pytest.mark.parametrize('ref,match', [('data/derived/loop', 'does not cite a corrections vintage'),
+                                       (7, 'corrections_vintage must be a project path or None'),
+                                       ('../outside', 'snapshot outside project')],
+                         ids=['self_reference', 'not_a_string', 'outside_project'])
+def test_derived_snapshot_with_a_bad_vintage_reference_is_refused(tmp_path, ref, match, no_network):
+    s, fake = fake_derived(tmp_path, 'loop', {}, ref)
+    with pytest.raises(ValueError, match=match):
+        reconcile(tmp_path, s, evidence(tmp_path), corrections=fake / 'corrections.json')
+    assert [r['event'] for r in journal(tmp_path)][-2:] == ['started', 'failed']
+
+
+def test_derived_snapshot_without_a_vintage_is_accepted(tmp_path, no_network):
+    s, fake = fake_derived(tmp_path, 'plain', {}, None)
+    reconcile(tmp_path, s, evidence(tmp_path), corrections=fake / 'corrections.json')
