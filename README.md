@@ -1,100 +1,72 @@
 # Cross-Asset Alpha Lab
 
-Учебное исследование: дают ли относительный momentum и устойчивость движения добавочную ценность к простым мультиактивным стратегиям после расходов и учёта риска?
+An auditable study of whether relative momentum and persistence of returns can improve a simple multi-asset allocation after trading costs and risk controls.
 
-Состояние на 7 октября 2026 года: N0 завершён; N1 (данные) выполнен. Вердикт D015 (данные не готовы к N2) утверждён; блокирующие пункты закрыты на скорректированном vintage (источники эмитентов для DBC и GLD, семь исправлений по решению пользователя), вердикт D019 «данные готовы к N2» утверждён записью D020 после code review и исправлений; N2 использует только vintage data/derived/20261006T172442-80ef993493; движок счёта и исполнения N2 реализован и проверен тестами на синтетических рынках, зарегистрированный прогон и повтор на этом vintage (20261007T140216-1814c4deb7 и 20261007T140236-ff53aee6df) прошли все семь инвариантов, отчёт N2 готов (docs/n2/N2_REPORT.md), ветка claude/n2-execution ждёт финального ревью и слияния в main. Доходность H1/H2 не рассчитывалась, гипотезы не проверены. Положительная альфа не является условием успеха проекта.
+The research is intended to distinguish a useful allocation rule from a result explained by familiar market exposures, favorable execution assumptions, or repeated testing. Its value will depend on evidence against transparent baselines, including the possibility that added complexity has no economic benefit.
 
-MVP: девять рискованных ETF и BIL, USD, дневные данные, месячные решения, long-only, без плеча. Предполагаемое исполнение — следующее открытие с явным ограничением денег. Репозиторий публичный: https://github.com/oakridge-i/cross-asset-alpha-lab (remote origin); ветка claude/n2-execution пока только локальная.
+**Stage as of 7 October 2026: data preparation and the account and execution engine (N2) are implemented; strategy performance is untested.** The approved dataset was released for portfolio-engine development under D020. The repository implements the N1 data pipeline and the N2 engine for positions, cash, orders, costs, splits and distributions. It contains no strategy backtest or H1/H2 performance results. The N2 engine was exercised with a test weight provider that is not a strategy, and no returns or NAV from that run are published. No positive alpha or investable track record has been established.
 
-Основные документы:
+## Research design
 
-- [RESEARCH_PROTOCOL.md](RESEARCH_PROTOCOL.md) — точные формулы, сравнения, параметры и правила исследования.
-- [STATUS.md](STATUS.md) — выполненное, критерии готовности и следующий шаг.
-- [DECISIONS.md](DECISIONS.md) — решения и причины.
-- [EXECUTION_MODEL.md](EXECUTION_MODEL.md): модель счёта и исполнения N2 (контракт выплат, порядок событий, заявки, издержки, выходные файлы, инварианты) и толкования протокола из D021.
-- [Отчёт N2](docs/n2/N2_REPORT.md): зарегистрированный прогон и повтор на реальных данных, инварианты, количества, ограничения.
-- [Ручные сверки N2](docs/n2/manual_reconciliation.md): расчёты механики исполнения, с которыми тесты движка сверяют результат.
-- [Отчёт N1](docs/n1/N1_REPORT.md) — данные, сверка с эмитентами, база сплитов, закрытие блокирующих пунктов и вердикты (D015 «не готово к N2»; D019 «готово», утверждён D020); [журнал запусков N1](docs/n1/execution_record.md).
-- [Отчёт N0](docs/n0/N0_REPORT.md) — предпосылки, источники и ограничения.
-- [Code review N1](docs/reviews/2026-10-06-n1-review.md) — проверка изменений на 0a0e865: четыре P2, 122 пройденных теста и подтверждённое воспроизведение текущего снимка. Исправления R1–R4 внесены в 6e33721.
-- [Повторное ревью R1–R4](docs/reviews/2026-10-07-n1-rereview.md) — исходные сценарии закрыты; обнаружены новая регрессия P2 при сверке с derived/corrections.json и прежний пробел проверки дат P3. Свежие проверки: 130 passed, 13/13 файлов совпали по SHA-256. RR1 и RR2 исправлены в 5a8eac5 (145 тестов).
-- [Проверка доступности](docs/n0/source_probe.json) — фактические ответы источника, границы и хеши ответов.
-- [Проверка AAPL и перенос](docs/n0/AAPL_REUSE_AUDIT.md) — подтверждённая исходная версия и кандидаты на перенос.
-- [Полный план N0–N8](docs/MASTER_PLAN.md) — исходный маршрут; уточнения N0 находятся в протоколе и DECISIONS.md.
-- [Журнал попыток](experiments/EXPERIMENT_LOG.jsonl) и [его правила](experiments/README.md).
-- [Перезапись истории перед публикацией](docs/HISTORY_REWRITE.md) — что изменено и соответствие прежних хешей коммитов новым; журнал и документы ссылаются на прежние хеши.
+The proposed strategy uses daily USD data, monthly allocation decisions, long-only ETF positions, and no leverage. Orders are sized from information available at the decision close and modeled for execution at the next open, subject to cash availability and explicit trading costs.
 
-Python-пакет src/alpha_lab содержит конвейер данных N1: загрузку, нормализацию, QA, сверку распределений, слой исправлений и replay, а также модули N2: market.py (загрузка vintage и контракт выплат), ledger.py (счёт и события сессии), engine.py (дневной цикл, заявки, инварианты, журнал запуска). Расчёта целевых весов, метрик и стратегий нет; есть тестовый поставщик весов invariant_rotation, нужный только для проверки механики. Зарегистрированные запуски движка на реальных данных описаны в отчёте N2.
+| Exposure | ETFs |
+|---|---|
+| Equities | SPY, EFA, EEM |
+| Government bonds | IEF, TLT |
+| Corporate credit | LQD, HYG |
+| Gold and commodities | GLD, DBC |
+| Treasury-bill allocation | BIL |
 
-## Окружение и проверки N1
+Four fixed H1 configurations measure momentum relative to BIL and test the resulting allocation against the absolute-trend benchmark B3. Two H2 configurations test whether persistence across six calendar months adds value to a fixed H1 parent. A separate adaptive selection policy is registered independently. Comparisons, risk limits, cost scenarios, and statistical tests are specified in the [research protocol](RESEARCH_PROTOCOL.md).
 
-Окружение: Python 3.14.0, версии пакетов точно в requirements.lock (включая pip). Пакет alpha_lab не устанавливается; для CLI путь к src задаётся через PYTHONPATH=src, pytest находит его через pythonpath в pyproject.toml. Установка проверена 6 октября 2026 года в Git Bash на новом временном venv вне репозитория: после установки `pip freeze --all` совпал с requirements.lock, `pip check` без замечаний, тесты 66 passed на тот момент (на ветке закрытия 122 passed), `python -m alpha_lab --help` работает с PYTHONPATH=src и без него завершается ошибкой `No module named alpha_lab`.
+The historical schedule uses 2007-2008 for warmup, 2009-2013 for development, and 2014-2022 for walk-forward evaluation. The reserved 2023-2025 period and the separate 2026 period are not established as independent tests: prior exposure to this history is uncertain. A prospective test requires a future model freeze.
 
-```bash
-py -3.14 -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.lock
-.venv/Scripts/python -m pip check
-.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=$TEMP/n1pt
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab --help
-```
+## Evidence available today
 
-В рабочем .venv были лишние openpyxl 3.1.5 и et_xmlfile 2.0.0, которых нет в lock-файле. Их установили для раннего незакоммиченного скрипта; закоммиченный код их не импортирует. 6 октября 2026 года они удалены (`pip uninstall -y openpyxl et_xmlfile`); после этого `pip freeze --all` совпадает с requirements.lock. Запуски N1 начиная с 20261006T103809-a4a22ec667 выполнены до удаления, их environment hash включает эти пакеты.
+N1 preserves immutable source snapshots, normalizes prices and corporate actions to as-traded units, reconciles distributions against issuer materials, records corrections with provenance, and supports offline replay.
 
-Запуски N1 до закрытия блокирующих пунктов в том виде, в каком они выполнены (с текущим кодом derived-снимок 20261006T122144-73228a71eb не воспроизводится: схема нормализованной таблицы изменилась). Каждый запуск пишет started и completed/failed в experiments/EXPERIMENT_LOG.jsonl и создаёт новый каталог в data/ (не входит в Git):
+- The approved vintage, `data/derived/20261006T172442-80ef993493`, covers 4,869 common sessions through 5 October 2026. Calendar QA passed with no reported adjustment breaks.
+- EEM's 2008 split and BIL's 2017 reverse split were checked against documents. Distribution checks passed under the documented readiness rule for all ten ETFs after seven issuer-based corrections.
+- Recorded offline reconstruction reproduced all 13 files by SHA-256. Input-validation defects identified in review were corrected; the historical verification record is in [STATUS.md](STATUS.md).
 
-```bash
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab evidence --root . --parent 20261006T103625-5202b05cbc
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab reconcile data/snapshots/20261006T103809-a4a22ec667 data/evidence/20261006T122017-3048321309 --root . --parent 20261006T104437-36dd8f9b4a
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab audit data/snapshots/20261006T103809-a4a22ec667 --payable data/reconciliation/20261006T122119-c6bfb5c69b/payable.json --root . --parent 20261006T104336-dff9099c6b
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab replay data/derived/20261006T122144-73228a71eb --root . --parent 20261006T122144-73228a71eb
-```
+These results establish a usable research input under stated limitations. They do not verify every price, establish historical point-in-time availability, or demonstrate strategy returns. The evidence and initial rejection followed by approval are documented in the [N1 report](docs/n1/N1_REPORT.md) and [decisions D012-D020](DECISIONS.md).
 
-Закрытие блокирующих пунктов (6 октября 2026 года, ветка claude/n1-closure). Порядок обязателен: каждый шаг получает результат предыдущего, а между запусками журнал коммитится, чтобы следующий запуск начинался с чистого дерева. Локальный снимок DBC data/manual/dbc-invesco-distribution.json в Git не входит и должен лежать на месте (sha256 указан в configs/n1_evidence.json):
+N2 adds an engine for accounting and execution, described in [EXECUTION_MODEL.md](EXECUTION_MODEL.md), with seventeen protocol interpretations recorded in [D021](DECISIONS.md) and manual reconciliations in [docs/n2/manual_reconciliation.md](docs/n2/manual_reconciliation.md).
 
-```bash
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab evidence --root . --parent 20261006T122017-3048321309
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab reconcile data/snapshots/20261006T103809-a4a22ec667 data/evidence/20261006T172354-1c0a8ca2d8 --root . --parent 20261006T122119-c6bfb5c69b
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab corrections data/reconciliation/20261006T172415-ce65adb53e --root . --parent 20261006T172415-ce65adb53e
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab audit data/snapshots/20261006T103809-a4a22ec667 --payable data/corrections/20261006T172434-fbb5c9f554/payable.json --corrections data/corrections/20261006T172434-fbb5c9f554/corrections.json --root . --parent 20261006T122144-73228a71eb
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab reconcile data/snapshots/20261006T103809-a4a22ec667 data/evidence/20261006T172354-1c0a8ca2d8 --corrections data/corrections/20261006T172434-fbb5c9f554/corrections.json --root . --parent 20261006T172415-ce65adb53e
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab replay data/derived/20261006T172442-80ef993493 --root . --parent 20261006T172442-80ef993493
-```
+- A registered run and its repeat on the approved vintage (`20261007T140216-1814c4deb7` and `20261007T140236-ff53aee6df`, window 2007-05-31 to 2022-12-30) passed all seven financial invariants and produced identical output file hashes.
+- The run used the test provider `invariant_rotation`, which exists only to exercise orders, splits and payouts. It covered the EEM and BIL splits and the single proxy payout, with 187 decisions and 1,870 orders. The [N2 report](docs/n2/N2_REPORT.md) states the counts and limitations.
+- The run command is in [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
 
-Снимок Yahoo создан командой `acquire` (запуск 20261006T103809-a4a22ec667) и в 3B не перезагружался. Повтор evidence и acquire обращается к сети и даёт новый vintage; replay работает без сети.
+These results establish that the accounting mechanics hold on real data under the stated interpretations. They say nothing about strategy behavior.
 
-Итог N1: база сплитов EEM 2008 и BIL 2017 подтверждена документами. На исходных данных Yahoo распределения подтверждены (confirmed) у EFA, EEM, IEF, DBC, у GLD статус confirmed_no_distributions; на скорректированном vintage 20261006T172442-80ef993493 (7 исправлений по эмитенту) confirmed или confirmed_no_distributions у всех десяти (docs/n1/N1_REPORT.md). Точность всех цен не установлена; actual payable dates есть только у совпавших с эмитентом событий.
+## What would justify further attention
 
-## Запуск N2
+| Milestone | Evidence required |
+|---|---|
+| N2: portfolio and execution | Tested accounting, cash constraints, corporate actions, and manual reconciliation (implemented; see [N2 report](docs/n2/N2_REPORT.md)) |
+| N3-N5: baselines and hypotheses | Comparable net returns, full attempt history, risk attribution, uncertainty, and cost/delay robustness |
+| N6: reserved historical check | Frozen procedure, one recorded opening, and disclosure of historical familiarity |
+| N7-N8: conclusions and prospective observation | A reproducible report, explicit rejection criteria, and receipts for genuinely future observations |
 
-Команда `simulate` (проверена зарегистрированными запусками 7 октября 2026 года на vintage data/derived/20261006T172442-80ef993493, окно 2007-05-31…2022-12-30, результаты и инварианты в [отчёте N2](docs/n2/N2_REPORT.md)). Для повторного запуска добавляется `--parent <id предыдущего запуска>`; перед запуском дерево должно быть чистым (строки журнала предыдущего запуска закоммичены):
+The protocol requires both economic relevance and statistical support, together with robustness across costs, execution delays, asset classes, and years. A negative result is a valid outcome; a favorable backtest alone is insufficient.
 
-```bash
-PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider invariant_rotation --start 2007-05-31 --end 2022-12-30 --root .
-```
+## Material limitations
 
-## Проверки N0
+The universe was chosen retrospectively. Yahoo and issuer histories may be revised; `available_at` is a modeling assumption. The seven corrections rely on issuer records without independent confirmation. GLD's no-distribution classification rests on qualified documentary evidence, and issuer evidence does not establish DBC's completeness before 17 December 2007. The distribution tolerance was chosen after inspecting rounding differences. The original Yahoo acquisition used uncommitted code, whose patch hash is retained in the journal.
 
-Сейчас проверены команды просмотра репозитория из его корня:
+Execution remains a research model: settlement, auction fills, liquidity, and real brokerage constraints require further assessment. BIL is a traded ETF; idle USD earns zero in the proposed accounting model. Data rights and redistribution permissions have not been established. Raw market data and issuer captures are excluded from Git.
 
-```powershell
-git status --short --branch
-git log -1 --oneline
-```
+## Inspect and reproduce
 
-Диагностический скрипт N0 использует только стандартную библиотеку Python. Его повтор загружает ответы заново и выводит JSON в консоль; результаты поставщика и их хеши могут измениться. Для сохранения предусмотрен --output с новым путём, существующий receipt не перезаписывается. Это не воспроизведение сертифицированного снимка N1:
+- [Current status and historical checks](STATUS.md)
+- [Research protocol](RESEARCH_PROTOCOL.md) and [decision history](DECISIONS.md)
+- [N1 data report](docs/n1/N1_REPORT.md), [source evidence](docs/n1/source_evidence.json), and [run record](docs/n1/execution_record.md)
+- [N2 execution model](EXECUTION_MODEL.md), [N2 report](docs/n2/N2_REPORT.md), and [manual reconciliations](docs/n2/manual_reconciliation.md)
+- [Environment, replay commands, and reproduction limits](docs/REPRODUCIBILITY.md)
+- [Experiment journal](experiments/EXPERIMENT_LOG.jsonl) and [recording rules](experiments/README.md)
+- [N0 source assessment](docs/n0/N0_REPORT.md) and [prior-project reuse audit](docs/n0/AAPL_REUSE_AUDIT.md)
+- [English documentation edition and historical receipts](docs/DOCUMENTATION_EDITION.md)
+- [Historical commit mapping](docs/HISTORY_REWRITE.md)
 
-```powershell
-python -X utf8 docs/n0/probe_sources.py
-```
-
-Проверка документов N0 без сети и изменения receipt (рассчитана на корень основного репозитория; после N1 проверка пустого журнала не проходит по построению, в worktree скрипт не находит каталог quant-research-plan):
-
-```powershell
-python -X utf8 docs/n0/verify_n0.py --no-write
-```
-
-Проверяются ссылки, точность копий, ограничения manifest, пустой журнал, состояние AAPL и иллюстративная арифметика формул. Это не тесты ещё отсутствующего портфельного движка. Проверка AAPL требует доступных исходных локальных каталогов; перенос проекта на другой компьютер потребует обновить этот аудиторский сценарий.
-
-Код и документы распространяются по лицензии MIT ([LICENSE](LICENSE)); на рыночные данные и материалы эмитентов она не распространяется. Сырые данные и окружения исключены из Git. Условия библиотеки не заменяют права на рыночные данные; внешняя публикация и платные источники требуют отдельного разрешения.
-
-2023–2026 годы не объявлены независимым тестом: прежний просмотр H1/H2 неизвестен. Реально новые наблюдения начнутся только после будущей заморозки модели. Подробности — в протоколе.
+Code and documentation are licensed under [MIT](LICENSE). That license does not cover market data or issuer materials.

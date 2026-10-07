@@ -1,79 +1,79 @@
-# Отчёт N0: проверка предпосылок
+# N0 report: feasibility and research specification
 
-6 октября 2026 года, Europe/Moscow. Задача: проверить осуществимость нулевого бюджета и превратить общий план в протокол до результатов стратегий. Доходности H1/H2, выбор модели и оптимизация не запускались.
+6 October 2026, Europe/Moscow. N0 assessed feasibility with a zero data budget and converted the general plan into a protocol before strategy results. H1/H2 returns, model selection and optimization were not run. This report records the state at N0; subsequent data validation and closure are documented in [N1_REPORT.md](../n1/N1_REPORT.md) and [STATUS.md](../../STATUS.md).
 
-## Что сделано и зачем
+## Work completed
 
-Прочитаны NEW_CHAT_BRIEF, MASTER_PLAN, NEW_PROJECT_SETUP, AGENTS.template и итоговые документы AAPL. Создан отдельный локальный репозиторий; обязательные документы и пустой реестр попыток. Сохранены копии исходных задания/настройки и плана; AGENTS скопирован точно. Протокол уточняет формулы, веса, cash, время, selection и критерии выводов, чтобы код не принимал экономические решения задним числом.
+The source brief, master plan, setup specification and final AAPL documents were reviewed. A separate local repository was created with the required documents and an empty experiment register. Copies of the original brief, setup and plan were preserved, and the original repository instructions were copied exactly. The protocol specifies formulas, weights, cash treatment, timing, selection and standards for conclusions so that implementation cannot choose economic assumptions after observing results.
 
-Для работы использованы Superpowers using-superpowers/brainstorming/verification-before-completion и scoped analyze-data-quality. N0 — подготовка исследовательской спецификации; продуктовый Python-пакет и N1–N8 ещё не реализованы. Implementation plan навыка writing-plans будет нужен для следующего программного этапа; он не выдаётся за выполненную реализацию.
+N0 produced a research specification and a focused source-quality assessment. The production Python package and stages N1–N8 had not been implemented at this point. A programming implementation plan remained a requirement for the next stage. The English edition and treatment of historical receipts are described in [DOCUMENTATION_EDITION.md](../DOCUMENTATION_EDITION.md).
 
-## Источники и границы
+## Sources and scope
 
-Проверка непосредственно query1.finance.yahoo.com/v8/finance/chart: по одному дневному запросу на каждый из десяти ETF от 1990 до исключающего 2026-10-06, events div/splits/capitalGains. Конечная наблюдаемая сессия у всех 2026-10-05. В исходной проверке все HTTP200; есть Adj Close, USD и America/New_York. Дубликатов timestamp и нечисловых/неположительных OHLC в возвращённых строках не найдено. Это не проверяет отсутствующие между ними сессии, точность рынка, объём или весь event history. Receipt [source_probe.json](source_probe.json), исполняемая проверка [probe_sources.py](probe_sources.py). Повторный расширенный receipt [source_probe_extended.json](source_probe_extended.json) добавляет OHLC-отношения, поля объёма, порядок дат и годовые counts actions.
+The initial probe queried query1.finance.yahoo.com/v8/finance/chart directly, once per ETF, for daily data from 1990 through the exclusive end date 2026-10-06, with div/splits/capitalGains events. The last observed session was 2026-10-05 for every ETF. All initial responses were HTTP 200 and included Adj Close, USD and America/New_York. Returned rows contained no duplicate timestamps or nonnumeric/nonpositive OHLC values. These checks did not establish completeness of sessions between returned rows, market accuracy, volume accuracy or the full event history. The receipt is [source_probe.json](source_probe.json), with executable check [probe_sources.py](probe_sources.py). The repeated, extended receipt [source_probe_extended.json](source_probe_extended.json) adds OHLC relationships, volume fields, date ordering and annual action counts.
 
-| ETF | Первые OHLC | Строк в исходном ответе | Dividend events | Split events |
+| ETF | First OHLC | Rows in initial response | Dividend events | Split events |
 |---|---|---:|---:|---:|
-| SPY |1993-01-29|8478|136|0|
-| EFA |2001-08-27|6313|47|1|
-| EEM |2003-04-14|5907|47|2|
-| IEF |2002-07-30|6085|291|0|
-| TLT |2002-07-30|6085|289|0|
-| LQD |2002-07-30|6085|290|0|
-| HYG |2007-04-11|4903|233|0|
-| GLD |2004-11-18|5503|0|0|
-| DBC |2006-02-06|5198|9|0|
-| BIL |2007-05-30|4869|128|1|
+| SPY | 1993-01-29 | 8478 | 136 | 0 |
+| EFA | 2001-08-27 | 6313 | 47 | 1 |
+| EEM | 2003-04-14 | 5907 | 47 | 2 |
+| IEF | 2002-07-30 | 6085 | 291 | 0 |
+| TLT | 2002-07-30 | 6085 | 289 | 0 |
+| LQD | 2002-07-30 | 6085 | 290 | 0 |
+| HYG | 2007-04-11 | 4903 | 233 | 0 |
+| GLD | 2004-11-18 | 5503 | 0 | 0 |
+| DBC | 2006-02-06 | 5198 | 9 | 0 |
+| BIL | 2007-05-30 | 4869 | 128 | 1 |
 
-Grain: одна строка на ticker/session, события отдельным потоком. Количество distributions не доказывает их полноту; особенно sparse BIL128 требует проверки истории распределений/нулевых месяцев у эмитента. Никакого вывода «ежемесячно значит обязано быть ненулевое событие каждый месяц» не сделано.
+The grain is one row per ticker/session, with events in a separate stream. Distribution counts do not establish completeness. BIL's sparse 128 events particularly required comparison with issuer distribution history and zero-payment months. Monthly distribution frequency was not interpreted as requiring a nonzero event every month.
 
-Расширенный повтор завершился с exit0. У всех десяти рядов 0 нарушений порядка/дубликатов, положительности и отношений Low<=Open/Close<=High; volume заполнен и неотрицателен. Общий пересекающийся набор содержит 4869 наблюдаемых сессий, на 2008-12-31 доступно 402 предшествующих доходности — больше 252 требуемых. В BIL отсутствуют ненулевые dividend events за 2010/2012–2015/2021; источник ещё не сверён с нулевыми выплатами эмитента. Эти годы не объявлены ошибкой данных автоматически. Проверка биржевого календаря не выполнялась; отсутствие OHLC-проблем в возвращённых строках не доказывает отсутствие пропущенных сессий.
+The extended repeat exited with code 0. All ten series had 0 ordering, duplicate, positivity or Low<=Open/Close<=High violations; volume was populated and nonnegative. Their common intersection contained 4869 observed sessions. There were 402 prior returns at 2008-12-31, exceeding the required 252. BIL had no nonzero dividend events in 2010/2012–2015/2021; the source had not yet been reconciled with issuer zero payments. These years were not automatically classified as data errors. No exchange-calendar check was performed; valid OHLC in returned rows did not prove that sessions were complete.
 
-Общий начало 2007-05-30 ограничивает годовой прогрев. Полный development стартует 2009, тогда для yearly2014 доступны пять предшествующих полных лет. Это решение по источнику, не по доходности. Обновлённый протокол сохраняет предварительные WF2014–2022 и reserved2023–2025. Ответ пользователя о прежнем просмотре «Не уверен / не помню» означает неизвестную экспозицию; термин независимый holdout не применяется.
+The common start of 2007-05-30 constrains the annual warm-up. Full development starts in 2009, providing five prior complete years for yearly 2014 selection. This decision was based on source coverage rather than returns. The revised protocol retains the preliminary WF 2014–2022 and reserved 2023–2025 periods. The owner's answer about prior inspection, translated as "Unsure / do not remember", leaves exposure unknown; the reserved period is not described as an independent holdout.
 
-## Эмитенты: что подтверждено
+## Issuer evidence
 
-Текущие классы/мандаты и даты inception прочитаны в первичных источниках; показатели доходности эмитентов не использовались для отбора ETF. Веб-страницы являются текущими материалами, не полным архивом historical mandates.
+Current asset classes, mandates and inception dates were read from primary sources. Issuer performance figures were not used to select ETFs. These were current webpages rather than a complete archive of historical mandates.
 
-- [SPY — SSGA](https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy): S&P500, inception1993-01-22.
-- [EFA — iShares](https://www.ishares.com/us/products/239623/ishares-msci-eafe-etf): развитые equity вне США/Канады, inception2001-08-14.
-- [EEM — iShares](https://www.ishares.com/us/products/239637/ishares-msci-emerging-markets-etf): emerging markets, inception2003-04-07.
-- [IEF — iShares](https://www.ishares.com/us/products/239456/ishares-710-year-treasury-bond-etf): Treasury7–10years, inception2002-07-22.
-- [TLT — iShares](https://www.ishares.com/us/products/239454/ishares-20-year-treasury-bond-etf): Treasury20+years, inception2002-07-22.
-- [LQD — iShares](https://www.ishares.com/us/products/239566/ishares-iboxx-investment-grade-corporate-bond-etf): investment-grade corporate, inception2002-07-22.
-- [HYG — iShares](https://www.ishares.com/us/products/239565/ishares-iboxx-high-yield-corporate-bond-etf): high-yield corporate, inception2007-04-04.
-- [GLD — эмитент](https://www.spdrgoldshares.com/usa/gld/): physical gold less expenses, inception/listing2004-11-18. Там же раскрыта замена London PM Fix на LBMA Gold Price PM с 2015-03-20.
-- [DBC — Invesco](https://www.invesco.com/us/en/financial-products/etfs/invesco-db-commodity-index-tracking-fund.html): commodity futures плюс collateral income; inception2006-02-03 подтверждён результатом поиска по официальной странице и [factsheet эмитента](https://www.invesco.com/us-rest/contentdetail?contentId=1fd207c649400410VgnVCM10000046f1bf0aRCRD). Прямое открытие factsheet перенаправлялось на country-splash/404; полноценный локальный PDF не сохранён. Отдельный материал [Commodity ETFs and ETPs](https://www.invesco.com/us/en/solutions/invesco-etfs/commodity-investing.html) подтверждает methodology update с 2025-11-10. Официальный product source также раскрывает смену managing owner2015-02-23.
-- [BIL — SSGA](https://www.ssga.com/us/en/intermediary/etfs/state-street-spdr-bloomberg-1-3-month-t-bill-etf-bil): T-bills1–3months, inception/listing2007-05-25, monthly distributions.
+- [SPY — SSGA](https://www.ssga.com/us/en/individual/etfs/state-street-spdr-sp-500-etf-trust-spy): S&P 500; inception 1993-01-22.
+- [EFA — iShares](https://www.ishares.com/us/products/239623/ishares-msci-eafe-etf): developed equities outside the US/Canada; inception 2001-08-14.
+- [EEM — iShares](https://www.ishares.com/us/products/239637/ishares-msci-emerging-markets-etf): emerging markets; inception 2003-04-07.
+- [IEF — iShares](https://www.ishares.com/us/products/239456/ishares-710-year-treasury-bond-etf): 7–10-year Treasuries; inception 2002-07-22.
+- [TLT — iShares](https://www.ishares.com/us/products/239454/ishares-20-year-treasury-bond-etf): 20+-year Treasuries; inception 2002-07-22.
+- [LQD — iShares](https://www.ishares.com/us/products/239566/ishares-iboxx-investment-grade-corporate-bond-etf): investment-grade corporate bonds; inception 2002-07-22.
+- [HYG — iShares](https://www.ishares.com/us/products/239565/ishares-iboxx-high-yield-corporate-bond-etf): high-yield corporate bonds; inception 2007-04-04.
+- [GLD — issuer](https://www.spdrgoldshares.com/usa/gld/): physical gold less expenses; inception/listing 2004-11-18. The source also discloses replacement of the London PM Fix with the LBMA Gold Price PM from 2015-03-20.
+- [DBC — Invesco](https://www.invesco.com/us/en/financial-products/etfs/invesco-db-commodity-index-tracking-fund.html): commodity futures plus collateral income. Inception 2006-02-03 was confirmed by a search result for the official page and the [issuer factsheet](https://www.invesco.com/us-rest/contentdetail?contentId=1fd207c649400410VgnVCM10000046f1bf0aRCRD). Direct factsheet access redirected to a country splash/404; a complete local PDF was not preserved. [Commodity ETFs and ETPs](https://www.invesco.com/us/en/solutions/invesco-etfs/commodity-investing.html) confirms a methodology update from 2025-11-10. The official product source also discloses a managing-owner change on 2015-02-23.
+- [BIL — SSGA](https://www.ssga.com/us/en/intermediary/etfs/state-street-spdr-bloomberg-1-3-month-t-bill-etf-bil): 1–3-month T-bills; inception/listing 2007-05-25; monthly distributions.
 
-У девяти инструментов, кроме GLD, первая дата источника позднее inception; это пропуски начального охвата, не доказательство плохой последующей истории. Начальную доступность определяет конкретная таблица, а не предположение о полноте с inception.
+For nine instruments, excluding GLD, the source's first date follows inception. These are gaps in initial coverage, not proof of defective subsequent history. Initial availability is determined by the actual table rather than assumed coverage from inception.
 
-У iShares публичные distribution tables включают Ex-Date, Record Date, Payable Date и amount (например [EFA](https://www.ishares.com/us/products/239623/ishares-msci-eafe-etf), раздел Distributions). Их доступность сейчас не подтверждает архив всех выплат 2007–2026. SSGA предоставляет distribution schedules; глубина архива для BIL/SPY ещё не установлена.
+Public iShares distribution tables contain Ex-Date, Record Date, Payable Date and amount; see the Distributions section for [EFA](https://www.ishares.com/us/products/239623/ishares-msci-eafe-etf). Their availability at the time of review did not establish a complete archive of 2007–2026 payments. SSGA provides distribution schedules; archive depth for BIL/SPY had not yet been established.
 
-## Ограничения и реакция
+## Limitations and responses at N0
 
-| Риск | Свидетельство / уверенность | Влияние | Принятое действие |
+| Risk | Evidence / confidence | Effect | Agreed response |
 |---|---|---|---|
-| Нет payable dates в chart | Все ненулевые dividend event имеют только amount/date; высокая | Нельзя считать ex-date сразу свободными деньгами | Receivable, actual dates где есть, missing proxy+10 calendar days; stress0/30. |
-| Split/price basis не сертифицирована | EEM3:1 в 2008, BIL1:2 в 2017 в receipt; высокая для наличия события, семантика OHLC ещё не проверена | Двойной сплит и неверные количества могут разрушить NAV | N1 блокирует N2 до сверки; auto_adjust=False недостаточно. |
-| BIL sparse actions |128 ненулевых событий за 19 лет; высокая для count, причина неизвестна | Возможна неполнота доходности cash reference | Годовой event profile и сверка эмитента; не подменять отсутствие события нулём автоматически. |
-| Retrospective vendor data | Снимок получен сейчас, нет исторических archived vintages | Availability assumptions и исторические revisions | Causal prefixes, hashes, vintage; не заявлять true point-in-time. |
-| Нет opening auction/spread archive | Дневной Open,10bps задано планом | Реальное исполнение отличается | Модельное next-open, расходы/lag/резерв stress, нет real-trading claims. |
-| Fixed survivors | Universe составлен сегодня | Survivorship/selection bias | Только эта выборка; class exclusions и раскрытие. |
-| Mandates изменялись | DBC index2025, owner2015; GLD reference2015 | Неизменный ticker не гарантирует неизменный экономический объект | Описать события, before/after и without-DBC; не подклеивать индекс. |
-| Право использования/распространения не установлено полностью | README yfinance предупреждает о personal-use/terms; прямые terms не прочитаны | Техническая доступность не равна лицензии | Только локальная учебная работа; raw в gitignore; публикация/paid отдельны. |
-| Нет независимости reserved | Ответ пользователя «Не уверен / не помню» | Ограничена сила статистических выводов | Зарезервированная историческая проверка, будущий prospective stream. |
+| No payable dates in chart | All nonzero dividend events contain only amount/date; high confidence | Ex-date cannot immediately create spendable cash | Receivables; actual dates where available; missing-date proxy of +10 calendar days; stress 0/30. |
+| Split/price basis not certified | Receipt includes EEM 3:1 in 2008 and BIL 1:2 in 2017; high confidence in event presence, OHLC semantics unverified | Double application of splits or incorrect quantities can invalidate NAV | N1 blocks N2 pending reconciliation; auto_adjust=False is insufficient. |
+| Sparse BIL actions | 128 nonzero events over 19 years; count established, cause unknown | Cash-reference returns may be incomplete | Annual event profiles and issuer reconciliation; do not automatically equate missing events with zero. |
+| Retrospective vendor data | Snapshot acquired at review time; no archived historical vintages | Availability assumptions and historical revisions | Causal prefixes, hashes and vintages; no true point-in-time claim. |
+| No opening-auction/spread archive | Daily Open; plan specifies 10 bps | Real execution differs | Modeled next-open execution, cost/lag/reserve stress; no real-trading claims. |
+| Fixed survivors | Universe assembled at review time | Survivorship/selection bias | Conclusions limited to this sample; disclose excluded classes. |
+| Mandate changes | DBC index 2025, owner 2015; GLD reference 2015 | A fixed ticker does not guarantee a fixed economic object | Document events, before/after analysis and exclusion of DBC; do not splice in an index. |
+| Usage/distribution rights not fully established | yfinance README warns about personal use/terms; direct terms not read | Technical access does not establish a license | Local educational research only; raw data ignored by Git; publication/paid data require separate authorization. |
+| Reserved-period independence unknown | Owner answered "Unsure / do not remember" | Limits strength of statistical conclusions | Reserved historical check and future prospective stream. |
 
-N0 определяет последствия этих пробелов, а не объявляет их устранёнными. Полный QA с календарями, OHLC-consistency, revisions, контрольными ценами/событиями и stop rules — N1. Пока не подтверждённые нулевые distributions и split basis запрещают переход к экономическим выводам.
+N0 defined the consequences of these gaps without claiming to close them. Full QA with calendars, OHLC consistency, revisions, reference prices/events and stop rules belonged to N1. Unconfirmed zero distributions and split basis blocked economic conclusions at this stage.
 
-## Документация адаптера и литература
+## Adapter documentation and literature
 
-[Официальный download](https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html) описывает отдельные настройки auto_adjust/actions/repair/keepna и исключающий end; поэтому defaults не принимаются молча. [yfinance README](https://github.com/ranaroussi/yfinance) говорит об учебном/исследовательском применении, personal use и самостоятельной проверке прав Yahoo. Лицензия кода не даёт автоматически права на данные. Доступ к полным Yahoo terms через web не удался; это зарегистрированный неизвестный вопрос, не положительное юридическое заключение.
+The [official download reference](https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html) describes separate auto_adjust/actions/repair/keepna settings and an exclusive end date; defaults are therefore not accepted implicitly. The [yfinance README](https://github.com/ranaroussi/yfinance) describes educational/research use, personal use and the need to check Yahoo rights independently. The code license does not automatically grant data rights. Full Yahoo terms could not be accessed through the browser; this was recorded as unresolved rather than a favorable legal conclusion.
 
-Исследовательская мотивация: [Time Series Momentum](https://www.aqr.com/Insights/Research/Journal-Article/Time-Series-Momentum), [Value and Momentum Everywhere](https://www.aqr.com/insights/research/journal-article/value-and-momentum-everywhere). Отдельные диагностики множественного поиска: [Deflated Sharpe Ratio](https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf), [Probability of Backtest Overfitting](https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf). Они поддерживают дисциплину сравнения и отбора; не подтверждают прибыльность этих шести вариантов. Во время N0 новые гипотезы из литературы не добавлены.
+Research motivation: [Time Series Momentum](https://www.aqr.com/Insights/Research/Journal-Article/Time-Series-Momentum) and [Value and Momentum Everywhere](https://www.aqr.com/insights/research/journal-article/value-and-momentum-everywhere). Separate diagnostics for multiple searches: [Deflated Sharpe Ratio](https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf) and [Probability of Backtest Overfitting](https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf). These support comparison and selection discipline; they do not establish profitability of the six registered variants. No new hypotheses from the literature were added during N0.
 
-## Следующий конкретный шаг
+## Next stage recorded at N0
 
-N1: зафиксировать Python-окружение и source adapter, DATA_CONTRACT.md, неизменяемый локальный snapshot с manifest, coverage/calendar/actions QA, контроль EEM2008 и BIL2017, coverage payable dates с фактическими/proxy флагами. Проверить контрольные события/цены у эмитентов; вопросы split basis, distribution полноты и material revisions должны иметь явный verdict. Производственные H1/H2 NAV, оптимизация и reserved-performance reports не входят в N1.
+N1 required a frozen Python environment and source adapter, DATA_CONTRACT.md, an immutable local snapshot with a manifest, coverage/calendar/action QA, EEM 2008 and BIL 2017 checks, and payable-date coverage with actual/proxy flags. Reference prices/events required issuer comparison; split basis, distribution completeness and material revisions required explicit verdicts. Production H1/H2 NAV, optimization and reserved-performance reports were outside N1.
 
-Критерии завершения N0 и результаты каждого — [STATUS.md](../../STATUS.md); машинное свидетельство финальной проверки — [verification.json](verification.json). N0 — завершённая спецификация с раскрытыми ограничениями, не готовый набор сертифицированных данных N1.
+N0 completion criteria and their results are recorded in [STATUS.md](../../STATUS.md); the final machine verification receipt is [verification.json](verification.json). N0 completed a specification with disclosed limitations. It did not certify the N1 dataset.

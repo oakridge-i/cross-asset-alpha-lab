@@ -1,37 +1,37 @@
-# Проверка AAPL перед возможным переносом
+# AAPL release audit for selective reuse
 
-6 октября 2026, read-only. Источник C:\Quantitive\model 1 aapl; release worktree <workspace>\aapl-finalization.
+Read-only audit dated 6 October 2026. Original repository: `C:\Quantitive\model 1 aapl`; release checkout: `<workspace>\aapl-finalization`.
 
-| Проверка | Фактическое состояние |
+| Check | Observed state |
 |---|---|
-| Основной каталог | main, HEAD ed4fd39518f1f58ad4065512bec8223443186bf3, clean |
+| Primary checkout | main, HEAD ed4fd39518f1f58ad4065512bec8223443186bf3, clean |
 | Local origin/main | ed4fd39518f1f58ad4065512bec8223443186bf3 |
-| Локальный v0.6.0 peeled |4d69932382af4a7bcaddfb4621f0973ea2d820c2|
-| Release worktree |codex/aapl-final-release, HEAD4d69932382af4a7bcaddfb4621f0973ea2d820c2, clean|
-| Прямой remote refs check |main ed4fd39518f1f58ad4065512bec8223443186bf3; annotated tag0300c8182c64a9c0b40fae1b4cb258340ae62c45, peeled4d69932382af4a7bcaddfb4621f0973ea2d820c2|
+| Local v0.6.0, peeled | 4d69932382af4a7bcaddfb4621f0973ea2d820c2 |
+| Release checkout | codex/aapl-final-release, HEAD 4d69932382af4a7bcaddfb4621f0973ea2d820c2, clean |
+| Direct remote ref check | main ed4fd39518f1f58ad4065512bec8223443186bf3; annotated tag 0300c8182c64a9c0b40fae1b4cb258340ae62c45, peeled 4d69932382af4a7bcaddfb4621f0973ea2d820c2 |
 
-Чтение git старого каталога использовало одноразовый `-c safe.directory`, без глобальной настройки. Первое HTTPS git ls-remote не прошло Windows schannel; повтор с `-c http.sslBackend=openssl` прошёл, проверка TLS не выключалась. Fetch, pull, checkout и mutation старого проекта не выполнялись. Remote main проверен напрямую; состояние merge PR отдельно через GitHub API не запрашивалось.
+Reading the original repository used a one-time `-c safe.directory` setting, without a global configuration change. The first HTTPS git ls-remote failed with Windows schannel; the retry with `-c http.sslBackend=openssl` succeeded. TLS verification remained enabled. No fetch, pull, checkout or mutation of the original project was performed. Remote main was checked directly; the PR merge state was not queried separately through the GitHub API.
 
-Прочитаны [итоговый отчёт](../../../aapl-finalization/docs/final/research_report.md), [reproduction](../../../aapl-finalization/docs/final/reproduction.md), [review](../../../aapl-finalization/docs/final/review.md), [execution record](../../../aapl-finalization/docs/final/execution_record.md), release_manifest и final_tests.log.
+The audit read the release [research report](https://github.com/oakridge-i/aapl-sma-backtest/blob/4d69932382af4a7bcaddfb4621f0973ea2d820c2/docs/final/research_report.md), [reproduction instructions](https://github.com/oakridge-i/aapl-sma-backtest/blob/4d69932382af4a7bcaddfb4621f0973ea2d820c2/docs/final/reproduction.md), [review](https://github.com/oakridge-i/aapl-sma-backtest/blob/4d69932382af4a7bcaddfb4621f0973ea2d820c2/docs/final/review.md), [execution record](https://github.com/oakridge-i/aapl-sma-backtest/blob/4d69932382af4a7bcaddfb4621f0973ea2d820c2/docs/final/execution_record.md), release_manifest and final_tests.log. These links are pinned to the audited release commit; their repository and paths were verified against the local release checkout when preparing this English edition.
 
-149 passed в 96.44s — сохранённая проверка AAPL, прочитанная в логе, не новая проверка в этом чате. Из сохранённых документов: два frozen searches, offline repeats,72cost/lag scenarios на снимок,202320daily rows. В updated общем периоде CAGR nested ensemble4.74% vs50%AAPL11.43%; убедительное преимущество/alpha не установлены. Эти числа не использовались для подбора нового протокола по результатам H1/H2.
+The recorded AAPL test result was 149 passed in 96.44 s, read from the saved log; it was not rerun during this audit. The saved documents record two frozen searches, offline repeats, 72 cost/lag scenarios per snapshot and 202320 daily rows. Over the common period of the updated data, nested-ensemble CAGR was 4.74%, versus 11.43% for 50% AAPL. A convincing advantage or alpha was not established. These figures were not used to select the new protocol on the basis of H1/H2 results.
 
-release_manifest описывает состояние локального выпуска до последующей публикации; поле remote_mutations=false не означает, что PR/main сегодня не опубликованы. Прямое сравнение refs подтверждает более позднее состояние из briefing. Старый preview принадлежит 91e769e и не переносится как свежий результат.
+release_manifest describes the local release before its subsequent publication. Its remote_mutations=false field does not imply that the PR or main remained unpublished. Direct ref comparison confirmed the later state recorded in the source brief. The previous preview belongs to 91e769e and is not treated as a new result.
 
-## Материал для выборочного переноса
+## Candidates for selective reuse
 
-| Источник в release | Возможная польза | Повторная проверка нового контракта |
+| Release source | Potential use | Required validation against the new contract |
 |---|---|---|
-|src/quant_backtest/research_config.py|YAML/config validation pattern|Новая schema, universe, available_at, next-open параметры. Не копировать старые defaults.|
-|src/quant_backtest/data_quality.py и closeout.py|Snapshot/manifest/hash и effective-period pattern|OHLC/actions, split basis, сохранение raw/vintage, качество по каждому ETF, не только adjusted close.|
-|src/quant_backtest/metrics.py|Drawdown, aligned excess returns, формулы метрик|Единое sample ddof=1 и sessions-CAGR; в legacy есть отдельная calendar-CAGR функция, её нельзя смешать с report формулой.|
-|tests/test_a1_accounting.py, test_a2_financial_invariants.py|Ручные финансовые инварианты|Несколько активов, actual BIL, receivable/cash, Open и order quantities вместо close allocations.|
-|tests/test_closeout.py|Replays/effective snapshot regression|Новый формат multi-asset NAV/trades/position receipts; retain original и effective hash.|
-|tests/test_methodology_v05.py, test_m1_foundation.py|Материал для тестов причинности|Future price/action/source-vintage не меняют past decisions; calendar вместо искусственного freq=B.|
-|src/quant_backtest/reports.py, reporting scripts|Вывод source-backed таблиц|Новый contract полей и явный статус exploratory/reserved/prospective.|
+| src/quant_backtest/research_config.py | YAML/config validation pattern | New schema, universe, available_at and next-open parameters. Do not copy the previous defaults. |
+| src/quant_backtest/data_quality.py and closeout.py | Snapshot, manifest, hash and effective-period patterns | OHLC/actions, split basis, preservation of raw data and vintages, and quality for each ETF beyond adjusted close. |
+| src/quant_backtest/metrics.py | Drawdown, aligned excess returns and metric formulas | Consistent sample ddof=1 and sessions-based CAGR. The legacy calendar-based CAGR function must not be mixed with the report formula. |
+| tests/test_a1_accounting.py, test_a2_financial_invariants.py | Manual financial invariants | Multiple assets, actual BIL, receivables/cash, Open and order quantities rather than allocations at close. |
+| tests/test_closeout.py | Replay and effective-snapshot regression patterns | New multi-asset NAV, trade and position receipts; retain original and effective hashes. |
+| tests/test_methodology_v05.py, test_m1_foundation.py | Causality test material | Future prices, actions and source vintages must not change past decisions; use an exchange calendar rather than artificial freq=B. |
+| src/quant_backtest/reports.py, reporting scripts | Tables backed by source evidence | New field contract and explicit exploratory, reserved and prospective status. |
 
-Просмотрены имена модулей/тестов, фактические metrics.py и research_data.py; таблица — кандидаты на дальнейший аудит, не сертификат каждого указанного модуля. Полный исходный код этих модулей будет прочитан перед переносом. Сырые snapshots не скопированы в новый repo.
+Module and test names were inspected, and metrics.py and research_data.py were read. The table identifies candidates for further audit; it does not certify every listed module. Their full source must be read before reuse. Raw snapshots were not copied into the new repository.
 
-Не переносить автоматически engine.py/costs.py/continuous.py и research orchestration. AAPL next-close, синтетическая денежная доходность BIL, другое sizing/settlement; эти предположения не удовлетворяют новому RESEARCH_PROTOCOL. Ни одна строка продуктового кода AAPL на N0 не перенесена.
+engine.py, costs.py, continuous.py and research orchestration require a separate assessment before any reuse. AAPL assumes next-close execution, synthetic BIL cash returns and different sizing/settlement; these assumptions do not meet the new RESEARCH_PROTOCOL. No AAPL production code was transferred during N0.
 
-При будущем переносе записывать original repo, tag, SHA, path, фактический diff, лицензию и новые проверки. Применимость формулы важнее сохранения интерфейса старого проекта.
+Any future reuse must record the original repository, tag, SHA, path, actual diff, license and new validation. Formula applicability takes priority over preserving the previous interface.

@@ -1,18 +1,18 @@
-# Исследовательский протокол Cross-Asset Alpha Lab
+# Cross-Asset Alpha Lab Research Protocol — English edition 1.0-en.1
 
-Версия 1.0, 6 октября 2026 года. Автор спецификации: Codex, по стартовому заданию пользователя. Статус: решения N0 зафиксированы до расчёта результатов H1/H2; техническая валидация данных и движка впереди. Это не утверждение о проверенных гипотезах или одобрении пользователем каждой технической детали.
+Research protocol version 1.0, dated 6 October 2026. This English edition is an editorial translation of research protocol 1.0 at baseline `4516269`; the economic rules are unchanged. See [Documentation edition](docs/DOCUMENTATION_EDITION.md) for provenance and hashes. Original N0 status: decisions were fixed before calculating H1/H2 results; technical validation of the data and engine remained pending. This does not establish that the hypotheses were tested or that every technical detail received individual approval. Current implementation status is recorded in [STATUS.md](STATUS.md).
 
-## 1. Вопрос, объём и критерий успеха
+## 1. Research question, scope, and success criteria
 
-Проверить добавочную ценность относительного momentum к абсолютному тренду и добавочную ценность фильтра устойчивости к фиксированному родителю momentum. Различать доходность, снижение риска, известную momentum-премию, экономию расходов и альфу относительно конкретной модели.
+Test the incremental value of relative momentum over absolute trend, and of a persistence filter over a fixed momentum parent. Distinguish investment returns, risk reduction, the established momentum premium, cost savings, and alpha relative to a specified model.
 
-Один локальный Python-пакет, CLI, файлы, тестируемое ядро; бюджет данных — ноль. USD, long-only ETF, дневные данные, месячные решения, без плеча и short. Нейросети, брокер, реальные сделки, веб-интерфейс, облако и агентная инфраструктура не входят в MVP. Успешный инженерный и исследовательский результат может быть экономически отрицательным.
+One local Python package, a CLI, files, and a testable core; the data budget is zero. USD, long-only ETFs, daily data, monthly decisions, no leverage or short selling. Neural networks, brokerage integration, live trading, a web interface, and cloud infrastructure are outside the MVP. A successful engineering and research outcome may have a negative economic result.
 
-## 2. Вселенная и происхождение
+## 2. Universe and provenance
 
-Фиксированная современная выборка; на весь исторический рынок ETF выводы не распространяются. Даты inception эмитента и первые доступные цены различаются. Проверка 6 октября: [источники и ограничения](docs/n0/N0_REPORT.md), [receipt](docs/n0/source_probe.json).
+A fixed sample of currently available ETFs; conclusions do not extend to the full historical ETF market. Issuer inception dates differ from the first available prices. The 6 October check is documented in [sources and limitations](docs/n0/N0_REPORT.md) and the [receipt](docs/n0/source_probe.json).
 
-| Группа ограничений | ETF | Inception эмитента | Первая OHLC-сессия Yahoo |
+| Constraint group | ETF | Issuer inception | First Yahoo OHLC session |
 |---|---|---|---|
 | Equity | SPY | 1993-01-22 | 1993-01-29 |
 | Equity | EFA | 2001-08-14 | 2001-08-27 |
@@ -25,172 +25,172 @@
 | Real | DBC | 2006-02-03 | 2006-02-06 |
 | Cash proxy | BIL | 2007-05-25 | 2007-05-30 |
 
-Все десять ответов достигли 2026-10-05; это доступность, не полная сертификация истории. Общая наблюдаемая история начинается 2007-05-30. Подклейки индексов до рождения ETF нет. IEF/TLT сейчас торгуются на NASDAQ, остальные в receipt — NYSE Arca; общий календарь американских регулярных сессий допустим только после сверки N1.
+All ten responses reached 2026-10-05; this establishes availability, not full historical certification. The common observed history begins on 2007-05-30. No index history is spliced in before ETF inception. IEF/TLT currently trade on NASDAQ; the other instruments in the receipt trade on NYSE Arca. A common US regular-session calendar is permissible only after N1 reconciliation.
 
-DBC держит сырьевые фьючерсы внутри фонда. Движок покупает акции DBC, не отдельные фьючерсы; внутренние роллы/расходы уже отражаются в цене фонда. Изменение методологии его индекса с 2025-11-10 раскрывается как структурное изменение. У GLD сменился золотой reference в марте 2015 года. Ни один инструмент не заменяется по результату доходности.
+DBC holds commodity futures within the fund. The engine buys DBC shares, not individual futures; internal rolls and expenses are already reflected in the fund price. The index methodology change effective 2025-11-10 is disclosed as a structural change. GLD changed its gold reference in March 2015. No instrument is replaced on the basis of its return performance.
 
-## 3. Данные, деньги и время
+## 3. Data, cash, and timing
 
-Стартовый адаптер N1 — yfinance/Yahoo, альтернативные источники эмитентов используются для контрольных корпоративных событий. Настройки явно задаются: interval=1d, auto_adjust=False, back_adjust=False, actions=True, repair=False, keepna=True; версия закрепляется при создании окружения N1. Конец запроса исключающий, 2026-10-06. Гарантий исторического opening auction, point-in-time данных или распространения цен нет.
+The initial N1 adapter is yfinance/Yahoo; alternative issuer sources verify corporate actions. Settings are explicit: interval=1d, auto_adjust=False, back_adjust=False, actions=True, repair=False, keepna=True; the version is pinned when the N1 environment is created. The exclusive request end is 2026-10-06. Historical opening-auction prices, point-in-time data, and price redistribution rights are not guaranteed.
 
-Хранить исходные ответы отдельно от нормализованных OHLCV/actions, ряда полной доходности, признаков и результатов. Наблюдение содержит session, currency, timezone, available_at, source, retrieved_at, adjustment_basis и hash. Историческое available_at — модельное допущение, а не восстановленный фактический момент публикации Yahoo. Исправления поставщика получают отдельный vintage.
+Store original responses separately from normalized OHLCV/actions, total-return series, features, and results. Each observation contains session, currency, timezone, available_at, source, retrieved_at, adjustment_basis, and hash. Historical available_at is a modeling assumption, not a reconstructed Yahoo publication timestamp. Provider corrections receive a separate vintage.
 
-auto_adjust=False не доказывает, что OHLC выражены в реально торговавшихся тогда единицах акции: источник может уже учитывать сплиты. N1 обязан установить семантику на EEM 2008 и BIL 2017. В явном портфельном учёте нужны экономические цены и количества одной базы. При восстановлении as-traded из split-adjusted ряда цена и дивиденд умножаются на произведение последующих split ratios; объём переводится обратно в те же единицы только при подтверждённой семантике источника. Не применять сплит ещё раз к уже согласованному adjusted учёту. Неопределённость этого преобразования блокирует N2.
+auto_adjust=False does not establish that OHLC are expressed in the share units actually traded at the time: the source may already account for splits. N1 must establish the semantics using EEM 2008 and BIL 2017. Explicit portfolio accounting requires economic prices and quantities on the same basis. To reconstruct as-traded values from a split-adjusted series, multiply price and dividend by the product of subsequent split ratios; convert volume back to the same units only if the source semantics are confirmed. Do not apply a split again to an already consistent adjusted accounting basis. Uncertainty in this conversion blocks N2.
 
-Для признаков T_i,t — индекс теоретической полной доходности. После проверки actions он строится причинно на каждой сессии: T_i,t/T_i,t-1 = s_i,t × (C_i,t + D_i,t)/C_i,t-1, где s — новые акции / старые, C — as-traded close, D — распределение на одну новую акцию на ex-date. Без события s=1, D=0. Источник обязан привести D к этой базе. Это теоретическое реинвестирование в признаке, не денежная проводка портфеля. Adj Close сохраняется для независимой сверки; обычный Close не подменяет T молча.
+For features, T_i,t is a theoretical total-return index. After validating actions, construct it causally for each session: T_i,t/T_i,t-1 = s_i,t × (C_i,t + D_i,t)/C_i,t-1, where s is new shares / old shares, C is as-traded close, and D is the distribution per new share on the ex-date. Without an event, s=1, D=0. The source must express D on this basis. This is theoretical reinvestment for a feature, not a portfolio cash entry. Retain Adj Close for an independent reconciliation; ordinary Close must not silently substitute for T.
 
-В портфеле сплит меняет количество без создания богатства. Право на распределение получают акции, удерживаемые до ex-date; покупка на открытии ex-date права не даёт. Receivable входит в NAV с ex-date, деньги — с payable date. При отсутствии исторической payable date основное раскрытое приближение: credit на открытии первой сессии не раньше ex-date + 10 календарных дней; чувствительность +0/+30 календарных дней. Реальные даты, если независимо подтверждены, имеют приоритет. Для каждого события указывается actual/proxy. Фильтр H2 не использует будущую payable date. Будущая дата выплаты влияет на доступность денег только при наступлении события, не на прошлый сигнал.
+In the portfolio, a split changes quantity without creating wealth. Shares held before the ex-date earn the distribution entitlement; a purchase at the ex-date open does not. The receivable enters NAV on the ex-date; cash enters on the payable date. If a historical payable date is missing, the main disclosed approximation credits cash at the open of the first session no earlier than ex-date + 10 calendar days; sensitivities are +0/+30 calendar days. Independently confirmed actual dates take precedence. Each event is labeled actual/proxy. The H2 filter does not use a future payable date. A future payment date affects cash availability only when the event occurs, not the past signal.
 
-Распределения не начисляются второй раз через adjusted return в NAV. Расходы фонда уже включены в наблюдаемую цену; годовую expense ratio повторно не вычитать. Налоги, инвесторские удержания, валютная конверсия и реальная расчётная инфраструктура отсутствуют.
+Distributions must not enter NAV a second time through adjusted returns. Fund expenses are already included in the observed price; do not deduct the annual expense ratio again. Taxes, investor withholding, currency conversion, and actual settlement infrastructure are excluded.
 
-BIL — реально покупаемый ETF, с комиссиями и распределениями. Остаток USD — отдельный не приносящий процентов cash. Для Sharpe/полезности reference e_t = r_portfolio,t − r_BIL_TR,t; это доходность относительно BIL, не установленная безрисковая ставка. Базовый B0 имеет собственный торгуемый NAV и отличается от теоретического BIL reference.
+BIL is an ETF that is actually purchased, with transaction costs and distributions. Residual USD is separate, non-interest-bearing cash. For Sharpe/utility, the reference is e_t = r_portfolio,t − r_BIL_TR,t; this is a return relative to BIL, not an established risk-free rate. Benchmark B0 has its own tradable NAV and differs from the theoretical BIL reference.
 
-## 4. Календарь и допустимость признаков
+## 4. Calendar and feature eligibility
 
-t — последняя регулярная торговая сессия месяца. Решение в 18:00 America/New_York, включая дни раннего закрытия; информация после этого времени не используется. Плановый бар должен быть завершён. Исполнение на следующей общей допустимой регулярной сессии, модельная цена Open. Для перспективного журнала, если реальная загрузка опоздала, available_at задаётся фактическим временем, исполнение сдвигается до следующего открытия после него; задняя датировка запрещена.
+t is the last regular trading session of the month. The decision time is 18:00 America/New_York, including early-close days; later information is excluded. The scheduled bar must be complete. Execution occurs in the next common eligible regular session at the modeled Open price. For the prospective log, if actual retrieval is late, available_at is the actual timestamp and execution moves to the next open after it; backdating is prohibited.
 
-Сигналы и риск используют только историю <=t. Для каждого ETF требуются 253 последовательных закрытия/252 доходности, 63 доходности для sigma и 126 для covariance; единый полный прогрев применяется ко всем сравнениям. Для H2 нужны семь month-end уровней T, чтобы получить шесть полных месячных доходностей. Неполные месяцы исключаются.
+Signals and risk use only history <=t. Each ETF requires 253 consecutive closes/252 returns, 63 returns for sigma, and 126 for covariance; the same complete warm-up applies to every comparison. H2 requires seven month-end T levels to obtain six complete monthly returns. Incomplete months are excluded.
 
-Пропуски не заполняются вперёд для исполнения. Неразрешённый пропуск в признаках, OHLC, action или valuation останавливает общий сопоставимый запуск; произвольно сокращать universe нельзя. Первые даты источника используются как граница, а не скрыто восполняются. Неразрешённые дефекты N1 оформляются решением до результатов сигналов. Не торговать по устаревшему Open. Уже созданная заявка при отсутствии допустимого бара отменяется с причиной; системный дефект общей истории требует остановки исследования.
+Do not forward-fill missing values for execution. An unresolved gap in features, OHLC, actions, or valuation stops the common comparable run; the universe must not be reduced arbitrarily. First source dates serve as boundaries, not as gaps to be filled silently. Unresolved N1 defects require a documented decision before signal results. Do not trade at a stale Open. An existing order without an eligible bar is canceled with a recorded reason; a systemic defect in the common history requires research to stop.
 
-## 5. Риск и единое построение весов
+## 5. Risk and common weight construction
 
-r_i,d = T_i,d/T_i,d-1 − 1. sigma_i,t = sqrt(252) × sample_std последних 63 r_i (ddof=1). Нулевое, нечисловое или неполное sigma — ошибка качества/допустимости, не бесконечный score.
+r_i,d = T_i,d/T_i,d-1 − 1. sigma_i,t = sqrt(252) × sample_std of the latest 63 r_i (ddof=1). Zero, nonnumeric, or incomplete sigma is a quality/eligibility error, not an infinite score.
 
-Sigma_t = 252 × sample_cov последних 126 ежедневных excess returns девяти ETF относительно BIL (ddof=1). Без оптимизации shrinkage. Симметрия/PSD проверяются; численная отрицательная дисперсия ниже −1e-12 останавливает расчёт, величина от −1e-12 до 0 округляется до 0.
+Sigma_t = 252 × sample_cov of the latest 126 daily excess returns of the nine ETFs relative to BIL (ddof=1). No shrinkage optimization. Check symmetry/PSD; a numerical negative variance below −1e-12 stops calculation, while a value from −1e-12 to 0 is rounded to 0.
 
-Для inverse-vol набора S из m инструментов и заранее заданного числа слотов K:
+For an inverse-volatility set S with m instruments and a predefined slot count K:
 
 q_i = (m/K) × (1/sigma_i) / sum(j in S, 1/sigma_j).
 
-Пустой S означает нулевые рискованные веса. Неиспользованные слоты остаются в BIL; m<K не увеличивает бюджет прошедших инструментов. После расчёта q_i:
+An empty S implies zero risky weights. Unused slots remain in BIL; m<K does not increase the budget allocated to qualifying instruments. After calculating q_i:
 
 1. v_i = min(q_i, 0.25).
-2. Если сумма v группы >0.50, пропорционально уменьшить веса этой группы до 0.50. Снятые доли не перераспределять.
-3. V = sqrt(v' Sigma_t v). a = min(1, 0.10/V), при V=0 a=1. w_i=a v_i.
+2. If the sum of v within a group >0.50, reduce that group's weights proportionally to 0.50. Do not reallocate the removed weights.
+3. V = sqrt(v' Sigma_t v). a = min(1, 0.10/V), with a=1 when V=0. w_i=a v_i.
 4. w_BIL = 1 − sum(w_i).
 
-Рискованный вес <=100%, ETF <=25%, группа <=50%; цель 10% только уменьшает риск. Это ограничения целевых весов в момент решения. Фактические веса могут дрейфовать и отличаться после гэпа/расходов/округления; превышения раскрываются, ежедневная ребалансировка не добавляется. Денежный ETF не подпадает под рискованные 25%/50%. Из-за caps top-3 часто оставляет >=25% в денежной части; лимиты после просмотра не ослабляются.
+Risky weight <=100%, ETF <=25%, group <=50%; the 10% target only reduces risk. These constraints apply to target weights at the decision time. Actual weights can drift and differ after gaps, costs, and rounding; disclose breaches without introducing daily rebalancing. The cash ETF is exempt from the risky 25%/50% limits. The caps often leave >=25% in the cash allocation for top-3; do not relax limits after reviewing results.
 
-## 6. Базовые стратегии
+## 6. Benchmarks
 
-Все используют общий капитал, календарь, месячную частоту, прогрев, execution и расходы.
+All use the same capital, calendar, monthly frequency, warm-up, execution, and costs.
 
-| ID | Точное правило |
+| ID | Exact rule |
 |---|---|
-| B0 | Цель 100% BIL; распределения/свободные деньги реинвестируются при месячном решении. |
-| B1 | q_i=1/9 для всех девяти рискованных ETF; затем общий cap/group/vol алгоритм. |
-| B2 | inverse-vol всех девяти, m=K=9; затем общий алгоритм риска. |
-| B3 | Абсолютный тренд: T_i,t/T_i,t-252 ÷ (T_BIL,t/T_BIL,t-252) −1 >0; прошедшие получают inverse-vol с K=9; затем общий алгоритм риска. Последний 21 день у B3 не исключается. |
-| REF_SPY | Дополнительный SPY buy-and-hold, первоначальные расходы, деньги/распределения по общей модели; не применяется cap=25% и цель 10%. Это явно отдельный неконтролируемый по риску ориентир, не главный конкурент. |
+| B0 | Target 100% BIL; reinvest distributions/free cash at the monthly decision. |
+| B1 | q_i=1/9 for all nine risky ETFs; then apply the common cap/group/vol algorithm. |
+| B2 | Inverse volatility of all nine, m=K=9; then apply the common risk algorithm. |
+| B3 | Absolute trend: T_i,t/T_i,t-252 ÷ (T_BIL,t/T_BIL,t-252) −1 >0; qualifying instruments receive inverse-volatility weights with K=9; then apply the common risk algorithm. B3 does not exclude the latest 21 days. |
+| REF_SPY | Supplementary SPY buy-and-hold, initial costs, and cash/distributions under the common model; cap=25% and the 10% target do not apply. This is an explicitly separate reference without risk controls, not the primary comparator. |
 
-B1 — равные веса до общего уменьшения риска. B3 — главный конкурент H1; B2 выявляет пользу простого управления риском. Публиковать реализованную волатильность и cash, не предполагать равенство риска из одинаковых caps.
+B1 has equal weights before common risk reduction. B3 is H1's primary comparator; B2 identifies the contribution of simple risk management. Publish realized volatility and cash rather than assuming equal risk from identical caps.
 
-## 7. H1 и H2: ровно шесть конфигураций
+## 7. H1 and H2: exactly six configurations
 
-Экономическое основание H1: относительная сила может сохраняться вследствие постепенного усвоения информации и движения капитала. Это проверяемое объяснение, не установленная причина. Литература о momentum на других рынках не доказывает эффект этой ETF-выборки. H2 проверяет, отличает ли равномерное движение устойчивую силу от единичного скачка.
+H1's economic rationale: relative strength may persist because information is absorbed gradually and capital flows evolve. This is a testable explanation, not an established cause. Momentum literature from other markets does not establish the effect in this ETF sample. H2 tests whether a more consistent path distinguishes persistent strength from a single jump.
 
-Для H1, L in {126,252}, окно от t−L до t−21; ровно L−21 ежедневных доходностей:
+For H1, L in {126,252}, the window runs from t−L to t−21, containing exactly L−21 daily returns:
 
 M_i,t(L) = (T_i,t-21/T_i,t-L) / (T_BIL,t-21/T_BIL,t-L) − 1.
 
 S_i,t(L) = M_i,t(L)/sigma_i,t.
 
-Допуск строго S>0, сортировка по убыванию S, точные равенства — по ticker в ASCII-порядке. Выбрать максимум K in {3,4}. Недостающие слоты не заполнять отрицательным score. inverse-vol и общий риск из раздела 5. Волатильность измеряется к t, хотя momentum пропускает последние 21 сессию; это допустимая информация и заранее выбранное правило.
+Eligibility is strictly S>0; sort by descending S, breaking exact ties by ticker in ASCII order. Select at most K in {3,4}. Do not fill missing slots with negative scores. Apply inverse volatility and the common risk rules in section 5. Volatility is measured through t even though momentum excludes the latest 21 sessions; this is available information and a predefined rule.
 
-H2 всегда использует H1_252_3, включая его выбор, caps и vol scaling. Для последних шести завершённых календарных месяцев j:
+H2 always uses H1_252_3, including its selection, caps, and volatility scaling. For the latest six completed calendar months j:
 
 E_i,j = (T_i,end(j)/T_i,end(j-1)) / (T_BIL,end(j)/T_BIL,end(j-1)) − 1.
 
 F_i(h) = 1[sum(j, 1[E_i,j>0]) >= h], h in {4,5}.
 
-w_i,H2 = w_i,H1_252_3 × F_i(h); освобождённая доля добавляется BIL. Не делать новый ranking, не добирать другие ETF и не перераспределять веса/повторно повышать экспозицию. Месяц t включён, поскольку к решению он завершён. E=0 не считается положительным.
+w_i,H2 = w_i,H1_252_3 × F_i(h); the released weight is added to BIL. Do not rerank, select replacement ETFs, redistribute weights, or rescale exposure upward. Month t is included because it is complete by the decision time. E=0 is not positive.
 
-| ID | Параметры | Роль и основное сравнение |
+| ID | Parameters | Role and primary comparison |
 |---|---|---|
-| H1_252_3 | L=252, K=3 | Основной H1; vs B3 |
-| H1_252_4 | L=252, K=4 | Соседний H1; vs B3 |
-| H1_126_3 | L=126, K=3 | Соседний H1; vs B3 |
-| H1_126_4 | L=126, K=4 | Соседний H1; vs B3 |
-| H2_4of6 | fixed parent H1_252_3, h=4 | Основной H2; vs parent, дополнительно B3 |
-| H2_5of6 | fixed parent H1_252_3, h=5 | Соседний H2; vs parent, дополнительно B3 |
+| H1_252_3 | L=252, K=3 | Primary H1; vs B3 |
+| H1_252_4 | L=252, K=4 | Neighboring H1; vs B3 |
+| H1_126_3 | L=126, K=3 | Neighboring H1; vs B3 |
+| H1_126_4 | L=126, K=4 | Neighboring H1; vs B3 |
+| H2_4of6 | fixed parent H1_252_3, h=4 | Primary H2; vs parent, with B3 supplementary |
+| H2_5of6 | fixed parent H1_252_3, h=5 | Neighboring H2; vs parent, with B3 supplementary |
 
-## 8. Исполнение: ограничения, которые N2 обязан реализовать
+## 8. Execution: constraints N2 must implement
 
-Начальный капитал 100000 USD, без открытых позиций; NAV включает деньги, позиции и receivables. На month-end создаются целевые целые количества Q_i=floor(0.99 × w_i × NAV_t / C_i,t), включая BIL; заявки — разница с фактическими количествами. 1% — общий резерв для расходов/гэпов, фиксированное допущение. Никакого размера по ещё неизвестному Open. Split преобразует позиции и неисполненные заявки в согласованные единицы, остаток дробных акций сохраняется до продажи, новый целевой размер — целочисленный.
+Initial capital is 100000 USD, with no open positions; NAV includes cash, positions, and receivables. At month-end, create integer target quantities Q_i=floor(0.99 × w_i × NAV_t / C_i,t), including BIL; orders are the difference from actual quantities. The 1% common reserve for costs/gaps is a fixed assumption. Do not size using an Open that is not yet known. A split converts positions and outstanding orders into consistent units; retain fractional residual shares until sale, while new target quantities are integers.
 
-На исполнении: события до открытия, затем продажи по Open с расходами, затем покупки. Продажи ограничены имеющимися позициями. Если денег недостаточно на все исходные покупки вместе с расходами, коэффициент fill = min(1, available_cash / sum(requested_quantity × Open × (1+c))). Купить floor(fill × requested_quantity) для каждого ETF; остаток оставить USD, не раздать по удачному ticker. Open используется для ограничения фактического исполнения заявки, не для ретроспективного создания идеального target. После одного открытия неисполненная часть отменяется, причина сохраняется. Полученные продажи считаются сразу доступными: это упрощение расчётов, не модель реального cash account/settlement.
+Execution sequence: pre-open events, then sales at Open with costs, then purchases. Sales are limited to held quantities. If cash is insufficient for all original purchases including costs, fill = min(1, available_cash / sum(requested_quantity × Open × (1+c))). Buy floor(fill × requested_quantity) for each ETF; keep the remainder in USD rather than assigning it to a favored ticker. Open limits actual order execution; it does not retrospectively create an ideal target. Cancel any unfilled portion after one open and retain the reason. Sale proceeds are immediately available: this simplifies settlement and does not model an actual cash account/settlement system.
 
-Стоимость c × abs(quantity) × Open: основная c=0.001 (10 bps на одну сторону), включая BIL, покупки, продажи и первоначальный вход. В основном сценарии нет дополнительного вычета тех же расходов через ухудшенную цену. Sell+buy — две стороны. Корпоративные действия сами не создают торговую комиссию. Проскальзывание/спред объединены в c, не измерены. Частичное исполнение из-за денег моделируется, глубина стакана/ликвидность не моделируется. Cash >=0 с допуском 1e-8 USD для численного остатка; отрицательное сверх допуска — ошибка.
+Cost is c × abs(quantity) × Open: main c=0.001 (10 bps per side), including BIL, purchases, sales, and initial entry. The main scenario does not deduct the same costs again through an adverse execution-price adjustment. Sell+buy is two sides. Corporate actions do not themselves incur trading commissions. Slippage/spread are combined in c and are not measured. Cash-constrained partial fills are modeled; order-book depth/liquidity is not. Cash >=0, with a tolerance of 1e-8 USD for numerical residuals; a negative value beyond the tolerance is an error.
 
-Новая позиция зарабатывает после исполнения, старая несёт overnight до Open. В конце года счёт не обнуляется; смена модели вызывает реальные сделки. На последней дате нет принудительной ликвидации. N2 создаёт EXECUTION_MODEL.md и ручные сверки before/after open, сплита, ex/pay dates, гэпа и двухсторонней смены ETF. Новое экономическое правило требует версии протокола, а не скрытого решения в коде.
+A new position earns returns after execution; an existing position carries overnight exposure through Open. The account is not reset at year-end; changing models causes actual trades. There is no forced liquidation on the last date. N2 must produce EXECUTION_MODEL.md and manual reconciliations before/after open, a split, ex/pay dates, a gap, and a two-sided ETF switch. A new economic rule requires a protocol version change, not an undocumented code decision.
 
-## 9. Исторические границы и экспозиция
+## 9. Historical boundaries and prior exposure
 
-Пользователь 6 октября ответил о прежнем просмотре H1/H2: «Не уверен / не помню». AAPL/SPY/BIL и события рынка уже знакомы. Полная point-in-time/поведенческая независимость исторического теста не установлена.
+On 6 October, prior exposure to H1/H2 results was reported as "Not sure / do not remember." AAPL/SPY/BIL and market events were already familiar. Full point-in-time and behavioral independence of the historical test is unestablished.
 
-| Период | Назначение |
+| Period | Purpose |
 |---|---|
-| 2007-05-30–2008-12-31 | Общая история и прогрев; не самостоятельная область оценки доходности. |
-| 2009-01-01–2013-12-31 | Development: данные/движок/базовые сравнения. Первый сигнал на закрытии 2008-12-31, исполнение первая допустимая сессия 2009. |
-| 2014-01-01–2022-12-31 | Исследовательский yearly walk-forward; изменение протокола после просмотра отмечает затронутую историю как development. |
-| 2023-01-01–2025-12-31 | Зарезервированная историческая проверка с неизвестной прежней экспозицией; однократное открытие после freeze, не независимый holdout. |
-| 2026-01-01–2026-10-05 | Отдельный свежий исторический участок с тем же ограничением независимости, неполный год. Не выбирать по нему модель. |
-| После реальной заморозки финальной модели | Перспективный журнал новых входов/решений; начальная дата пока не наступила. |
+| 2007-05-30–2008-12-31 | Common history and warm-up; not a separate return-evaluation period. |
+| 2009-01-01–2013-12-31 | Development: data/engine/benchmarks. First signal at the 2008-12-31 close; execution in the first eligible session of 2009. |
+| 2014-01-01–2022-12-31 | Research yearly walk-forward; a protocol change after inspection designates affected history as development. |
+| 2023-01-01–2025-12-31 | Reserved historical check with unknown prior exposure; opened once after freeze, not an independent holdout. |
+| 2026-01-01–2026-10-05 | Separate recent historical segment with the same independence limitation, an incomplete year. Do not select a model on it. |
+| After the final model is actually frozen | Prospective log of new inputs/decisions; the start date has not yet occurred. |
 
-Замена предварительного начала 2008 на 2009 вызвана доступностью BIL и единым прогревом, до просмотра доходности стратегий. Она исключает оценку большей части кризиса 2008; это материальное ограничение, которое не маскируется индексной подклейкой.
+The preliminary start was changed from 2008 to 2009 because of BIL availability and the common warm-up, before reviewing strategy returns. This excludes evaluation of most of the 2008 crisis; the material limitation must not be obscured by splicing in index history.
 
-N1 может проверять цены/actions на всей истории, включая reserved, но не генерировать там таблицы стратегии, сравнения, rankings или Sharpe. Метаданные/QA-доступ регистрируются в source/quality receipt. Финальные показатели reserved закрыты до N6. При изменении границ по дефекту данных сначала документировать доступность и причину; изменение ради результата запрещено.
+N1 may inspect prices/actions throughout history, including the reserved period, but must not generate strategy tables, comparisons, rankings, or Sharpe there. Metadata/QA access is recorded in source/quality receipts. Final reserved-period performance remains closed until N6. If a data defect changes boundaries, first document availability and the reason; changes motivated by results are prohibited.
 
-## 10. Отдельная адаптивная политика P_A1
+## 10. Separate adaptive policy P_A1
 
-Не седьмая конфигурация сигнала, а отдельная испробованная политика. Выбор только среди четырёх H1, H2 родитель не меняется. Фиксированный H1_252_3 всегда показывается рядом.
+This is a separate policy to be evaluated, rather than a seventh signal configuration. Selection is restricted to the four H1 configurations; H2's parent remains fixed. Always show fixed H1_252_3 alongside it.
 
-Для года y>=2014 доступны ровно пять предыдущих календарных лет y−5…y−1; первые три — обучающий контекст, последние два — хронологическая внутренняя validation. Сигналы детерминированы; дополнительных обучаемых параметров нет. Каждый кандидат на внутреннем двухлетнем участке имеет один непрерывный счёт со стартом в cash, полный прошлый прогрев, тот же execution/cost. Первые три года не включаются в validation score. Случайный shuffle запрещён.
+For year y>=2014, exactly five preceding calendar years y−5…y−1 are available; the first three provide training context, and the final two form chronological internal validation. Signals are deterministic; there are no additional fitted parameters. Each candidate has one continuous account over the internal two-year segment, starting in cash with full prior warm-up and the same execution/cost rules. The first three years do not enter the validation score. Random shuffling is prohibited.
 
-Полезность U = 252 × mean(e_daily) − (3/2) × 252 × sample_var(e_daily), ddof=1. Коэффициент 3 не оптимизируется. Выбрать максимальный U на общей validation. Все кандидаты с U>=best_U−0.001 считаются близкими; порядок предпочтения H1_252_3, H1_252_4, H1_126_3, H1_126_4. Это приоритет исходного варианта, длинного окна и меньшего набора, не ранжирование по OOS. Отсутствие конечных score по численной причине при допустимых данных — фиксированный fallback H1_252_3 с предупреждением; дефект входов останавливает расчёт, fallback его не скрывает.
+Utility U = 252 × mean(e_daily) − (3/2) × 252 × sample_var(e_daily), ddof=1. The coefficient 3 is not optimized. Select maximum U on common validation. All candidates with U>=best_U−0.001 are treated as close; the preference order is H1_252_3, H1_252_4, H1_126_3, H1_126_4. This favors the original configuration, a longer window, and a smaller set; it is not an OOS ranking. If finite scores are unavailable for numerical reasons despite eligible data, use fixed fallback H1_252_3 with a warning; defective inputs stop calculation and are not concealed by fallback.
 
-Выбор фиксируется до первого открытия года по доступному предыдущему закрытию. Между годовыми окнами реальный портфель переносится непрерывно. При моделировании 2023–2025 алгоритм заморожен до открытия всего теста; он может автоматически использовать завершившийся предыдущий год, как в реальном времени, без ручного вмешательства и просмотра промежуточных результатов. Настройки не переобучаются по всему reserved заранее.
+Selection is fixed before the year's first open using the available preceding close. The actual portfolio carries continuously between annual windows. For 2023–2025 simulation, freeze the algorithm before opening the entire test; it may automatically use a completed preceding year as it would in real time, without manual intervention or inspection of intermediate results. Settings are not fitted in advance on the entire reserved period.
 
-## 11. Метрики, минимальный эффект и неопределённость
+## 11. Metrics, minimum effect, and uncertainty
 
-Одинаковые даты и NAV-разметка; доходность r_t=NAV_t/NAV_t-1−1, включая первый реальный вход относительно стартового NAV. CAGR=(NAV_end/NAV_start)^(252/n_returns)−1; partial-year total return показывается отдельно. Vol=sqrt(252) × sample_std(r), Sharpe_BIL=sqrt(252) × mean(e)/sample_std(e). Нулевая дисперсия даёт undefined, не infinity. Drawdown относительно running maximum с начальным NAV. Односторонний оборот=sum(abs(trade_notional))/pretrade_NAV; это не оборот, делённый на 2. Расходы — USD и доля NAV. Таблица также включает cash+BIL и receivables отдельно, рискованные веса, группы, количество месячных решений и разрез по годам.
+Use identical dates and NAV observation conventions; return r_t=NAV_t/NAV_t-1−1 includes the first actual entry relative to initial NAV. CAGR=(NAV_end/NAV_start)^(252/n_returns)−1; show partial-year total return separately. Vol=sqrt(252) × sample_std(r), Sharpe_BIL=sqrt(252) × mean(e)/sample_std(e). Zero variance yields undefined, not infinity. Drawdown uses the running maximum including initial NAV. One-way turnover=sum(abs(trade_notional))/pretrade_NAV; this is not turnover divided by 2. Show costs in USD and as a fraction of NAV. The table also includes cash+BIL and receivables separately, risky weights, groups, the number of monthly decisions, and annual breakdowns.
 
-Основной эффект: DeltaU=U(candidate)−U(comparator). Минимально интересный эффект — +0.01 полезности в год (1 процентный пункт); это проектная оценка ценности усложнения, не найденный оптимум. Дополнительно требуется положительная разница annualized mean excess return. Для H1 comparator=B3, для H2=fixed parent. H2 vs B3/B2 — обязательные вспомогательные сравнения, не замена неудачного parent comparison.
+Primary effect: DeltaU=U(candidate)−U(comparator). The minimum economically relevant effect is +0.01 utility per year (1 percentage point); this is a project judgment about the value of added complexity, not an estimated optimum. A positive difference in annualized mean excess return is also required. For H1, comparator=B3; for H2, comparator=fixed parent. H2 vs B3/B2 are mandatory supplementary comparisons and cannot replace an unsuccessful parent comparison.
 
-Парный circular block bootstrap на согласованных ежедневных рядах candidate/comparator/BIL; 10000 реплик, seed=20261006, длины 21/63/126 сессий. Основная длина 63; все три показать. Выбирать благоприятную длину нельзя. Ресэмплирование общей датой сохраняет совместные движения. Для DeltaU basic 95% CI: [2 DeltaU_hat − Q_0.975(DeltaU*), 2 DeltaU_hat − Q_0.025(DeltaU*)]. Плановый односторонний p для H0: DeltaU<=0 — (1+count[DeltaU*−DeltaU_hat >= DeltaU_hat])/(10000+1), как приближённый центрированный bootstrap; не точный конечновыборочный тест.
+Paired circular block bootstrap on aligned daily candidate/comparator/BIL series; 10000 replicates, seed=20261006, block lengths 21/63/126 sessions. The primary length is 63; show all three. Do not select a favorable length. Resampling common dates preserves joint movements. For DeltaU, the basic 95% CI is [2 DeltaU_hat − Q_0.975(DeltaU*), 2 DeltaU_hat − Q_0.025(DeltaU*)]. The scheduled one-sided p for H0: DeltaU<=0 is (1+count[DeltaU*−DeltaU_hat >= DeltaU_hat])/(10000+1), an approximate centered bootstrap, not an exact finite-sample test.
 
-Семейство шести фиксированных DeltaU-проверок: четыре H1 vs B3 и два H2 vs parent. Holm FWER 5% по основным p при длине 63; первые заголовочные выводы — H1_252_3 и H2_4of6. Результат соседнего варианта не делает основной вариант успешным. Условия и интервалы на уже знакомой истории остаются исследовательскими; коррекция не восстанавливает независимость. Статистическая незначимость не доказывает отсутствия эффекта.
+The family of six fixed DeltaU tests comprises four H1 vs B3 and two H2 vs parent. Apply Holm FWER 5% to the primary p values at length 63; lead conclusions concern H1_252_3 and H2_4of6. A neighboring configuration's result does not establish success for the primary configuration. Conditions and intervals on familiar history remain exploratory; adjustment does not restore independence. Statistical nonsignificance does not establish the absence of an effect.
 
-Регрессии на полных месячных доходностях, отдельно по WF и reserved; неполный октябрь 2026 не включать. y=R_candidate−R_BIL. Модель A: intercept + excess return главного comparator (B3 для H1, parent для H2). Модель B: intercept + четыре class proxies. Class proxy — среднее месячных excess total returns инструментов соответствующей группы Equity/Treasury/Credit/Real из раздела 2. Их веса/состав не оптимизируются; это контроль экспозиций, не точная репликация академических factors и не торгуемый benchmark с расходами. Модели A/B оцениваются отдельно, без дублирующего B3 внутри четырёх факторов. OLS, Newey-West HAC, lag=3 месяца с конечновыборочной поправкой. Annual alpha=12×monthly intercept; 95% интервалы и число месяцев показывать. При <36 полных месяцев, rank deficiency или condition number>1e8 вывод об alpha не формировать. Alpha/CIs — вспомогательное описание без отдельного некорректированного подтверждающего p-claim. Даже положительный intercept не доказывает новую универсальную альфу.
+Regressions use complete monthly returns, separately for WF and reserved; exclude incomplete October 2026. y=R_candidate−R_BIL. Model A: intercept + excess return of the primary comparator (B3 for H1, parent for H2). Model B: intercept + four class proxies. A class proxy is the mean monthly excess total return of instruments in the corresponding Equity/Treasury/Credit/Real group in section 2. Weights/composition are not optimized; these control exposures and are neither exact replications of academic factors nor tradable benchmarks with costs. Estimate A/B separately without duplicating B3 within the four-factor model. OLS, Newey-West HAC, lag=3 months with finite-sample correction. Annual alpha=12×monthly intercept; show 95% intervals and the number of months. Do not form an alpha conclusion with <36 complete months, rank deficiency, or condition number>1e8. Alpha/CIs are supplementary descriptions without a separate unadjusted confirmatory p-value claim. Even a positive intercept does not establish new universal alpha.
 
-Bootstrap фиксированного NAV условен на уже выбранной модели. Для P_A1 отдельно показать ежегодные validation scores, выборы и его устойчивость: ресэмплировать только доступную внутреннюю validation совместными блоками 63, 1000 реплик с seed=20261007, заново выбирать конфигурацию по тому же правилу и считать частоты выбора. Это диагностика неопределённости выбора, не CI всего процесса обучения/исполнения. Bootstrap реализованного P_A1 подписывать как условный; подтверждающий p для всей адаптивной процедуры не заявляется. DSR/PBO — необязательные диагностики N5, только с явно указанным множеством испытаний и ограничениями; ими не заменять основной контракт.
+A bootstrap of fixed NAV is conditional on the model already selected. For P_A1, separately show annual validation scores, selections, and selection stability: resample only available internal validation using joint blocks of 63, 1000 replicates with seed=20261007, reselect the configuration under the same rule, and calculate selection frequencies. This diagnoses selection uncertainty; it is not a CI for the entire training/execution process. Label a bootstrap of realized P_A1 as conditional; no confirmatory p value is claimed for the full adaptive procedure. DSR/PBO are optional N5 diagnostics, with an explicit trial set and limitations; they do not replace the primary contract.
 
-## 12. Заранее назначенные сценарии
+## 12. Prespecified scenarios
 
-Не выбирать по ним победителя и не менять параметры. Повторять те же информационные решения; при изменении состояния счёта размеры новых заявок рассчитываются причинно по актуальному счёту. Для P_A1 сохранять основные годовые выборы; под стресс не выбирать их заново.
+Do not select a winner or change parameters using these scenarios. Repeat the same informational decisions; when account state changes, size new orders causally from the current account. Retain P_A1's main annual selections rather than reselecting under stress.
 
-- Полная сетка cost {0,10,20,50} bps × execution {next open, one extra session}: восемь сценариев на каждую B0–B3, REF_SPY, шесть конфигураций и P_A1. Ноль — объяснение расходов, 50 — крайний сценарий.
-- Дивиденды: missing-pay-date proxy {0,10,30} календарных дней, основной 10; actual даты не менять. Резерв заявок {0%,1%,2%}, основной 1%. Одно изменение за раз при основных cost/lag.
-- H1_252_3 без деления score на sigma, остальные правила прежние. Отдельно равные веса выбранного набора вместо inverse-vol при неизменном score — эффект sizing.
-- H2 без фильтра = parent; H2 vs causal exposure-matched parent: уменьшить рискованные веса parent до суммы рискованных весов H2 в текущем решении, остаток в BIL. Не использовать будущую реализованную волатильность для sizing.
-- H1 vs B3 и B2; одинаковые caps и ex-ante risk; отдельно показать фактический риск. Одинаковый результат B2 используется для диагностики без отбора, новый кандидат из него не создаётся.
-- Leave-one-class-out для четырёх групп: убрать всю группу, остальные K/лимиты не ослаблять; B1/B2/B3 считают слоты по исходным девяти, чтобы удаление не перераспределяло бюджет автоматически. H1 K остаётся 3/4. Вспомогательная singleton диагностика без DBC из-за известного изменения методологии также фиксируется заранее.
-- Календарные блоки 2009–2013, 2014–2016, 2017–2019, 2020–2022, reserved 2023–2025, fresh 2026 отдельно; дополнительно каждый год. Отдельно раскрыть периоды до/после 2025-11-10 DBC, не выбирать дату разрыва по графику стратегии.
-- Альтернативные представители классов и второй ценовой источник отложены за MVP до установленного конкретного пробела/отдельного решения; текущая устойчивость охватывает только эту фиксированную выборку. Благоприятную замену по результату не подбирать.
+- Full grid cost {0,10,20,50} bps × execution {next open, one extra session}: eight scenarios for each B0–B3, REF_SPY, the six configurations, and P_A1. Zero explains costs; 50 is an extreme scenario.
+- Dividends: missing-pay-date proxy {0,10,30} calendar days, main 10; do not change actual dates. Order reserve {0%,1%,2%}, main 1%. Change one item at a time at main cost/lag.
+- H1_252_3 without dividing the score by sigma, with other rules unchanged. Separately, equal weights in the selected set instead of inverse volatility with the score unchanged, to identify sizing effects.
+- H2 without the filter = parent; H2 vs a causal exposure-matched parent: reduce the parent's risky weights to the sum of H2 risky weights at the current decision, putting the remainder in BIL. Do not use future realized volatility for sizing.
+- H1 vs B3 and B2; identical caps and ex-ante risk rules, with actual risk reported separately. The same B2 result diagnoses performance without selection; it does not become a new candidate.
+- Leave-one-class-out for four groups: remove the entire group without relaxing the remaining K/limits; B1/B2/B3 count slots against the original nine so removal does not automatically reallocate the budget. H1 K remains 3/4. A supplementary single-instrument exclusion diagnostic without DBC is also prespecified because of its known methodology change.
+- Calendar blocks 2009–2013, 2014–2016, 2017–2019, 2020–2022, reserved 2023–2025, and recent 2026 separately; additionally, each year. Separately disclose periods before/after DBC's 2025-11-10 change; do not choose the break date from a strategy chart.
+- Alternative class representatives and a second price source are deferred beyond the MVP until a specific gap is established or a separate decision is made; current robustness covers only this fixed sample. Do not select favorable replacements from results.
 
-## 13. Решения по гипотезам и открытие теста
+## 13. Hypothesis decisions and test opening
 
-Ошибки причинности, учёта или существенные неразрешённые дефекты данных приостанавливают все экономические выводы. Если DeltaU<=0 либо эффект исчезает при 20 bps/дополнительной сессии — гипотеза не поддержана в данной области. Если точечный DeltaU>0, но <0.01 — экономическая ценность усложнения не установлена по назначенному критерию. Если DeltaU>=0.01, но интервал широк и включает 0 — недостаточно данных. Снижение риска без убедительного добавочного эффекта называется управлением риском.
+Causality or accounting errors, or material unresolved data defects, suspend all economic conclusions. If DeltaU<=0 or the effect disappears at 20 bps/an extra session, the hypothesis is unsupported within this scope. If point-estimate DeltaU>0 but <0.01, the economic value of added complexity is unestablished under the assigned criterion. If DeltaU>=0.01 but the interval is wide and includes 0, evidence is insufficient. Risk reduction without persuasive incremental value is described as risk management.
 
-«Кандидат на дальнейшее исследование» для основного фиксированного варианта требует совместно: DeltaU>=0.01 и положительную разницу mean excess return на WF и reserved; нижнюю основную CI>0 и Holm p<0.05 в scheduled historical checks; DeltaU>0 при 20 bps плюс дополнительной сессии; не менее 3 из 4 leave-class-out DeltaU>0; положительную годовую разницу среднего excess return в >=5 из 9 WF лет и >=2 из 3 reserved лет. Среди положительных WF годовых вкладов в сумму дневных candidate−comparator доходностей доля одного года <=50%. Провал устойчивости раскрывается как концентрация эффекта. Это совокупность критериев, не обещание достаточной мощности 36 месяцев и не доказательство независимой альфы. Alpha относительно моделей описывать отдельно.
+"Candidate for further research" for a primary fixed configuration requires all of the following: DeltaU>=0.01 and a positive mean excess-return difference in WF and reserved; the primary CI lower bound>0 and Holm p<0.05 in scheduled historical checks; DeltaU>0 at 20 bps plus an extra session; at least 3 of 4 leave-class-out DeltaU>0; a positive annual mean excess-return difference in >=5 of 9 WF years and >=2 of 3 reserved years. Among positive WF annual contributions to the sum of daily candidate−comparator returns, one year's share must be <=50%. A robustness failure is disclosed as effect concentration. These are joint criteria, not a promise of sufficient power from 36 months or proof of independent alpha. Describe alpha relative to the models separately.
 
-Открытие N6: зафиксированы git SHA, protocol/config hashes, data hashes, версии среды, все кандидаты/политики, решения выбора, QA и тесты N1–N5. Сначала записать финальный run_id и статус started в журнал, затем один раз создать весь reserved report; свежий 2026 идёт отдельной таблицей. Не менять процедуру по промежуточным результатам. Исправление ошибки допускается с новой версией, сохранением старого результата и явным повторным открытием. Отрицательный результат не разрешает новый оптимум или другой test-period.
+N6 opening requires fixed git SHA, protocol/config hashes, data hashes, environment versions, all candidates/policies, selection decisions, QA, and N1–N5 tests. First record the final run_id and started status in the log, then create the entire reserved report once; recent 2026 receives a separate table. Do not change the procedure based on intermediate results. An error correction is permitted with a new version, retention of the old result, and explicit reopening disclosure. A negative result does not authorize a new optimum or a different test period.
 
-## 14. Реестр, воспроизводимость и завершение
+## 14. Registry, reproducibility, and completion
 
-До первого N1 data-run журнал experiments/EXPERIMENT_LOG.jsonl пуст: N0 metadata probes документированы отдельно и не являются попытками проверки стратегии. H1/H2 имеют статус registered_not_tested. Правила всех data/strategy/replay/failed запусков — [experiments/README.md](experiments/README.md). Сначала started, потом completed/failed запись, без удаления. Ошибки и изменения после просмотра получают родителя/причину. Диагностики — не скрытые дополнительные кандидаты; изменение стратегии по диагностике становится новой попыткой.
+Before the first N1 data run, experiments/EXPERIMENT_LOG.jsonl is empty: N0 metadata probes are documented separately and are not strategy-testing attempts. H1/H2 have status registered_not_tested. Rules for all data/strategy/replay/failed runs are in [experiments/README.md](experiments/README.md). Record started first, then completed/failed, without deletion. Errors and changes after inspection receive a parent/reason. Diagnostics are not hidden extra candidates; a strategy change motivated by a diagnostic becomes a new attempt.
 
-N0 не запускает массовый перебор/оптимизацию. N1 DATA_CONTRACT/снимок/QA, N2 EXECUTION_MODEL/финансовые инварианты, N3 B0–B3 предшествуют H1/H2. Происхождение переноса AAPL v0.6.0 сохраняется; старый движок next-close не является реализацией этого next-open контракта.
+N0 does not run a broad search/optimization. N1 DATA_CONTRACT/snapshot/QA, N2 EXECUTION_MODEL/financial invariants, and N3 B0–B3 precede H1/H2. Retain provenance for transfers from AAPL v0.6.0; the old next-close engine does not implement this next-open contract.
 
-Изменения протокола имеют новую версию, дату, diff и причину в DECISIONS.md; уже просмотренные результаты не становятся независимыми от изменения документа. После N7 реальный N8 начинается с immutable prospective receipts; первые 8–12 недель проверяют процесс и при месячных решениях не подтверждают альфу. Наблюдение будущих данных нельзя заменить историческим backfill.
+Protocol changes receive a new version, date, diff, and reason in DECISIONS.md; previously viewed results do not become independent because the document changed. After N7, actual N8 begins with immutable prospective receipts; the first 8–12 weeks test the process and do not establish alpha from monthly decisions. Historical backfill cannot replace observation of future data.
