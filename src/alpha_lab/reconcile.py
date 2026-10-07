@@ -3,7 +3,8 @@ from pathlib import Path
 
 from .evidence import AMOUNT_BASES, parse_invesco_json, parse_ishares_html, parse_ssga_xlsx
 from .normalize import TOLERANCE, match_tolerance
-from .pipeline import corrections_info, normalized, project_path, read_corrections, require_inside
+from .pipeline import (check_vintage_lineage, corrections_info, normalized, project_path, read_corrections,
+                       require_inside)
 from .provenance import Run, canonical_bytes, freeze, sha256, verify
 
 CLASSES = ['matched', 'amount_mismatch', 'issuer_only', 'yahoo_only', 'outside_issuer_coverage']
@@ -15,10 +16,11 @@ def issuer_events(evidence, manifest):
     for s in manifest['metadata']['sources']:
         if s['status'] != 'completed':
             raise ValueError(f'failed evidence source: {s["id"]}')
-        if s['kind'] == 'document':
-            continue
+        # Documents too: a no_distributions status may only cite files frozen in this snapshot.
         if manifest['files'].get(s['file']) != s['sha256']:
             raise ValueError(f'evidence source {s["id"]} does not match the manifest')
+        if s['kind'] == 'document':
+            continue
         if s.get('amount_basis') not in AMOUNT_BASES:
             raise ValueError(f'evidence source {s["id"]} has no valid amount_basis')
         body = (evidence / s['file']).read_bytes()
@@ -112,6 +114,8 @@ def reconcile(root, source_snapshot, evidence_snapshot, parent=None, corrections
         run.base.update(universe=config['universe'], splits=config.get('splits', {}))
         info = corrections_info(root, corrections, corrections_path)
         run.base.update(info)
+        if corrections_path is not None:
+            check_vintage_lineage(root, run.base['source_manifest_sha256'], corrections_path, None)
         issuer = issuer_events(evidence, evidence_manifest)
         no_distributions = no_distribution_sources(evidence_manifest)
         frames = normalized(source, manifest, {}, corrections or {})

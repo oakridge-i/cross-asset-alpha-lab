@@ -252,3 +252,30 @@ def test_real_corrections_pass_validation(ticker, ex_date, action, yahoo, issuer
     correction = {'action': action, 'yahoo_amount': yahoo, 'issuer_amount': issuer, 'payable_date': None,
                   'source': 'issuer reference'}
     n.check_correction(ticker, ex_date, correction, 0.0 if yahoo is None else yahoo, 1.0)
+
+
+def test_correction_payable_date_is_actual_without_a_payable_file():
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0])
+    corrections = {'2017-11-29': {'action': 'replace', 'yahoo_amount': 0.4, 'issuer_amount': 0.45,
+                                  'payable_date': '2017-12-01', 'source': 'issuer-ref'},
+                   '2017-11-30': {'action': 'add', 'yahoo_amount': None, 'issuer_amount': 0.2,
+                                  'payable_date': None, 'source': 'issuer-ref-add'}}
+    x = norm(f, corrections=corrections)
+    assert x.loc['2017-11-29', ['payable_date', 'payable_basis', 'payable_source']].tolist() == [
+        '2017-12-01', 'actual', 'issuer-ref']
+    # Without an issuer payable date the protocol proxy still applies.
+    assert x.loc['2017-11-30', 'payable_basis'] == 'proxy_ex_plus_10_calendar_days'
+    # The same date in a payable file is consistent and gives the same frame.
+    same = norm(f, payable={'2017-11-29': {'date': '2017-12-01', 'source': 'issuer-ref'}}, corrections=corrections)
+    assert same.equals(x)
+
+
+@pytest.mark.parametrize('payable_date,payable,match', [
+    ('2017-12-01', {'2017-11-29': {'date': '2017-12-04', 'source': 'other'}}, 'conflicting actual payable dates'),
+    ('2017-11-28', {}, 'invalid actual payable evidence')], ids=['conflict', 'before_ex_date'])
+def test_correction_payable_date_is_validated(payable_date, payable, match):
+    f = frame([100, 99, 98, 97], dividends=[0, 0.4, 0, 0])
+    corrections = {'2017-11-29': {'action': 'replace', 'yahoo_amount': 0.4, 'issuer_amount': 0.45,
+                                  'payable_date': payable_date, 'source': 'issuer-ref'}}
+    with pytest.raises(ValueError, match=match):
+        norm(f, payable=payable, corrections=corrections)

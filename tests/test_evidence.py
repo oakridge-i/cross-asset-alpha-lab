@@ -65,6 +65,17 @@ def test_ssga_missing_duplicate_or_malformed_fails_closed(rows):
         e.parse_ssga_xlsx(xlsx(rows), 'SPY')
 
 
+def test_ssga_row_without_any_amount_fails_closed():
+    # A blank amount is not an explicit zero row: it must never become a 0.0 event (and so a remove).
+    blank = ['SPDR T-Bill', 'BIL', '78468R663', '11/29/2017', '11/30/2017', '12/05/2017', '', '', '', 'Monthly']
+    with pytest.raises(ValueError, match='no distribution amount'):
+        e.parse_ssga_xlsx(xlsx(SSGA_ROWS + [blank]), 'BIL')
+    # Other tickers' rows are not read, and an explicit zero stays a valid zero row.
+    assert len(e.parse_ssga_xlsx(xlsx(SSGA_ROWS + [blank]), 'SPY')) == 2
+    zero = blank[:6] + ['0.000000'] + blank[7:]
+    assert e.parse_ssga_xlsx(xlsx(SSGA_ROWS + [zero]), 'BIL')[-1]['amount'] == 0.0
+
+
 def table(total=('0.350802', '0.648931')):
     return {'exDate': [20260615, 20071224], 'recordDate': [20260615, None], 'payableDate': [20260618, 20080104],
             'incomeAmount': ['0.350802', '0.6489'], 'totalDistribution': list(total)}

@@ -217,3 +217,30 @@ def test_audit_refuses_payable_from_another_corrections_vintage(tmp_path, no_net
     # Same vintage, and a hand-written payable next to a vintage corrections file, are both accepted.
     audit_snapshot(tmp_path, s, payable=b / 'payable.json', corrections=b / 'corrections.json')
     audit_snapshot(tmp_path, s, payable={}, corrections=b / 'corrections.json')
+
+
+def test_blank_issuer_amount_never_derives_a_remove(tmp_path, no_network):
+    """parse -> compare -> derive: DDD 2017-11-29 has a Yahoo event and an SSGA row with all amounts blank."""
+    rows = [['DDD Fund', 'DDD', 'x', '11/29/2017', '11/30/2017', '12/05/2017', '', '', '', 'Monthly'],
+            ['DDD Fund', 'DDD', 'x', '12/01/2017', '12/04/2017', '12/08/2017', '0.03', '', '', 'Monthly']]
+    files = {'ssga.xlsx': xlsx(rows)}
+    sources = [dict(id='ssga', file='ssga.xlsx', url='https://issuer.test/ssga.xlsx', kind='ssga_xlsx',
+                    tickers=['DDD'], amount_basis='as_traded', retrieved_at='2026-10-06T00:00:00',
+                    sha256=sha256(files['ssga.xlsx']), http_status=200, status='completed')]
+    blank = freeze(tmp_path / 'data/evidence/blank', files, {'sources': sources})
+    with pytest.raises(ValueError, match='no distribution amount'):
+        reconcile(tmp_path, source(tmp_path), blank)
+    assert [r['event'] for r in journal(tmp_path)] == ['started', 'failed']
+    assert not (tmp_path / 'data/reconciliation').exists()
+
+
+def test_reconcile_refuses_corrections_of_another_source_snapshot(tmp_path, no_network):
+    first = reconcile(tmp_path, source(tmp_path), evidence(tmp_path))
+    derived = co.corrections_run(tmp_path, first)
+    other = source(tmp_path, 'other', retrieved_at='2026-10-07T00:00:00+00:00')
+    with pytest.raises(ValueError, match='corrections vintage was derived from another source snapshot'):
+        reconcile(tmp_path, other, evidence(tmp_path, 'cd2'), corrections=derived / 'corrections.json')
+    assert [r['event'] for r in journal(tmp_path)][-2:] == ['started', 'failed']
+    assert len(list((tmp_path / 'data/reconciliation').iterdir())) == 1
+    # The snapshot the corrections descend from is still accepted.
+    reconcile(tmp_path, source(tmp_path, 'cd2'), evidence(tmp_path, 'cd3'), corrections=derived / 'corrections.json')

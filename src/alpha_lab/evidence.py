@@ -89,6 +89,10 @@ def parse_ssga_xlsx(body, ticker):
             if row.get(columns['TICKER']) != ticker:
                 continue
             get = lambda name: row.get(columns[name], '')
+            # A blank component is zero only next to a stated one; a row with no amount at all is not an
+            # explicit zero row and must not become one (it would later justify a remove correction).
+            if not any(get(n) for n in SSGA_AMOUNTS):
+                raise ValueError(f'SSGA row has no distribution amount: {ticker}/{get("EX-DATE")}')
             events.append(event(us_date(get('EX-DATE')), us_date(get('RECORD DATE')),
                                 us_date(get('PAYABLE DATE')), sum(float(get(n) or 0) for n in SSGA_AMOUNTS)))
     except (KeyError, IndexError, TypeError, AttributeError, EOFError, NotImplementedError,

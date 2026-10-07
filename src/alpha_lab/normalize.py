@@ -79,7 +79,16 @@ def normalize(frame, ticker, retrieved_at, source_hash, payable=None, *, pay_del
         raise ValueError('dividend and capital gain on one date: basis not evidenced')
     if ((f.Low > f[['Open','Close']].min(axis=1)) | (f.High < f[['Open','Close']].max(axis=1))).any():
         raise ValueError('OHLC inequality')
-    payable = payable or {}
+    payable = dict(payable or {})
+    # An issuer payable date carried by an add/replace correction is actual evidence even when no separate
+    # payable file is passed; a payable file stating another date for the same event is a conflict.
+    for ex_date, correction in (corrections or {}).items():
+        if not isinstance(correction, dict) or correction.get('action') not in ('add', 'replace'):
+            continue
+        if when := correction.get('payable_date'):
+            if ex_date in payable and payable[ex_date].get('date') != when:
+                raise ValueError(f'conflicting actual payable dates: {ticker}/{ex_date}')
+            payable.setdefault(ex_date, {'date': when, 'source': correction.get('source')})
     bound = f.index[-1].date() + timedelta(days=pay_delay_days + 370)
     for value in payable.values():
         bound = max(bound, date.fromisoformat(value['date']) + timedelta(days=15))

@@ -83,9 +83,10 @@ def run(root):
     return target, load('comparison.json'), load('payable.json')
 
 
-def gld_evidence(root, name):
+def gld_evidence(root, name, drop=None, change=None):
     """Same issuer sources as evidence(), plus two document sources corroborating that GLD pays no
-    distributions: a prospectus (which also carries the explicit `basis` for the status) and a FAQ."""
+    distributions: a prospectus (which also carries the explicit `basis` for the status) and a FAQ.
+    drop omits a file from the frozen snapshot; change updates the prospectus source metadata."""
     files = {'ssga.xlsx': xlsx(SSGA), 'efa.html': page(EFA, EFA), 'eem.html': page(EEM, EEM),
              'memo.pdf': b'%PDF memo', 'gld.pdf': b'%PDF gld prospectus', 'gld-faq.pdf': b'%PDF gld faq'}
     sources = [dict(id=i, file=f, url=f'https://issuer.test/{f}', kind=k, tickers=t, amount_basis=b,
@@ -110,6 +111,10 @@ def gld_evidence(root, name):
                                     'page': 'p. 3'}],
                         retrieved_at='2026-10-06T00:00:00', sha256=sha256(files['gld-faq.pdf']), http_status=200,
                         status='completed'))
+    if change:
+        sources[-2].update(change)
+    if drop:
+        files.pop(drop)
     return freeze(root / f'data/evidence/{name}', files, {'sources': sources})
 
 
@@ -235,6 +240,16 @@ def test_evidence_metadata_must_agree_with_manifest(tmp_path, change, no_network
         r.reconcile(tmp_path, source(tmp_path), evidence(tmp_path, change=change))
     rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
     assert [x['event'] for x in rows] == ['started', 'failed']
+
+
+@pytest.mark.parametrize('drop,change', [('gld.pdf', None), (None, {'sha256': '0' * 64})],
+                         ids=['document_not_in_manifest', 'document_hash_not_manifest'])
+def test_no_distribution_documents_must_be_in_the_manifest(tmp_path, drop, change, no_network):
+    with pytest.raises(ValueError, match='evidence source gld does not match the manifest'):
+        r.reconcile(tmp_path, source(tmp_path), gld_evidence(tmp_path, 'e-gld', drop=drop, change=change))
+    rows = [json.loads(x) for x in (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').read_text().splitlines()]
+    assert [x['event'] for x in rows] == ['started', 'failed']
+    assert not (tmp_path / 'data/reconciliation').exists()
 
 
 def test_out_of_project_snapshots_are_logged_as_failed_runs(tmp_path, no_network):
