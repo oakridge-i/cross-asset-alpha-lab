@@ -1,82 +1,87 @@
-# Состояние проекта
+# Project status
 
-Дата: 7 октября 2026, Europe/Moscow. Этап N1 (данные): блокирующие пункты D015 закрыты на скорректированном vintage, вердикт D019 «данные готовы к N2» утверждён записью D020 (7 октября 2026) после двух раундов code review и исправлений. Прежний вердикт D015 («не готовы») остаётся записью истории. Ветка claude/n1-closure слита в main fast-forward 7 октября 2026. История переписана перед публикацией (docs/HISTORY_REWRITE.md: email, локальные пути, соответствие хешей); хеши коммитов в документах ниже и в журнале прежние. Доходности H1/H2 не рассчитывались, гипотезы registered_not_tested, reserved performance не открыт.
+As of 7 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. H1/H2 are `registered_not_tested`; reserved strategy performance has not been opened. The `main` branch contains the data pipeline only; N2 portfolio and execution functionality is not implemented here.
 
-N0 завершён ранее: протокол, проверка источников, receipt docs/n0/verification.json (35/35 на коммите N0).
+This is the [English editorial edition](docs/DOCUMENTATION_EDITION.md). Historical receipts and test results refer to their original versions. Commit identifiers retained below and in the journal may predate publication history rewriting; consult the [commit mapping](docs/HISTORY_REWRITE.md). Test counts below are historical records, not a new execution of the current suite.
 
-## Выполненное в N1
+## Documentation update: 7 October 2026
 
-- Пакет src/alpha_lab: загрузка Yahoo с неизменяемым снимком и журналом, нормализация в as-traded единицы, QA календаря и actions, загрузка материалов эмитентов, сверка распределений, слой исправлений, offline replay. CLI `python -m alpha_lab {acquire,evidence,reconcile,corrections,audit,replay}`.
-- Снимок Yahoo 20261006T103809-a4a22ec667 (десять ETF до 2026-10-05).
-- Материалы эмитентов 20261006T122017-3048321309: SSGA xlsx, шесть страниц iShares, документы сплитов EEM 2008 и BIL 2017.
-- Сверка 20261006T122119-c6bfb5c69b, QA 20261006T122144-73228a71eb с actual payable, replay 20261006T122200-a9fd9ddbda и повторный replay 20261006T131812-09887a01da после исправлений финального ревью.
-- Отчёт docs/n1/N1_REPORT.md, сводки docs/n1/source_evidence.json, docs/n1/quality.json, журнал запусков docs/n1/execution_record.md. Решения D012–D015.
-- Финальное ревью ветки: ошибок в расчётах не найдено; добавлены тесты отказа replay при подмене, сохранения данных при сбое загрузки Yahoo, журналирования нечитаемых входов, хеши входных manifest в журнале.
+English edition 1.0-en.1 replaces the public documentation at baseline `4516269` with an investor-facing overview and separate reproduction instructions. Workspace-specific instructions and execution checklists are excluded from version control. Review checked the protocol's economic rules and identifiers, the N0 hash lineage, all 51 historical commit mappings, and local documentation links. The 16 public Markdown documents contain no Cyrillic text. Source code, tests, runtime configuration, historical receipts and the experiment journal are unchanged; application tests and research runs were not repeated for this editorial update.
 
-## Закрытие блокирующих пунктов N1 (6 октября 2026)
+## Completed data work
 
-- Источники эмитентов: DBC из локального захвата Invesco JSON, полученного в браузере встроенной панели Claude desktop (sha256 7337eeb7…, загрузка разрешена пользователем; D017); GLD из проспекта и FAQ SSGA (D018). Evidence 20261006T172354-1c0a8ca2d8, 12 источников.
-- Сверка по исходным данным Yahoo 20261006T172415-ce65adb53e: DBC confirmed, GLD confirmed_no_distributions, EFA/EEM/IEF confirmed, SPY/TLT/LQD/HYG/BIL unresolved с теми же семью событиями.
-- Исправления 20261006T172434-fbb5c9f554 по решению пользователя (D016): 3 add, 3 replace, 1 remove. QA скорректированного vintage 20261006T172442-80ef993493 (technical_pass true, 4869/4869 сессий, adjustment_breaks 0), сверка скорректированного vintage 20261006T172453-4d72af092f (все десять тикеров confirmed или confirmed_no_distributions), replay 20261006T172504-6b932ef79b (replay_equal true).
-- Прежний derived-снимок 20261006T122144-73228a71eb текущим кодом не воспроизводится (в нормализованной таблице появились dividend_basis и dividend_correction_source, corrections.json вошёл в derived-снимок); его точное воспроизведение записано в запуске 20261006T131812-09887a01da на коммите 977eaf6.
-- Отчёт docs/n1/N1_REPORT.md, раздел «Закрытие блокирующих пунктов»; docs/n1/source_evidence.json, docs/n1/quality.json (копия quality.json нового vintage), docs/n1/execution_record.md. Решения D016–D019.
+`src/alpha_lab` implements Yahoo acquisition with immutable snapshots and a run journal; normalization into as-traded units; calendar and corporate-action QA; issuer-document acquisition; distribution reconciliation; provenance-bearing corrections; and offline replay. CLI commands are `acquire`, `evidence`, `reconcile`, `corrections`, `audit`, and `replay`.
 
-## Проверки
-
-| Проверка | Результат |
+| Record | Identifier and scope |
 |---|---|
-| pytest (`PYTHONPATH=src .venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=$TEMP/c5pt`) | 149 passed на 591352a; 145 на 5a8eac5 (после исправлений RR1–RR2); 130 на 6e33721 (после R1–R4); 122 после правок финального ревью; 79 на коммите 977eaf6 |
-| `.venv/Scripts/python -m pip check` | No broken requirements found |
-| Окружение | из .venv удалены openpyxl 3.1.5 и et_xmlfile 2.0.0: их нет в requirements.lock, закоммиченный код их не импортирует, они остались от раннего незакоммиченного скрипта; после удаления `pip freeze --all` совпадает с lock-файлом. Новый временный venv вне репозитория: установка из requirements.lock, pip check, 66 passed, `PYTHONPATH=src python -m alpha_lab --help` работает; venv удалён |
-| `git diff --check` | без замечаний |
-| replay | скорректированный vintage 20261006T172442-80ef993493: replay_equal true. Прежний снимок f9602513…: replay_equal true на коммите 977eaf6 (запуск 20261006T131812-09887a01da), текущим кодом не воспроизводится |
-| QA | скорректированный vintage: technical_pass true, 4869/4869 сессий у всех ETF, adjustment_breaks 0 |
-| База сплитов EEM 2008-07-24 3:1, BIL 2017-11-30 1:2 | confirmed оба |
-| Распределения | исходные данные Yahoo: confirmed EFA, EEM, IEF, DBC, GLD (confirmed_no_distributions), unresolved SPY, TLT, LQD, HYG, BIL; скорректированный vintage: все десять confirmed или confirmed_no_distributions |
-| `python -X utf8 docs/n0/verify_n0.py --no-write` | ошибка: в worktree скрипт ищет quant-research-plan рядом с корнем (.worktrees/quant-research-plan) и падает с FileNotFoundError; проверка пустого журнала N0 после N1 также не может пройти. Скрипт N0 не менялся |
+| Original Yahoo snapshot | `20261006T103809-a4a22ec667`: ten ETFs through 2026-10-05 |
+| Initial issuer evidence | `20261006T122017-3048321309`: SSGA workbooks, six iShares pages, EEM 2008 and BIL 2017 split documents |
+| Initial reconciliation | `20261006T122119-c6bfb5c69b` |
+| Initial QA with actual payable dates | `20261006T122144-73228a71eb` |
+| Initial replay | `20261006T122200-a9fd9ddbda` |
+| Replay after final-review fixes | `20261006T131812-09887a01da` on `977eaf6` |
 
-Последний проверенный коммит кода: 591352a (тесты 149 passed, replay_equal true; до него 5a8eac5, 145 passed, pip check, git diff --check; исправления RR1–RR2 повторного ревью). До них: 6e33721, 130 passed; 02af65e, 122 passed. Правки финального ревью: проверка исправлений remove и replace на событие Yahoo в сессии, проверка происхождения vintage исправлений от аудируемого снимка в audit.
+The initial N1 review added rejection of tampered replay inputs, preservation of partial Yahoo downloads after failure, journaling of unreadable inputs, and input-manifest hashes. The original verdict was not ready for N2 (D014/D015).
 
-## Code review Codex — 6 октября 2026, Asia/Tbilisi
+## Blocker resolution and approved vintage
 
-Проверен HEAD 0a0e865 и изменения после 80f75c9, включая ветку закрытия от main 799eef9. Свежие проверки: 122 passed, pip check без ошибок, diff --check без замечаний. Все 13 заново построенных файлов итогового vintage 20261006T172442-80ef993493 совпали по SHA-256; снимки источника, evidence, corrections и сверки прошли проверку целостности.
+On 6 October 2026, DBC issuer evidence was obtained by a local browser capture of Invesco JSON (SHA-256 `7337eeb7...`, full hash in D017). GLD evidence came from the SSGA prospectus and FAQ (D018). No new Yahoo acquisition was made.
 
-Найдены четыре P2: пустая сумма SSGA может стать основанием для remove; corrections без payable теряет известную дату выплаты; reconcile не проверяет происхождение corrections от source snapshot; документальный статус no_distributions не проверяет наличие PDF в manifest. Сохранённые семь исправлений этими сценариями не затронуты. D019 этим ревью не утверждён; до слияния рекомендованы исправления и регрессионные тесты. Производственный код и журнал не менялись. Полный отчёт: [docs/reviews/2026-10-06-n1-review.md](docs/reviews/2026-10-06-n1-review.md).
+| Record | Identifier and result |
+|---|---|
+| Expanded evidence | `20261006T172354-1c0a8ca2d8`: 12 sources |
+| Original-data reconciliation | `20261006T172415-ce65adb53e`: EFA/EEM/IEF/DBC confirmed; GLD confirmed_no_distributions; SPY/TLT/LQD/HYG/BIL unresolved |
+| Issuer-based corrections | `20261006T172434-fbb5c9f554`: 3 additions, 3 replacements, 1 removal under D016 |
+| Approved derived vintage | `20261006T172442-80ef993493`: technical_pass true; 4,869/4,869 sessions for each ETF; adjustment_breaks 0 |
+| Corrected-data reconciliation | `20261006T172453-4d72af092f`: all ten ETFs confirmed or confirmed_no_distributions |
+| Corrected-vintage replay | `20261006T172504-6b932ef79b`: replay_equal true |
+| Subsequent clean-tree replay | `20261007T064823-b7b806e0ce` on `591352a`: replay_equal true |
 
-## Исправления R1–R4 — 7 октября 2026
+Both EEM 2008-07-24 (3:1) and BIL 2017-11-30 (1:2) split bases are confirmed. Actual payable dates are available for issuer-matched events; a fallback assumption applies elsewhere.
 
-Коммит 6e33721, тесты 122 → 130.
+The older derived snapshot `20261006T122144-73228a71eb` cannot be reproduced with the current schema: `dividend_basis`, `dividend_correction_source`, and `corrections.json` were added. Its recorded exact replay is `20261006T131812-09887a01da` on `977eaf6` (snapshot hash beginning `f9602513`). N2 must use the approved corrected vintage and its corrections file.
 
-- R1: строка SSGA без суммы во всех трёх денежных столбцах отклоняется («SSGA row has no distribution amount»). Пустой столбец по-прежнему считается нулём, если в строке есть другая сумма. Явный `0.000000` остаётся нулевой записью.
-- R2: normalize берёт payable_date из исправлений add/replace как actual, если отдельного payable нет. Если payable.json указывает для того же события другую дату, normalize отказывает («conflicting actual payable dates»). Дата раньше ex-date отклоняется прежней проверкой.
-- R3: reconcile вызывает check_vintage_lineage, как audit; исправления от другого source snapshot отклоняются с записью failed в журнал.
-- R4: у источников kind=document file и sha256 проверяются по manifest до использования no_distributions.
+Evidence is published in the [N1 report](docs/n1/N1_REPORT.md), [source evidence](docs/n1/source_evidence.json), [quality summary](docs/n1/quality.json), and [execution record](docs/n1/execution_record.md). Decisions D012-D020 explain the initial rejection, source selection, corrections, and final approval.
 
-Проверки: pytest 130 passed; pip check без ошибок; git diff --check без замечаний. Офлайн-проверка на реальных снимках без записи в журнал (прямой вызов build и проверок, как в ревью): реальный SSGA workbook разбирается без ошибки, документы GLD присутствуют в manifest evidence 20261006T172354-1c0a8ca2d8, lineage vintage 20261006T172434-fbb5c9f554 от снимка 20261006T103809-a4a22ec667 подтверждена, 13 из 13 файлов итогового vintage 20261006T172442-80ef993493 совпали по SHA-256, technical_pass true. Итоговый vintage и семь исправлений правками не затронуты.
+## Review and historical verification
 
-## Повторное ревью R1–R4 — 7 октября 2026, Asia/Tbilisi
+| Verification point | Recorded result |
+|---|---|
+| N0 receipt | 35/35 checks at the N0 commit; `docs/n0/verification.json` |
+| Early clean environment | Python 3.14.0, install from requirements.lock, pip freeze --all matched the lock, pip check passed, 66 tests passed |
+| `977eaf6` | 79 tests passed; earlier-vintage replay equal |
+| Final-review fixes, including `02af65e` | 122 tests passed |
+| `6e33721`, R1-R4 fixes | 130 tests passed |
+| `5a8eac5`, RR1-RR2 fixes | 145 tests passed |
+| `591352a`, additional validation fixes | 149 tests passed; clean-tree corrected-vintage replay equal |
+| Publication checkout `6c18d28` | 149 tests passed; offline build matched all 13 approved-vintage files by SHA-256 |
 
-Проверен диапазон ae2cd38..6e33721 на HEAD a2019d7 (последующий коммит только документов). Исходные сценарии R1–R4 закрыты; все восемь новых тестовых случаев падают при возврате соответствующих прежних модулей. Свежие проверки: 130 passed за 35.37 s, pip check и diff --check без замечаний, прямой офлайн-build воспроизвёл 13/13 файлов итогового снимка; issuer_events и lineage исходного correction vintage прошли. Реальные data/ и журнал не менялись.
+Recorded package and whitespace checks passed at the review checkpoints. The working environment's extra `openpyxl 3.1.5` and `et_xmlfile 2.0.0` packages were removed on 6 October 2026; they were unused by committed code and absent from the lock. Earlier N1 environment hashes retain them. See [reproduction instructions](docs/REPRODUCIBILITY.md) for commands and limits.
 
-Найдена новая регрессия RR1 (P2): reconcile с corrections.json из derived-снимка падает с KeyError вместо проверки происхождения. RR2 (P3) фиксирует прежний приём неверных пустых payable_date как отсутствующей даты. До слияния требуется исправить RR1 и проверить оба типа manifest. D019 не утверждён, D020 не записан; слияние и публикация не выполнялись. Полный отчёт: [docs/reviews/2026-10-07-n1-rereview.md](docs/reviews/2026-10-07-n1-rereview.md).
+The [6 October review](docs/reviews/2026-10-06-n1-review.md) inspected `0a0e865` and changes after `80f75c9`, including closure work based on `799eef9`. It recorded 122 passing tests and byte-identical offline reconstruction of all 13 final-vintage files. Four P2 findings did not affect the seven saved corrections:
 
-## Исправления RR1–RR2 — 7 октября 2026
+- R1: empty SSGA amount rows could justify removal. Rows with no amount in any of the three monetary columns are now rejected; an explicit zero remains valid.
+- R2: corrections could lose a known payable date when no separate payable input existed. Add/replace dates are now retained as actual; conflicting actual dates are rejected.
+- R3: reconciliation did not check correction lineage against the source snapshot. It now calls the lineage validator and journals inconsistent inputs as failed.
+- R4: document-based no-distribution classification did not verify the PDF against the evidence manifest. File and hash integrity are now checked before classification.
 
-Коммит 5a8eac5, тесты 130 → 145.
+Fix commit `6e33721` increased the suite from 122 to 130 cases. The real SSGA workbook parsed, GLD documents were present in the evidence manifest, correction lineage passed, and the approved vintage remained unchanged across all 13 hashes.
 
-- RR1: check_vintage_lineage различает два типа manifest. Копия corrections.json в derived-снимке принимается, если derived построен из того же source snapshot и его corrections.json побайтно совпадает с файлом vintage, на который ссылается corrections_vintage; затем этот vintage проверяется прежним способом. Payable из другого снимка при corrections из derived отклоняется. Каталог с manifest, который не является ни vintage, ни derived, отклоняется с ValueError вместо KeyError.
-- RR2: payable_date у add/replace должна быть None, отсутствовать или быть строкой ISO-даты; False, 0, пустая строка, списки, словари и неверные даты отклоняются.
+The [7 October follow-up review](docs/reviews/2026-10-07-n1-rereview.md) inspected `ae2cd38..6e33721` at documentation-only HEAD `a2019d7`. All eight added cases failed when the corresponding old modules were restored. The suite passed 130 tests in 35.37 seconds, and offline reconstruction again matched 13/13 files without changing the real data or journal. Two further findings were identified:
 
-Каждый новый тест падал до исправления (KeyError или отсутствие отказа); тест на payable другого снимка проверен отключением условия. Проверки: pytest 145 passed, pip check без ошибок, git diff --check без замечаний. Офлайн на реальных снимках без записи в журнал: lineage для data/derived/20261006T172442-80ef993493/corrections.json (сценарий RR1 из отчёта) и для vintage 20261006T172434-fbb5c9f554 проходит; build воспроизвёл 13 из 13 файлов итогового снимка, technical_pass true; SHA-256 журнала до и после совпал.
+- RR1 (P2): reconciliation with `corrections.json` copied into a derived snapshot raised `KeyError`. The validator now accepts that form only when source lineage and byte identity with the referenced correction vintage are verified. Other payable snapshots and unsupported manifest types are rejected.
+- RR2 (P3): invalid empty payable-date values were accepted as absent. Add/replace dates now require an absent value, null, or a valid ISO-date string. False, zero, empty strings, lists, dictionaries, and invalid dates are rejected.
 
-## Ограничения
+Fix commit `5a8eac5` increased tests from 130 to 145. Each new regression case failed before its fix; the cross-snapshot payable check was also tested by disabling its condition. Both manifest forms passed on real inputs, the build matched 13/13 hashes, and the journal hash was unchanged. Review of `0266896..5a8eac5` found no Critical/Important issues; minor recursion/type handling for forged `corrections_vintage` references was corrected in `591352a`, reaching 149 tests. D020 approved readiness after these checks.
 
-Данные не point-in-time, available_at является модельным допущением. Семь исправлений Yahoo (D016) приняты по решению пользователя об авторитетности эмитента, независимой проверки у них нет. Основание GLD (D018) слабее формулировки «распределений не было никогда». Полнота DBC до 2007-12-17 по документу эмитента не доказана (D017). Yahoo и эмитенты могут пересматривать историю; iShares публикует суммы до сплита в текущих единицах. Объём не подтверждён и не используется. Выборка ретроспективная. Допуск суммы распределения выбран после наблюдения расхождений (D013). Снимок Yahoo загружен кодом с незакоммиченными изменениями (хеш патча в журнале). Права на данные Yahoo не установлены, снимки в Git не входят.
+## Publication and receipt scope
 
-## Следующий шаг
+The [public repository](https://github.com/oakridge-i/cross-asset-alpha-lab) was published under MIT on 7 October 2026, with `main` at `6c18d28` at that checkpoint. Before publication, historical email addresses and local paths were sanitized, including one journal path field, as documented in HISTORY_REWRITE.md. A local history bundle was retained separately. A fresh clone was checked across 52 commits for the removed personal email and local paths. Historical references remain material provenance; current English document hashes are registered separately.
 
-D019 утверждён записью D020. N2 использует только скорректированный vintage data/derived/20261006T172442-80ef993493 с его corrections.json. Ревью исправлений RR1–RR2 (0266896..5a8eac5) выполнил отдельный ревьюер: Critical/Important нет, мелкие замечания о RecursionError и TypeError для поддельной ссылки corrections_vintage исправлены в 591352a (149 тестов). Replay 20261007T064823-b7b806e0ce на 591352a с чистым деревом: replay_equal true.
+The N0 verifier is specific to the original N0 layout and state. It requires sibling source directories, historical copies, and an empty experiment journal. It failed in a worktree where the expected sibling project was absent and is not a current N1 verification command. Its receipt is retained as historical evidence, rather than recertified against this edition.
 
-Публикация 7 октября 2026: публичный репозиторий https://github.com/oakridge-i/cross-asset-alpha-lab, лицензия MIT, ветка main (6c18d28). Перед первым push история переписана по решениям пользователя от 6 и 7 октября: email заменён на noreply GitHub, локальный путь заменён меткой `<workspace>` в документах и в одной строке журнала (решение пользователя 7 октября); подробности и таблица хешей в docs/HISTORY_REWRITE.md. Прежняя история сохранена локально в cross-asset-alpha-lab-history-20261007.bundle рядом с каталогом проекта и не публикуется. Проверки: свежий клон с GitHub не содержит личного email и локальных путей ни в одном из 52 коммитов; после синхронизации локальные main и worktree стоят на 6c18d28, pytest 149 passed, офлайн-build итогового vintage 13/13 файлов совпали по SHA-256. Строка соавторства Claude в сообщениях опубликованных коммитов оставлена по решению пользователя; в новых коммитах она не добавляется.
+## Limitations and next milestone
 
-Следующий конкретный шаг: N2 «Портфель и исполнение» по docs/MASTER_PLAN.md и RESEARCH_PROTOCOL.md (проверенный движок, журнал сделок, ручная сверка) на vintage data/derived/20261006T172442-80ef993493. Начинать с плана задач N2; доходности H1/H2 до завершения N2 не рассчитываются.
+The data are not point-in-time; `available_at` is an assumption. Issuer records may be revised, and the seven corrections lack independent confirmation. GLD's evidence is weaker than an explicit assertion that distributions never occurred. DBC issuer coverage before 2007-12-17 is unproven. iShares expresses pre-split distributions in current units. Volume is unverified and unused; the universe is retrospective. D013's tolerance followed observation of rounding differences. Original Yahoo acquisition used uncommitted code, with its patch hash retained. Yahoo data rights are unestablished, and source snapshots are local rather than included in Git.
+
+The next milestone is N2 portfolio accounting and execution under the [research protocol](RESEARCH_PROTOCOL.md): financial invariants, a trade ledger, and manual reconciliation on `data/derived/20261006T172442-80ef993493`. H1/H2 returns must wait for that accounting foundation. New data or corrections require fresh reconciliation, QA, and a new readiness decision.

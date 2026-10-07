@@ -14,3 +14,15 @@ outputs/
 !.env.example
 *.log
 .worktrees/
+
+# Local working instructions and execution notes
+/AGENTS.md
+/README.agent.md
+/CLAUDE.md
+/.agents/
+/.codex/
+/.claude/
+/.superpowers/
+/docs/n0/NEW_CHAT_BRIEF.md
+/docs/n0/NEW_PROJECT_SETUP.md
+/docs/superpowers/plans/

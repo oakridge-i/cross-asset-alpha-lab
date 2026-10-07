@@ -1,13 +1,27 @@
-# Журнал исследовательских попыток
+# Experiment journal
 
-На N0 EXPERIMENT_LOG.jsonl имеет ноль строк. Проверки доступности/метаданных находятся в docs/n0; результатов стратегий нет. Реальные N1 data-runs и все дальнейшие расчёты регистрируются здесь.
+[EXPERIMENT_LOG.jsonl](EXPERIMENT_LOG.jsonl) records N1 data runs and, when implemented, subsequent portfolio and strategy calculations. At N0 it contained zero rows; availability and metadata probes were recorded separately in `docs/n0`. No strategy results have been produced on `main`.
 
-Append-only JSONL, UTF-8, одна запись на событие. Один run_id имеет started и completed/failed события. При аварии оставшийся started сохраняется, добавляется interrupted/recovered. Ошибка не удаляется, повтор имеет новый run_id и ссылку на прежний. Идентичный повтор не считается независимым экспериментом.
+## Events and provenance
 
-Обязательные поля каждой записи: schema_version, event, run_id, attempt_id, parent_attempt_id (null допустим), created_at_utc, protocol_version, git_sha, dirty_tree, dirty_patch_sha256 (null при clean), config_sha256, data_sha256, environment_manifest_sha256, seed, purpose, candidate_ids, universe, splits, status, output_paths, quality_warnings. Для started до получения данных data_sha256=null с причиной data_not_acquired; завершённая запись содержит hash снимка либо объяснение ошибки. Все отсутствующие применимые значения явно null + reason, не пустая имитация проверенной среды.
+The journal is append-only JSONL in UTF-8, with one record per event. A run begins with `started`. The current N1 implementation emits the terminal events `completed`, `quality_failed` for an audit that completes but fails technical QA, or `failed` for an execution error. A completed acquisition or reconciliation does not by itself certify research readiness; inspect quality warnings and the separate readiness decision.
 
-candidate_ids: B0/B1/B2/B3/REF_SPY, H1_252_3/H1_252_4/H1_126_3/H1_126_4, H2_4of6/H2_5of6; отдельная политика P_A1. Сценарии имеют scenario_id и parent_run_id. Временные разбиения — точные границы и роли, не только метка train/test. У finished сохраняются сигналы, заявки, сделки, позиции, выплаты, NAV и метрики, когда они применимы.
+A crash may leave an unmatched `started` record. Preserve it and document any interruption or recovery explicitly; the current code does not emit automatic `interrupted` or `recovered` events. A retry receives a new `run_id` and a reference to its predecessor. Errors are retained. An identical replay is not an independent experiment.
 
-Фиксированные конфигурации, адаптивная политика и дополнительные гипотезы имеют самостоятельные attempt_id. Диагностические сценарии перечисляются полностью; стратегия, изменённая по результату диагностики, получает новый attempt_id и ссылку на родителя. Доступ к reserved performance отмечается test_opened с причиной и frozen git/protocol/config/data hashes. N0 source QA доступ не выдаётся за performance opening.
+Required fields are `schema_version`, `event`, `run_id`, `attempt_id`, `parent_attempt_id` (which may be null), `created_at_utc`, `protocol_version`, `git_sha`, `dirty_tree`, `dirty_patch_sha256` (null for a clean tree), `config_sha256`, `data_sha256`, `environment_manifest_sha256`, `seed`, `purpose`, `candidate_ids`, `universe`, `splits`, `status`, `output_paths`, and `quality_warnings`.
 
-Перед N5 отдельно восстановить число всех известных ручных/программных попыток. Не считать шесть конфигураций полной оценкой множественного поиска, если исследователь менял способ отбора, период или данные. Не переносить неполный исторический журнал AAPL в статистическое число испытаний нового проекта; раскрыть знакомость с рынками отдельно.
+Before acquisition, `data_sha256` is null with the reason `data_not_acquired`. A terminal record contains the snapshot hash or explains why no valid snapshot exists. Inapplicable or unavailable values use explicit nulls and recorded reasons. The initial event stores the configuration and environment manifest. Provenance must not imply that an unavailable environment or input was verified.
+
+## Requirements for later research stages
+
+The following are registered requirements, rather than portfolio functionality implemented on `main`:
+
+- Candidate identifiers: `B0`, `B1`, `B2`, `B3`, `REF_SPY`; `H1_252_3`, `H1_252_4`, `H1_126_3`, `H1_126_4`; `H2_4of6`, `H2_5of6`; and the separate policy `P_A1`.
+- Scenarios carry `scenario_id` and `parent_run_id`. Time splits record exact boundaries and roles, rather than only train/test labels.
+- Terminal portfolio records retain signals, orders, trades, holdings, distributions, NAV, and metrics whenever applicable.
+- Fixed configurations, the adaptive policy, and additional hypotheses have separate `attempt_id` values. Diagnostic scenarios are listed completely. A strategy changed in response to a diagnostic is a new attempt linked to its parent.
+- Opening reserved performance is recorded as `test_opened`, with its reason and frozen Git, protocol, configuration, and data hashes. N0 source QA is not a performance opening.
+
+Before N5, reconstruct the number of all known manual and programmatic attempts. The six registered configurations are not a complete measure of multiple testing if selection methods, periods, or data were also changed. Do not include an incomplete historical AAPL journal as a statistical trial count for this project; disclose prior market familiarity separately.
+
+Historical hashes and receipts retain their original scope. See the [English documentation edition](../docs/DOCUMENTATION_EDITION.md) and [commit mapping](../docs/HISTORY_REWRITE.md).

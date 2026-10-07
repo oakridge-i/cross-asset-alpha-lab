@@ -1,51 +1,51 @@
-# Отчёт N1: данные
+# N1 report: data
 
-Дата: 6 октября 2026 года. Ветки codex/n1-data (разделы до «Закрытия блокирующих пунктов») и claude/n1-closure (закрытие). Вердикт D015 («не готовы к N2») утверждён и сохранён как история; новый вердикт предложен в разделе «Закрытие блокирующих пунктов» (DECISIONS D019) и ждёт утверждения контролёра. Разделы выше описывают состояние до закрытия.
+Report dated 6 October 2026, with approval updated on 7 October 2026. The initial sections record branch codex/n1-data before closure; the closure sections record claude/n1-closure. D015, "not ready for N2", was approved and remains a historical verdict. The subsequent D019 readiness verdict was approved by D020 on 7 October 2026. Findings in the initial sections describe the state before closure.
 
-## Объём
+## Scope
 
-Десять ETF протокола (SPY, EFA, EEM, IEF, TLT, LQD, HYG, GLD, DBC, BIL), USD, дневные регулярные сессии. Окно проверки: от общего старта 2007-05-30 до cutoff 2026-10-05 включительно, 4869 сессий XNYS. Снимок Yahoo 20261006T103809-a4a22ec667 (yfinance 1.7.0, auto_adjust=False, actions=True, repair=False) загружен один раз и не обновлялся. Материалы эмитентов загружены отдельно, снимок 20261006T122017-3048321309.
+The ten protocol ETFs are SPY, EFA, EEM, IEF, TLT, LQD, HYG, GLD, DBC and BIL, in USD with daily regular sessions. The validation window runs from the common start 2007-05-30 through cutoff 2026-10-05 inclusive, comprising 4869 XNYS sessions. Yahoo snapshot 20261006T103809-a4a22ec667 (yfinance 1.7.0, auto_adjust=False, actions=True, repair=False) was acquired once and not refreshed. Issuer evidence was acquired separately as snapshot 20261006T122017-3048321309.
 
-Проверка цен и actions охватывает всю историю, включая зарезервированные 2023–2025 и 2026 год, как допускает RESEARCH_PROTOCOL §9. Доходности стратегий, таблицы сравнения, ранжирования и Sharpe не рассчитывались ни на одном периоде.
+Price and action validation covered the entire history, including reserved 2023–2025 and 2026, as permitted by RESEARCH_PROTOCOL §9. Strategy returns, comparison tables, rankings and Sharpe ratios were not calculated for any period.
 
-Идентификаторы запусков, родители, git SHA и точные команды приведены в [execution_record.md](execution_record.md). Сводка источников и сверки в [source_evidence.json](source_evidence.json), полный QA скорректированного vintage в [quality.json](quality.json) (байтовая копия data/derived/20261006T172442-80ef993493/quality.json, sha256 51eae6705c56b9cd152efc1f84fb514ed18b24685da081f5d0ab25525dc569c3). QA прежнего vintage 20261006T122144-73228a71eb (sha256 8355d70b…) остался в истории Git.
+Run IDs, parents, git SHAs and exact commands are recorded in [execution_record.md](execution_record.md). Sources and reconciliation are summarized in [source_evidence.json](source_evidence.json). Full corrected-vintage QA is in [quality.json](quality.json), a byte copy of data/derived/20261006T172442-80ef993493/quality.json, sha256 51eae6705c56b9cd152efc1f84fb514ed18b24685da081f5d0ab25525dc569c3. QA for the former vintage 20261006T122144-73228a71eb (sha256 8355d70b…) remains in Git history. Original commit hashes are mapped in [HISTORY_REWRITE.md](../HISTORY_REWRITE.md); receipt preservation and the English edition are described in [DOCUMENTATION_EDITION.md](../DOCUMENTATION_EDITION.md).
 
-## Что и чем проверено
+## Validation methods
 
-| Проверка | Средство | Запуск |
+| Check | Method | Run |
 |---|---|---|
-| Неизменность снимков | manifest.json и manifest.sha256 каждого каталога, проверка перед использованием | все запуски |
-| Календарь, OHLC, actions, сверка Adj Close | `alpha_lab audit` (normalize + quality) | 20261006T122144-73228a71eb |
-| Распределения против эмитента | `alpha_lab reconcile`: SSGA xlsx (SPY, BIL), страницы iShares (EFA, EEM, IEF, TLT, LQD, HYG) | 20261006T122119-c6bfb5c69b |
-| База сплитов EEM 2008 и BIL 2017 | документы в снимке evidence, нормализованная таблица, результаты сверки | ручная проверка в этом отчёте |
-| Воспроизводимость | `alpha_lab replay`: повторная нормализация без сети и сравнение байтов | 20261006T122200-a9fd9ddbda |
+| Snapshot immutability | manifest.json and manifest.sha256 in each directory, verified before use | All runs |
+| Calendar, OHLC, actions, Adj Close reconciliation | `alpha_lab audit` (normalize + quality) | 20261006T122144-73228a71eb |
+| Distributions against issuer | `alpha_lab reconcile`: SSGA xlsx (SPY, BIL), iShares pages (EFA, EEM, IEF, TLT, LQD, HYG) | 20261006T122119-c6bfb5c69b |
+| EEM 2008 and BIL 2017 split basis | Documents in evidence snapshot, normalized table and reconciliation results | Manual assessment in this report |
+| Reproducibility | `alpha_lab replay`: offline renormalization and byte comparison | 20261006T122200-a9fd9ddbda |
 
-Правило сверки: событие Yahoo с dividend > 0 в окне сопоставляется с записью эмитента по ex-date. Суммы сравниваются в as-traded единицах. Суммы iShares приведены к текущему числу паёв (`current_units`) и умножаются на тот же future_split_factor, что и Yahoo. Допуск 0.0005 USD × max(1, future_split_factor). Материальность тикера равна сумме |diff| / предыдущий as-traded close × 10⁴ по всем сопоставленным событиям, включая остатки совпавших. Тикер `confirmed`, если нет ни одного события вне классов matched.
+Reconciliation matches each Yahoo event with dividend > 0 within the window to an issuer record by ex-date. Amounts are compared in as-traded units. iShares amounts use current share units (`current_units`) and are multiplied by the same future_split_factor as Yahoo. Tolerance is 0.0005 USD × max(1, future_split_factor). Ticker materiality sums |diff| / previous as-traded close × 10⁴ across all matched-date events, including residuals within tolerance. A ticker is `confirmed` only if no event falls outside the matched classes.
 
-## Результаты по критериям
+## Initial results
 
-### Техническая воспроизводимость
+### Technical reproducibility
 
-Все четыре новых запуска завершились `completed` на чистом дереве. Replay вернул `replay_equal: true`: заново построенные файлы побайтно совпали с замороженным derived-снимком. Одинаковый data_sha256 у replay и QA (f960251363f8105a2089a07ea5961327a60cd57cb2e2b2b64347934b663f3489) следует из конструкции, потому что replay записывает хеш проверяемого снимка, и отдельным доказательством не является. quality.json: technical_pass true, defective_assets пуст.
+All four committed-code reruns completed with status `completed` on clean trees. Replay returned `replay_equal: true`: rebuilt files matched the frozen derived snapshot byte for byte. The shared data_sha256 of replay and QA (f960251363f8105a2089a07ea5961327a60cd57cb2e2b2b64347934b663f3489) follows by construction, because replay records the hash of the snapshot being checked; it is not separate evidence. quality.json reported technical_pass true and an empty defective_assets list.
 
-Ограничение: сам снимок Yahoo получен кодом с незакоммиченными изменениями (git 1643651, dirty_tree true, хеш патча в журнале). Его байты проверяются по manifest. Код загрузки в Git не сохранён: хеш патча в журнале позволяет только проверить предъявленный кандидат патча, восстановить код по нему нельзя.
+Limitation: the Yahoo snapshot was acquired with uncommitted code changes (git 1643651, dirty_tree true, patch hash in the journal). Its bytes are verified against the manifest. The acquisition code was not preserved in Git: the journal's patch hash can validate a supplied candidate patch but cannot reconstruct its contents.
 
-### Полнота календаря
+### Calendar completeness
 
-У каждого из десяти ETF 4869 строк в окне, missing_sessions и unexpected_sessions пусты. adjustment_breaks 0 у всех; наибольший остаток сверки фактора Adj Close 2.25e-6 (TLT) при допуске 5e-5. Сверка Adj Close использует того же поставщика и независимым подтверждением не является.
+Each of the ten ETFs has 4869 rows in the window, with empty missing_sessions and unexpected_sessions. All have adjustment_breaks 0. The largest Adj Close factor residual is 2.25e-6 (TLT), against tolerance 5e-5. Adj Close reconciliation uses the same vendor and is not independent confirmation.
 
-### База сплитов
+### Split basis
 
-| Событие | Документ | Yahoo | Цены (as-traded close) | Распределения | Вердикт |
+| Event | Document | Yahoo | Prices (as-traded close) | Distributions | Verdict |
 |---|---|---|---|---|---|
-| EEM 2008-07-24, 3:1 | PHLX series adjustment 1410-08 от 2008-07-21: «3 for 1 Stock Split», ex-distribution date 7/24/2008; в списке 82 серии опционов EEM до сплита со страйками 70–185 (Aug 2008: 95–165, Sep и Dec 2008: 90–185, Jan 2009: 70–180, Mar 2009: 105–155) | split 3:1 на 2008-07-24 | 2008-07-23: 131.77 (source_close 43.92); 2008-07-24: 42.30. Отношение 3.115, при ровно 3 соответствует изменению цены −3.7% за сессию | 2007-12-24: iShares 0.648931 × 3 = 1.946793, Yahoo 1.947; 2008-06-25: 0.517255 × 3 = 1.551765, Yahoo 1.551999. Оба matched | confirmed |
-| BIL 2017-11-30, 1:2 | IRS Form 8937 SSGA: date of action November 30, 2017, «1:2 Reverse Share Split», каждые две акции конвертированы в одну | split 1:2 на 2017-11-30 | 2017-11-29: 45.74 (source_close 91.48); 2017-11-30: 91.48. Отношение 2.0000 | 43 события до сплита в окне совпали с SSGA as-traded после умножения на 0.5 (2017-11-01: Yahoo raw 0.07 → 0.035, SSGA 0.034618); расхождений до сплита нет | confirmed |
+| EEM 2008-07-24, 3:1 | PHLX series adjustment 1410-08 dated 2008-07-21: "3 for 1 Stock Split", ex-distribution date 7/24/2008; 82 pre-split EEM option series with strikes 70–185 (Aug 2008: 95–165; Sep and Dec 2008: 90–185; Jan 2009: 70–180; Mar 2009: 105–155) | 3:1 split on 2008-07-24 | 2008-07-23: 131.77 (source_close 43.92); 2008-07-24: 42.30. Ratio 3.115; relative to a split ratio of 3, this implies a session price change of −3.7% | 2007-12-24: iShares 0.648931 × 3 = 1.946793, Yahoo 1.947; 2008-06-25: 0.517255 × 3 = 1.551765, Yahoo 1.551999. Both matched | confirmed |
+| BIL 2017-11-30, 1:2 | SSGA IRS Form 8937: action date November 30, 2017, "1:2 Reverse Share Split"; every two shares converted into one | 1:2 split on 2017-11-30 | 2017-11-29: 45.74 (source_close 91.48); 2017-11-30: 91.48. Ratio 2.0000 | 43 pre-split events in the window matched SSGA as-traded amounts after multiplying by 0.5 (2017-11-01: Yahoo raw 0.07 → 0.035, SSGA 0.034618); no pre-split discrepancies | confirmed |
 
-PDF BIL является сканом: pypdf не извлекает текст, страница прочитана по изображению. Текст PDF EEM извлечён pypdf. Отношение закрытий вокруг сплита (3.115 у EEM при коэффициенте 3, 2.0000 у BIL при коэффициенте 2) не является независимой проверкой: as-traded close получен как source_close × future_split_factor, и это отношение показывает только отсутствие скачка в split-adjusted ряду Yahoo на дату сплита. Вердикт опирается на документы, совпадение даты и коэффициента с событием Yahoo и согласие сумм распределений эмитента до сплита после пересчёта. Уровень страйков EEM до сплита (70–185) согласуется с as-traded закрытием около 132. Суммы эмитентов до сплита совпадают с Yahoo после того же пересчёта, поэтому пересчёт распределений тоже подтверждён. Сплит EEM 2005-06-09 лежит до окна и документом не проверялся.
+The BIL PDF is a scan: pypdf could not extract text, so the page was read as an image. EEM PDF text was extracted with pypdf. The close ratios around the splits (EEM 3.115 with factor 3; BIL 2.0000 with factor 2) are not independent validation. as-traded close is source_close × future_split_factor, so the ratios demonstrate only the absence of a jump in Yahoo's split-adjusted series on the split date. The verdict relies on the documents, agreement of dates/ratios with Yahoo events, and agreement of pre-split issuer distributions after conversion. Pre-split EEM strikes of 70–185 are consistent with an as-traded close near 132. Issuer pre-split amounts match Yahoo after the same conversion, confirming distribution-unit conversion as well. The EEM split on 2005-06-09 lies before the window and was not document-verified.
 
-### Полнота распределений
+### Initial distribution completeness
 
-| Тикер | Статус | Yahoo | Эмитент | matched | mismatch | issuer_only | yahoo_only | вне покрытия | Материальность, bps |
+| Ticker | Status | Yahoo | Issuer | matched | mismatch | issuer_only | yahoo_only | Outside coverage | Materiality, bps |
 |---|---|---|---|---|---|---|---|---|---|
 | SPY | unresolved | 78 | 78 | 77 | 1 | 0 | 0 | 0 | 1.01 |
 | EFA | confirmed | 39 | 39 | 39 | 0 | 0 | 0 | 0 | 1.55 |
@@ -54,31 +54,31 @@ PDF BIL является сканом: pypdf не извлекает текст,
 | TLT | unresolved | 232 | 233 | 232 | 0 | 1 | 0 | 0 | 26.88 |
 | LQD | unresolved | 232 | 233 | 232 | 0 | 1 | 0 | 0 | 36.02 |
 | HYG | unresolved | 232 | 233 | 231 | 1 | 1 | 0 | 0 | 61.80 |
-| BIL | unresolved | 128 | 127 (+105 нулевых строк) | 126 | 1 | 0 | 1 | 0 | 7.10 |
+| BIL | unresolved | 128 | 127 (+105 zero rows) | 126 | 1 | 0 | 1 | 0 | 7.10 |
 | DBC | unverified_no_issuer_source | 8 | — | — | — | — | — | — | — |
 | GLD | unverified_no_issuer_source | 0 | — | — | — | — | — | — | — |
 
-Неразрешённые события:
+Unresolved events at the initial review:
 
-| Тикер | ex-date | Класс | Yahoo | Эмитент | diff | bps | Объяснение |
+| Ticker | ex-date | Class | Yahoo | Issuer | diff | bps | Explanation |
 |---|---|---|---|---|---|---|---|
-| HYG | 2012-11-01 | issuer_only | — | 0.510521 | −0.510521 | 55.14 | В Yahoo нет ноябрьской выплаты 2012 года у HYG, LQD и TLT; соседние 2012-10-01, 2012-12-03, 2012-12-26 есть. Ex-date следует за закрытием рынка 29–30 октября 2012. У IEF событие 2012-11-01 в Yahoo есть. Пропуск у поставщика, причина не установлена. |
-| LQD | 2012-11-01 | issuer_only | — | 0.378397 | −0.378397 | 30.76 | То же. |
-| TLT | 2012-11-01 | issuer_only | — | 0.269553 | −0.269553 | 21.85 | То же. |
-| BIL | 2022-03-01 | yahoo_only | 0.022 | 0.000000 | 0.022 | 2.41 | В SSGA строка с нулём, как и в соседних 2022-02…2022-05. Источники расходятся, причина не установлена. |
-| SPY | 2021-12-17 | amount_mismatch | 1.633 | 1.636431 | −0.003431 | 0.07 | В SSGA только дивиденд, capital gains 0; сплита нет. Причина не установлена. |
-| BIL | 2022-09-01 | amount_mismatch | 0.139 | 0.138459 | 0.000541 | 0.06 | Округление суммы эмитента до 0.001 даёт 0.138, не 0.139. |
-| HYG | 2023-12-14 | amount_mismatch | 0.379 | 0.37847 | 0.00053 | 0.07 | Округление даёт 0.378. |
+| HYG | 2012-11-01 | issuer_only | — | 0.510521 | −0.510521 | 55.14 | Yahoo lacks the November 2012 payment for HYG, LQD and TLT; adjacent 2012-10-01, 2012-12-03 and 2012-12-26 events are present. Ex-date follows the market closure of 29–30 October 2012. IEF has a Yahoo event on 2012-11-01. Vendor omission; cause unestablished. |
+| LQD | 2012-11-01 | issuer_only | — | 0.378397 | −0.378397 | 30.76 | Same omission. |
+| TLT | 2012-11-01 | issuer_only | — | 0.269553 | −0.269553 | 21.85 | Same omission. |
+| BIL | 2022-03-01 | yahoo_only | 0.022 | 0.000000 | 0.022 | 2.41 | SSGA has a zero row, as in adjacent 2022-02…2022-05. Sources disagree; cause unestablished. |
+| SPY | 2021-12-17 | amount_mismatch | 1.633 | 1.636431 | −0.003431 | 0.07 | SSGA lists only a dividend, capital gains 0; no split. Cause unestablished. |
+| BIL | 2022-09-01 | amount_mismatch | 0.139 | 0.138459 | 0.000541 | 0.06 | Rounding the issuer amount to 0.001 gives 0.138, not 0.139. |
+| HYG | 2023-12-14 | amount_mismatch | 0.379 | 0.37847 | 0.00053 | 0.07 | Rounding gives 0.378. |
 
-Материальность включает остатки совпавших событий: у HYG 61.80 bps складываются из 55.14 за пропуск, 0.07 за mismatch и примерно 6.6 по 231 совпавшему событию. Для TLT, LQD и HYG пропуск 2012-11-01 означает недоучёт одного месячного распределения в теоретическом TR и в денежном учёте N2.
+Materiality includes residuals within tolerance: HYG's 61.80 bps comprises 55.14 for the omission, 0.07 for the mismatch and approximately 6.6 across 231 matched events. For TLT, LQD and HYG, the 2012-11-01 omission understates one monthly distribution in theoretical TR and N2 cash accounting.
 
-DBC: Invesco отвечает HTTP 406 клиентам без браузера, обход защиты не применялся. В Yahoo 8 событий в окне: 2007-12-17, 2008-12-15, 2018-12-24, 2019-12-23, 2022-12-19, 2023-12-18, 2024-12-23, 2025-12-22. Их суммы и полнота не подтверждены. GLD: у Yahoo нет распределений, документа эмитента об отсутствии распределений в снимке нет.
+At this stage, Invesco returned HTTP 406 to nonbrowser clients; no protection bypass was used. Yahoo lists 8 DBC events in the window: 2007-12-17, 2008-12-15, 2018-12-24, 2019-12-23, 2022-12-19, 2023-12-18, 2024-12-23 and 2025-12-22. Their amounts and completeness were initially unverified. Yahoo has no GLD distributions, and the initial evidence snapshot contained no issuer document establishing their absence.
 
-### Даты выплаты
+### Initial payable dates
 
-Actual payable берутся из payable.json сверки: только совпавшие события с payable_date не раньше ex-date. Остальные события получают proxy ex-date + 10 календарных дней.
+Actual payable dates came from reconciliation payable.json, only for matched events with payable_date no earlier than ex-date. Other events used ex-date + 10 calendar days as a proxy.
 
-| Тикер | События в окне | actual | proxy |
+| Ticker | Events in window | actual | proxy |
 |---|---|---|---|
 | SPY | 78 | 77 | 1 (2021-12-17) |
 | EFA | 39 | 39 | 0 |
@@ -91,109 +91,109 @@ Actual payable берутся из payable.json сверки: только со�
 | DBC | 8 | 0 | 8 |
 | BIL | 128 | 125 | 3 (2008-03-03, 2022-03-01, 2022-09-01) |
 
-BIL 2008-03-03 совпал по сумме, но в строке SSGA record date 2008-02-05 и payable date 2008-02-11 раньше ex-date (даты record и payable повторяют строку 2008-02-01, суммы различаются: 0.086739 и 0.115251), поэтому дата эмитента отвергнута.
+BIL 2008-03-03 matched by amount, but its SSGA row has record date 2008-02-05 and payable date 2008-02-11, both earlier than ex-date. These dates repeat the 2008-02-01 row, whose amount differs: 0.086739 versus 0.115251. The issuer date was rejected.
 
-## Ограничения
+## General limitations
 
-- Данные не point-in-time. available_at 18:00 America/New_York является модельным допущением.
-- Yahoo и эмитенты могут пересматривать историю. Снимки фиксируют состояние на 2026-10-06; iShares публикует суммы до сплита в текущих единицах паёв, то есть в пересчитанном виде.
-- Объём остаётся в единицах источника с меткой unconfirmed и не используется.
-- Выборка ретроспективная: десять ETF выбраны в 2026 году, все существуют на cutoff.
-- Допуск 0.0005 USD выбран после наблюдения расхождений BIL 2009 (DECISIONS D013).
-- Сумма iShares totalDistribution включает доход, capital gains и return of capital; разделение по видам не проверялось.
-- Права на распространение данных Yahoo не установлены; снимки в Git не входят.
+- The data is not point-in-time. available_at at 18:00 America/New_York is a modeling assumption.
+- Yahoo and issuers may revise history. Snapshots preserve the state at 2026-10-06; iShares publishes pre-split amounts restated in current share units.
+- Volume remains in source units, marked unconfirmed, and is not used.
+- The sample is retrospective: ten ETFs were selected in 2026, all surviving at cutoff.
+- The 0.0005 USD tolerance was selected after observing BIL 2009 discrepancies (DECISIONS D013).
+- iShares totalDistribution includes income, capital gains and return of capital; component classification was not verified.
+- Yahoo data redistribution rights are unestablished; snapshots are excluded from Git.
 
-## Вердикт (утверждён, DECISIONS D015)
+## Initial verdict (approved, DECISIONS D015)
 
-| Критерий N2 | Результат | Основание |
+| N2 criterion | Result | Basis |
 |---|---|---|
-| Техническая воспроизводимость | пройден | replay_equal true; evidence, reconciliation, QA и replay запущены на чистых деревьях; снимок Yahoo 20261006T103809 получен на грязном дереве (1643651, dirty_tree true) |
-| Полнота календаря | пройден | 4869/4869 сессий у всех десяти ETF |
-| База сплитов EEM 2008 и BIL 2017 | пройден | оба события confirmed |
-| Полнота и единицы распределений | не пройден | confirmed только EFA, EEM, IEF; SPY, TLT, LQD, HYG, BIL unresolved; DBC, GLD unverified |
-| Даты выплаты | не блокирует | протокол допускает proxy; доля proxy в таблице выше |
+| Technical reproducibility | Passed | replay_equal true; evidence, reconciliation, QA and replay ran on clean trees; Yahoo snapshot 20261006T103809 was acquired on a dirty tree (1643651, dirty_tree true) |
+| Calendar completeness | Passed | 4869/4869 sessions for all ten ETFs |
+| EEM 2008 and BIL 2017 split basis | Passed | Both events confirmed |
+| Distribution completeness and units | Failed | Only EFA, EEM and IEF confirmed; SPY, TLT, LQD, HYG and BIL unresolved; DBC and GLD unverified |
+| Payable dates | Nonblocking | Protocol permits proxy dates; shares shown above |
 
-Вердикт: данные не готовы к N2. Условие готовности (оба сплита confirmed и каждый распределяющий тикер confirmed) не выполнено.
+Historical verdict: data was not ready for N2. The readiness requirement, both splits confirmed and every distributing ticker confirmed, was not met.
 
-Блокирующие пункты:
+Blocking items at that time:
 
-1. DBC: нет источника эмитента, 8 событий не подтверждены.
-2. GLD: отсутствие распределений не подтверждено документом.
-3. HYG, LQD, TLT: в Yahoo отсутствует выплата 2012-11-01 (55, 31 и 22 bps).
-4. BIL 2022-03-01: Yahoo 0.022 при нуле у SSGA (2.4 bps).
-5. SPY 2021-12-17, BIL 2022-09-01, HYG 2023-12-14: расхождения сумм от 0.0005 до 0.0034 USD, каждое меньше 0.1 bps.
+1. DBC: no issuer source; 8 unconfirmed events.
+2. GLD: no document confirming absence of distributions.
+3. HYG, LQD, TLT: missing Yahoo payment on 2012-11-01 (55, 31 and 22 bps).
+4. BIL 2022-03-01: Yahoo 0.022 versus SSGA zero (2.4 bps).
+5. SPY 2021-12-17, BIL 2022-09-01 and HYG 2023-12-14: amount discrepancies from 0.0005 to 0.0034 USD, each below 0.1 bps.
 
-Варианты следующего шага (выбирает пользователь):
+Options recorded for the owner's decision:
 
-- DBC: пользователь вручную скачивает в браузере историю распределений DBC с сайта Invesco и передаёт файл. Для его приёма нужен парсер и тип источника «локальный файл с хешем», то есть отдельная задача с кодом. Другой вариант: сверка с годовыми отчётами фонда (distributions per share).
-- GLD: документ эмитента о том, что траст не делает распределений (проспект или годовой отчёт SPDR Gold Trust), добавить в evidence как document.
-- Пропуск 2012-11-01 и BIL 2022-03-01: решение, какой источник считать верным. План допускает исправления только отдельным производным vintage с доказательствами, без изменения исходного снимка.
-- Расхождения меньше 0.1 bps: решение о принятии с раскрытием либо о замене суммой эмитента в отдельном vintage.
+- DBC: obtain the Invesco distribution history in a browser and supply the file. Acceptance required a parser and a local-file-with-hash source type, a separate implementation task. An alternative was comparison with annual fund reports' distributions per share.
+- GLD: add an issuer document stating the trust's distribution policy, such as the SPDR Gold Trust prospectus or annual report, to evidence as document.
+- Missing 2012-11-01 events and BIL 2022-03-01: decide which source is authoritative. The plan permits corrections only in a separate derived vintage with evidence, preserving the original snapshot.
+- Discrepancies below 0.1 bps: decide between acceptance with disclosure and replacement by issuer amounts in a separate vintage.
 
-Порог, допуск и код для прохождения сверки не менялись.
+No threshold, tolerance or code was changed to make the initial reconciliation pass.
 
-## Закрытие блокирующих пунктов
+## Closure of blocking items
 
-Дата: 6 октября 2026 года, ветка claude/n1-closure. Пять блокирующих пунктов D015 закрыты в три шага: добавлены источники эмитентов для DBC и GLD, неподтверждённые события Yahoo оформлены явным файлом исправлений, нормализация применила его как отдельный производный vintage. Снимок Yahoo 20261006T103809-a4a22ec667 не менялся и не загружался повторно. Допуск 0.0005 USD, правило материальности и критерий готовности не менялись. Идентификаторы, родители, git SHA и команды: [execution_record.md](execution_record.md).
+6 October 2026, branch claude/n1-closure. The five D015 blocking items were closed in three steps: issuer sources were added for DBC and GLD, unconfirmed Yahoo events were recorded in an explicit corrections file, and normalization applied it as a separate derived vintage. Yahoo snapshot 20261006T103809-a4a22ec667 was unchanged and not reacquired. The 0.0005 USD tolerance, materiality rule and readiness criterion were unchanged. IDs, parents, git SHAs and commands are in [execution_record.md](execution_record.md).
 
-| Шаг | Запуск | Результат |
+| Step | Run | Result |
 |---|---|---|
-| Материалы эмитентов | 20261006T172354-1c0a8ca2d8 | 12 источников completed |
-| Сверка по исходным данным Yahoo | 20261006T172415-ce65adb53e | confirmed: EFA, EEM, IEF, DBC; confirmed_no_distributions: GLD; unresolved: SPY, TLT, LQD, HYG, BIL (те же семь событий, что в D015) |
-| Исправления | 20261006T172434-fbb5c9f554 | 7 событий: 3 add, 3 replace, 1 remove |
-| QA скорректированного vintage | 20261006T172442-80ef993493 | technical_pass true, 4869/4869 сессий, adjustment_breaks 0 |
-| Сверка скорректированного vintage | 20261006T172453-4d72af092f | все десять тикеров confirmed или confirmed_no_distributions |
+| Issuer evidence | 20261006T172354-1c0a8ca2d8 | 12 sources completed |
+| Reconciliation of original Yahoo data | 20261006T172415-ce65adb53e | confirmed: EFA, EEM, IEF, DBC; confirmed_no_distributions: GLD; unresolved: SPY, TLT, LQD, HYG, BIL (the same seven D015 events) |
+| Corrections | 20261006T172434-fbb5c9f554 | 7 events: 3 add, 3 replace, 1 remove |
+| Corrected-vintage QA | 20261006T172442-80ef993493 | technical_pass true, 4869/4869 sessions, adjustment_breaks 0 |
+| Corrected-vintage reconciliation | 20261006T172453-4d72af092f | All ten tickers confirmed or confirmed_no_distributions |
 | Replay | 20261006T172504-6b932ef79b | replay_equal true |
 
-Прежний derived-снимок 20261006T122144-73228a71eb текущим кодом не воспроизводится: нормализованная таблица получила колонки dividend_basis и dividend_correction_source, а corrections.json стал частью derived-снимка. Его точное воспроизведение записано до этого изменения: запуск 20261006T131812-09887a01da на коммите 977eaf6, replay_equal true. Повторно он не воспроизводился и в N2 не передаётся.
+The former derived snapshot 20261006T122144-73228a71eb cannot be reproduced with current code: normalized tables gained dividend_basis and dividend_correction_source, and corrections.json became part of the derived snapshot. Its exact reproduction was recorded before this change in run 20261006T131812-09887a01da on commit 977eaf6, replay_equal true. It was not replayed again after the format change and is not passed to N2.
 
-### Правило исправлений (D016)
+### Correction rule (D016)
 
-Решение пользователя от 6 октября 2026 года: данные эмитента авторитетны для событий, которые не совпали с Yahoo. Правила применяются только к событиям вне класса matched:
+The owner's decision of 6 October 2026 treats issuer data as authoritative for events that did not match Yahoo. Rules apply only outside the matched class:
 
-- issuer_only: добавить событие с суммой эмитента (as-traded);
-- amount_mismatch: заменить сумму Yahoo суммой эмитента;
-- yahoo_only: удалить, только если эмитент явно перечисляет строку с нулевой суммой на эту ex-date; иначе событие остаётся unresolved.
+- issuer_only: add the issuer amount in as-traded units;
+- amount_mismatch: replace Yahoo's amount with the issuer amount;
+- yahoo_only: remove only when the issuer explicitly lists a zero-amount row for that ex-date; otherwise leave unresolved.
 
-События, совпавшие с эмитентом в допуске, сохраняют суммы Yahoo (округлённые до 0.001). Цены, сплиты и прочие строки не меняются. В колонке dividend стоит сумма эмитента (0 при удалении), dividend_basis равен `issuer_correction`, source_dividend хранит исходное значение Yahoo, dividend_correction_source ссылку на источник. Исправление даты, где Yahoo и эмитент уже совпали, неизвестной даты или события с несовпавшим yahoo_amount отвергается с ошибкой.
+Events matching within tolerance retain Yahoo amounts, rounded to 0.001. Prices, splits and other rows are unchanged. dividend holds the issuer amount (0 for removal), dividend_basis is `issuer_correction`, source_dividend retains the original Yahoo value, and dividend_correction_source references the source. A correction targeting an already matched date, an unknown date or an event with a nonmatching yahoo_amount is rejected.
 
-### Исправления по событиям
+### Event corrections
 
-Источники лежат в снимке data/evidence/20261006T172354-1c0a8ca2d8. У HYG, LQD и TLT в эти даты сплитов нет (коэффициент 1.0), суммы iShares в текущих единицах паёв равны as-traded.
+Sources are in data/evidence/20261006T172354-1c0a8ca2d8. HYG, LQD and TLT have no splits at these dates (factor 1.0), so iShares current-unit amounts equal as-traded amounts.
 
-| Тикер | ex-date | Действие | Yahoo | Эмитент | Дата выплаты | Источник (файл, sha256) |
+| Ticker | ex-date | Action | Yahoo | Issuer | Payable date | Source (file, sha256) |
 |---|---|---|---|---|---|---|
-| HYG | 2012-11-01 | add | нет события | 0.510521 | 2012-11-07 | ishares-hyg.html, f6c39eed… |
-| LQD | 2012-11-01 | add | нет события | 0.378397 | 2012-11-07 | ishares-lqd.html, 96a13a36… |
-| TLT | 2012-11-01 | add | нет события | 0.269553 | 2012-11-07 | ishares-tlt.html, e29ba7e4… |
-| BIL | 2022-03-01 | remove | 0.022 | 0 (явная нулевая строка) | нет | ssga-distributions.xlsx, b162dd17… |
+| HYG | 2012-11-01 | add | No event | 0.510521 | 2012-11-07 | ishares-hyg.html, f6c39eed… |
+| LQD | 2012-11-01 | add | No event | 0.378397 | 2012-11-07 | ishares-lqd.html, 96a13a36… |
+| TLT | 2012-11-01 | add | No event | 0.269553 | 2012-11-07 | ishares-tlt.html, e29ba7e4… |
+| BIL | 2022-03-01 | remove | 0.022 | 0 (explicit zero row) | None | ssga-distributions.xlsx, b162dd17… |
 | SPY | 2021-12-17 | replace | 1.633 | 1.636431 | 2022-01-31 | ssga-distributions.xlsx, b162dd17… |
 | BIL | 2022-09-01 | replace | 0.139 | 0.138459 | 2022-09-08 | ssga-distributions.xlsx, b162dd17… |
 | HYG | 2023-12-14 | replace | 0.379 | 0.37847 | 2023-12-20 | ishares-hyg.html, f6c39eed… |
 
-Полные ссылки (URL и путь к файлу снимка с хешем) записаны в corrections.json для каждого события и в [source_evidence.json](source_evidence.json). Причины расхождений у Yahoo не установлены: исправление опирается на решение пользователя об авторитетности эмитента, а не на объяснение ошибки поставщика.
+Full references, including URL and snapshot path/hash, are recorded for each event in corrections.json and [source_evidence.json](source_evidence.json). The causes of Yahoo discrepancies are unknown. Corrections implement the owner's issuer-authority decision rather than an established explanation of vendor error.
 
-Влияние на теоретический TR (индекс на 2026-10-05 относительно прежнего vintage; до даты исправления индекс не менялся): SPY +0.0007%, TLT +0.22%, LQD +0.31%, HYG +0.55%, BIL −0.025%. Сравнение таблиц двух vintage: OHLC, Volume, source_close, source_adj_close и split_ratio не отличаются; dividend изменён ровно в семи строках (HYG две, BIL две, SPY, LQD и TLT по одной), в них dividend_basis равен `issuer_correction`, в остальных `source`.
+Effect on theoretical TR, measured as the 2026-10-05 index relative to the former vintage: SPY +0.0007%, TLT +0.22%, LQD +0.31%, HYG +0.55%, BIL −0.025%. The index is unchanged before each correction date. Comparing both vintages found identical OHLC, Volume, source_close, source_adj_close and split_ratio. dividend changes in exactly seven rows: HYG two, BIL two, SPY/LQD/TLT one each. Their dividend_basis is `issuer_correction`; all other rows are `source`.
 
-### DBC: источник эмитента
+### DBC issuer source
 
-Историю распределений DBC (Invesco DB Commodity Index Tracking Fund) отдаёт JSON-интерфейс Invesco. Клиентам без браузера он отвечает HTTP 406. Файл получен 6 октября 2026 года вызовом fetch() в контексте страницы встроенного браузера Claude desktop; ответ сохранён без изменений, sha256 7337eeb71802061102d85c051178c059507b8c07a75fea7a9718e775f374ae41 (2521 байт) вычислен в браузере и перепроверен на диске. Загрузка разрешена пользователем 6 октября 2026 года. Обхода защиты в коде нет. Файл читается из data/manual/dbc-invesco-distribution.json и указан в configs/n1_evidence.json; при несовпадении sha256 получение evidence завершается ошибкой, при совпадении файл копируется в снимок evidence. Метаданные захвата (URL, страница, время, метод): data/manual/dbc-invesco-distribution.capture.json.
+Invesco's JSON interface serves the distribution history of Invesco DB Commodity Index Tracking Fund. Nonbrowser clients receive HTTP 406. On 6 October 2026 the file was obtained by fetch() in a browser page context. The response was saved unchanged. Its sha256, 7337eeb71802061102d85c051178c059507b8c07a75fea7a9718e775f374ae41 (2521 bytes), was calculated in the browser and rechecked on disk. The owner authorized acquisition on 6 October 2026. The code contains no protection bypass. The file is read from data/manual/dbc-invesco-distribution.json and referenced by configs/n1_evidence.json. Evidence acquisition fails if sha256 differs; otherwise the file is copied into the evidence snapshot. Capture metadata (URL, page, timestamp and method) is preserved in data/manual/dbc-invesco-distribution.capture.json.
 
-В истории 8 строк, ex-date от 2007-12-17 до 2025-12-22. Все 8 совпали с событиями Yahoo в допуске (наибольшая разница 0.00047 у 2018-12-24); событий только у одной из сторон нет; материальность 0.86 bps. Статус confirmed. Ограничения: список эмитента начинается с 2007-12-17, поэтому полнота окна от 2007-05-30 до этой даты по документу эмитента не доказана (в Yahoo в этом интервале событий нет); разделение суммы по видам не сверялось; файл получен один раз одним способом и не входит в Git (права на распространение не установлены).
+The history has 8 rows, with ex-dates from 2007-12-17 to 2025-12-22. All 8 match Yahoo within tolerance (largest difference 0.00047 on 2018-12-24), with no events unique to either source; materiality is 0.86 bps. Status: confirmed. Limitations: the issuer list starts on 2007-12-17, so issuer documentation does not establish completeness from 2007-05-30 through that date (Yahoo has no events in the interval). Amount components were not reconciled. The file was obtained once by one method and is excluded from Git because redistribution rights are unestablished.
 
-### GLD: отсутствие распределений
+### GLD no-distribution evidence
 
-В снимке два документа SSGA, оба загружены по сети (sha256 в [source_evidence.json](source_evidence.json), там же дословные цитаты и страницы). Что в них сказано:
+The snapshot contains two SSGA documents, both acquired over the network. Their sha256 values, verbatim quotations and page references are in [source_evidence.json](source_evidence.json). The documents state:
 
-- проспект SPDR Gold Trust, с. 9: акционеры не получают дивидендов;
-- проспект, с. 30, раздел о распределениях: Trust Indenture предусматривает распределения акционерам только в двух случаях (избыток денежных средств за 12 месяцев сверх $0.01 на акцию; прекращение и ликвидация траста);
-- FAQ по GLD, с. 3: траст не распределяет акционерам выручку от продажи золота. Фраза стоит в ответе о форме 1099-B для небольших продаж золота на оплату расходов траста, то есть касается выручки от этих продаж, а не распределений акционерам вообще.
+- SPDR Gold Trust prospectus, p. 9: shareholders do not receive dividends.
+- Prospectus, p. 30, distributions section: the Trust Indenture permits shareholder distributions only in two cases, excess cash over 12 months exceeding $0.01 per share, and trust termination/liquidation.
+- GLD FAQ, p. 3: the trust does not distribute gold-sale proceeds to shareholders. This appears in an answer about Form 1099-B for small gold sales to pay trust expenses. Its scope is those sale proceeds, rather than all shareholder distributions.
 
-Ни один документ не утверждает, что распределений не было никогда. Статус confirmed_no_distributions опирается на четыре обстоятельства вместе: узкий круг случаев в Trust Indenture, ответ FAQ, ноль событий Yahoo по GLD в окне и то, что траст в окне действует и не прекращён. Последнее отдельным документом не проверялось; косвенно его подтверждают котировки GLD на все 4869 сессий окна.
+Neither document states that distributions have never occurred. confirmed_no_distributions rests on four considerations together: the narrow Trust Indenture conditions, the FAQ answer, zero Yahoo GLD events in the window, and the trust operating without termination during the window. The last point was not checked against a separate document; GLD quotes on all 4869 sessions support it indirectly.
 
-### Результат сверки
+### Closure reconciliation results
 
-| Тикер | Исходные данные Yahoo | bps | Скорректированный vintage | Yahoo | Эмитент | matched | bps |
+| Ticker | Original Yahoo data | bps | Corrected vintage | Yahoo | Issuer | matched | bps |
 |---|---|---|---|---|---|---|---|
 | SPY | unresolved | 1.01 | confirmed | 78 | 78 | 78 | 0.94 |
 | EFA | confirmed | 1.55 | confirmed | 39 | 39 | 39 | 1.55 |
@@ -202,36 +202,36 @@ BIL 2008-03-03 совпал по сумме, но в строке SSGA record da
 | TLT | unresolved | 26.88 | confirmed | 233 | 233 | 233 | 5.03 |
 | LQD | unresolved | 36.02 | confirmed | 233 | 233 | 233 | 5.26 |
 | HYG | unresolved | 61.80 | confirmed | 233 | 233 | 233 | 6.59 |
-| BIL | unresolved | 7.10 | confirmed | 127 | 127 (+105 нулевых строк) | 127 | 4.64 |
+| BIL | unresolved | 7.10 | confirmed | 127 | 127 (+105 zero rows) | 127 | 4.64 |
 | DBC | confirmed | 0.86 | confirmed | 8 | 8 | 8 | 0.86 |
-| GLD | confirmed_no_distributions | нет | confirmed_no_distributions | 0 | документы | нет | нет |
+| GLD | confirmed_no_distributions | N/A | confirmed_no_distributions | 0 | Documents | N/A | N/A |
 
-Материальность скорректированного vintage состоит из остатков округления Yahoo у совпавших событий. Сверка подтверждает, что исправления применены и других расхождений нет. Для семи исправленных событий независимого источника она не даёт: после исправления они совпадают с эмитентом по построению.
+Corrected-vintage materiality comprises Yahoo rounding residuals in matched events. Reconciliation confirms application of corrections and the absence of other discrepancies. It provides no independent source for the seven corrected events, which match issuer amounts by construction.
 
-### Даты выплаты
+### Closure payable dates
 
-Actual payable берутся из payable.json vintage исправлений. В окне proxy осталось у одного события: BIL 2008-03-03 (в строке SSGA record и payable раньше ex-date, причина описана выше). У DBC все 8 событий теперь с actual payable (раньше proxy). Для SPY 2021-12-17, BIL 2022-09-01 и HYG 2023-12-14 actual добавлены исправлениями, для HYG, LQD, TLT 2012-11-01 тоже. События до 2007-05-30 вне окна проверки и остаются proxy.
+Actual dates come from the corrections vintage's payable.json. Within the window only BIL 2008-03-03 retains a proxy because its SSGA record/payable dates precede ex-date, as explained above. All 8 DBC events now have actual dates, previously proxy. Corrections add actual dates for SPY 2021-12-17, BIL 2022-09-01, HYG 2023-12-14 and HYG/LQD/TLT 2012-11-01. Events before 2007-05-30 lie outside the validation window and retain proxies.
 
-### Ограничения скорректированного vintage
+### Corrected-vintage limitations
 
-- Остаются ограничения разделов выше: данные не point-in-time, выборка ретроспективная, права на данные Yahoo не установлены, допуск выбран после наблюдения расхождений (D013), снимок Yahoo получен кодом с незакоммиченными изменениями.
-- Суммы совпавших событий взяты у Yahoo с округлением до 0.001; отличие от эмитента внутри допуска остаётся (см. материальность в таблице).
-- Причины пропуска 2012-11-01 у HYG, LQD, TLT, нулевой строки BIL 2022-03-01 и расхождений трёх сумм не установлены.
-- Второго источника, независимого от эмитента, нет: эмитент признан авторитетным по решению пользователя.
-- Исправленные строки сохраняют available_at = 18:00 America/New_York в день ex-date по тому же historical_model_assumption; суммы эмитентов получены в октябре 2026 года и могут быть пересмотренными значениями, а не суммой, объявленной в тот день. Эмитент объявляет сумму не позже ex-date, поэтому исправление не добавляет информации сверх самого события, но конвейер, опиравшийся тогда на Yahoo, увидел бы неисправленные значения.
-- В comparison.json сверки скорректированного vintage поле yahoo_amount хранит скорректированную сумму, а не исходную сумму Yahoo; исходная сумма есть в corrections.json (yahoo_amount) и в сверке исходных данных.
-- Поле data_ready_for_n2 в quality.json равно false: код QA записывает его константой, решение о готовности принимается этим отчётом и записью D019.
+- General limitations above remain: data is not point-in-time, the sample is retrospective, Yahoo data rights are unestablished, tolerance was selected after observing discrepancies (D013), and acquisition used uncommitted code.
+- Matched-event amounts retain Yahoo's rounding to 0.001 and residual differences within tolerance, shown in the materiality table.
+- Causes of the HYG/LQD/TLT 2012-11-01 omissions, BIL 2022-03-01 zero row and three amount discrepancies are unestablished.
+- There is no second source independent of the issuer; issuer authority follows the owner's decision.
+- Corrected rows retain available_at = 18:00 America/New_York on ex-date under the same historical_model_assumption. Issuer amounts were obtained in October 2026 and may be revised values rather than the amounts announced on the original date. Issuers announce amounts no later than ex-date, so the correction does not add information beyond the event itself, but a pipeline relying on Yahoo at that time would have seen the uncorrected values.
+- In corrected-vintage comparison.json, yahoo_amount holds the corrected amount. Original Yahoo amounts remain in corrections.json (yahoo_amount) and the original-data reconciliation.
+- quality.json has data_ready_for_n2 false because QA writes it as a constant. Readiness is determined by this report and decision D019.
 
-### Вердикт (DECISIONS D019, утверждён D020 7 октября 2026)
+### Final verdict (DECISIONS D019, approved by D020 on 7 October 2026)
 
-Правило готовности задано до сверки и не менялось: оба сплита confirmed и каждый распределяющий тикер confirmed или confirmed_no_distributions на скорректированном vintage.
+The readiness rule was defined before reconciliation and remained unchanged: both splits confirmed, and every distributing ticker confirmed or confirmed_no_distributions on the corrected vintage.
 
-| Критерий N2 | Результат | Основание |
+| N2 criterion | Result | Basis |
 |---|---|---|
-| Техническая воспроизводимость | пройден | replay_equal true для 20261006T172442-80ef993493; шесть запусков закрытия на чистом дереве; снимок Yahoo получен на грязном дереве (1643651), его байты проверяются по manifest |
-| Полнота календаря | пройден | 4869/4869 сессий у всех десяти ETF, adjustment_breaks 0, наибольший остаток Adj Close 2.25e-6 (TLT) |
-| База сплитов EEM 2008 и BIL 2017 | пройден | оба confirmed (раздел «База сплитов»); sha256 документов в новом снимке evidence совпали с прежними |
-| Полнота и единицы распределений | пройден | девять тикеров confirmed (SPY, EFA, EEM, IEF, TLT, LQD, HYG, BIL, DBC), GLD confirmed_no_distributions, на vintage 20261006T172442-80ef993493 |
-| Даты выплаты | не блокирует | в окне proxy у одного события (BIL 2008-03-03) |
+| Technical reproducibility | Passed | replay_equal true for 20261006T172442-80ef993493; six closure runs on clean trees; Yahoo acquired on a dirty tree (1643651), with bytes verified against manifest |
+| Calendar completeness | Passed | 4869/4869 sessions for all ten ETFs, adjustment_breaks 0, largest Adj Close residual 2.25e-6 (TLT) |
+| EEM 2008 and BIL 2017 split basis | Passed | Both confirmed in Split basis; document sha256 values in new evidence match the former snapshot |
+| Distribution completeness and units | Passed | Nine tickers confirmed (SPY, EFA, EEM, IEF, TLT, LQD, HYG, BIL, DBC), GLD confirmed_no_distributions, on vintage 20261006T172442-80ef993493 |
+| Payable dates | Nonblocking | One proxy event in the window, BIL 2008-03-03 |
 
-Предложенный вердикт: данные готовы к N2 при условии, что N2 использует только скорректированный vintage data/derived/20261006T172442-80ef993493 вместе с его corrections.json и раскрывает ограничения, в частности основание по GLD и непроверенную полноту DBC до 2007-12-17. Снимок Yahoo без исправлений и vintage 20261006T122144-73228a71eb для N2 не используются. Доходности стратегий не рассчитывались.
+Approved verdict: the data is ready for N2 provided that N2 uses only corrected vintage data/derived/20261006T172442-80ef993493 with its corrections.json and discloses its limitations, particularly the GLD evidence basis and unverified DBC completeness before 2007-12-17. Uncorrected Yahoo data and vintage 20261006T122144-73228a71eb are not N2 inputs. Strategy returns were not calculated.
