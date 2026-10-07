@@ -1,6 +1,6 @@
 # Reproducibility
 
-The repository implements N1 data preparation and the N2 account and execution engine. Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. No strategy performance reproduction is available: the N2 run uses a test weight provider and publishes no returns.
+The repository implements N1 data preparation, the N2 account and execution engine and the N3 benchmark providers, metrics and report. Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. No strategy performance reproduction is available: the N2 run uses a test weight provider and publishes no returns, and the registered N3 benchmark runs described below have not been executed at the time of writing.
 
 The [English documentation edition](DOCUMENTATION_EDITION.md) registers current document hashes separately. N0 receipts and the original experiment records are historical evidence; they do not certify the bytes of the rewritten documentation. See [HISTORY_REWRITE.md](HISTORY_REWRITE.md) for old-to-published commit mappings.
 
@@ -58,7 +58,23 @@ The `simulate` command applies the N2 engine to the approved vintage. It was ver
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider invariant_rotation --start 2007-05-31 --end 2022-12-30 --root .
 ```
 
-The run needs the local approved vintage and a clean working tree. It appends journal events and writes its result to `data/runs/<run_id>`, which is excluded from Git. For a repeat, add `--parent <run id of the previous run>` after committing the previous run's journal lines, so that the repeat starts on a clean tree. The provider `invariant_rotation` is a mechanics test, not a strategy. An `invariants_failed` run exits with code 0; check `passed` in `invariants.json` or the journal status. The command is not part of the N1 replay and the `data/runs` outputs are not committed.
+The run needs the local approved vintage and a clean working tree. It appends journal events and writes its result to `data/runs/<run_id>`, which is excluded from Git. For a repeat, add `--parent <run id of the previous run>` after committing the previous run's journal lines, so that the repeat starts on a clean tree. The provider `invariant_rotation` is a mechanics test, not a strategy. An `invariants_failed` run prints its directory and exits with code 3 (D022, item 1); `audit` exits with code 3 on `quality_failed` in the same way. A caller should still read `passed` in `invariants.json` or the journal status. The command is not part of the N1 replay and the `data/runs` outputs are not committed.
+
+## N3 benchmark runs
+
+The N3 runs use the approved vintage, the locked environment and a clean working tree. Before the first run, `provenance.verify` on `data/derived/20261006T172442-80ef993493` and its manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2` must match. The window is 2008-12-31 to 2022-12-30 in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000); the first decision is the close of 2008-12-31 (D022, item 6).
+
+```bash
+for p in B0 B1 B2 B3 REF_SPY; do
+  PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider $p --start 2008-12-31 --end 2022-12-30 --root .
+  # commit the new EXPERIMENT_LOG.jsonl lines before the next command
+done
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab report --runs data/runs/<B0 dir> data/runs/<B1 dir> data/runs/<B2 dir> data/runs/<B3 dir> data/runs/<REF_SPY dir> --root .
+```
+
+Each `simulate` prints `data/runs/<run_id>`; substitute the five printed directories in `report`. The commands are shown as a sequence, not an unattended batch: each run must start on a clean tree and the journal lines of the previous run are committed first, because the report rejects a run whose records have `dirty_tree` true or no `git_sha`. A command that exits with code 3 has frozen its result and journaled `invariants_failed`; it stays in the journal and its cause is fixed before a repeat with `--parent`.
+
+A repeat uses `--parent <run id of the first run>` for each of the five runs and for the report. A repeated benchmark run and a repeated report are compared by the `files` dictionaries of their `manifest.json` (per-file SHA-256), not by the manifest bytes, which contain run identifiers. The report files `benchmarks.json` and `benchmarks.md` in `data/reports/<run_id>/` contain no run id. The `--expected-sha256` option of `simulate` and `report` exists for tests on synthetic vintages; registered runs use the default, the approved hash. Run identifiers and results are added to the repository after the runs; none is recorded here.
 
 ## Historical blocker-resolution sequence
 
