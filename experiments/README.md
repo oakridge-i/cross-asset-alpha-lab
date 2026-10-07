@@ -1,6 +1,6 @@
 # Experiment journal
 
-[EXPERIMENT_LOG.jsonl](EXPERIMENT_LOG.jsonl) records N1 data runs, N2 execution runs, N3 benchmark runs and, when implemented, subsequent strategy calculations. At N0 it contained zero rows; availability and metadata probes were recorded separately in `docs/n0`. No strategy results have been produced; the N2 runs use a test weight provider and publish no returns. The N3 benchmark runs and the report run are defined below; at the time of writing none has been executed, so the journal holds no benchmark result.
+[EXPERIMENT_LOG.jsonl](EXPERIMENT_LOG.jsonl) records N1 data runs, N2 execution runs, N3 benchmark runs and, when implemented, subsequent strategy calculations. At N0 it contained zero rows; availability and metadata probes were recorded separately in `docs/n0`. No strategy results have been produced; the N2 runs use a test weight provider and publish no returns. The journal holds the N3 benchmark runs of B0, B1, B2, B3 and REF_SPY, the benchmark report and their repeats (7 October 2026); their results are in the [N3 report](../docs/n3/N3_REPORT.md). The journal holds no H1/H2 result.
 
 ## Events and provenance
 

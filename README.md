@@ -4,7 +4,7 @@ An auditable study of whether relative momentum and persistence of returns can i
 
 The research is intended to distinguish a useful allocation rule from a result explained by familiar market exposures, favorable execution assumptions, or repeated testing. Its value will depend on evidence against transparent baselines, including the possibility that added complexity has no economic benefit.
 
-**Stage as of 7 October 2026: data preparation and the account and execution engine (N2) are implemented; strategy performance is untested.** The approved dataset was released for portfolio-engine development under D020. The repository implements the N1 data pipeline and the N2 engine for positions, cash, orders, costs, splits and distributions. It contains no strategy backtest or H1/H2 performance results. The N2 engine was exercised with a test weight provider that is not a strategy, and no returns or NAV from that run are published. No positive alpha or investable track record has been established.
+**Stage as of 7 October 2026: data preparation, the account and execution engine (N2) and the benchmarks (N3) are implemented; results for B0-B3 and REF_SPY for 2009-2022 are in the [N3 report](docs/n3/N3_REPORT.md); strategy (H1/H2) performance is untested.** The approved dataset was released for portfolio-engine development under D020. The repository implements the N1 data pipeline and the N2 engine for positions, cash, orders, costs, splits and distributions. It contains no strategy backtest or H1/H2 performance results. The N2 engine was exercised with a test weight provider that is not a strategy, and no returns or NAV from that run are published. N3 adds the baselines B0-B3 and REF_SPY, whose results are reported without comparison to any candidate. No positive alpha or investable track record has been established.
 
 ## Research design
 
@@ -40,12 +40,19 @@ N2 adds an engine for accounting and execution, described in [EXECUTION_MODEL.md
 
 These results establish that the accounting mechanics hold on real data under the stated interpretations. They say nothing about strategy behavior.
 
+N3 computes the protocol benchmarks B0 (BIL only), B1 (equal weights), B2 (inverse volatility), B3 (absolute trend) and the reference REF_SPY (a single SPY purchase) on the approved vintage, with the interpretations recorded in [D022](DECISIONS.md).
+
+- Registered runs of the five benchmarks and a report over them (window 2008-12-31 to 2022-12-30, 168 monthly decisions for B0-B3) passed all seven financial invariants. A repeat of every run and of the report produced identical output file hashes.
+- The [N3 report](docs/n3/N3_REPORT.md) publishes the section 11 metrics for 2009-2022 by period and by year, with weight-construction diagnostics. Realized volatility and cash shares differ across the benchmarks, and the actual weights of B2 and B3 drift above the 25% target cap between decisions.
+- The benchmarks are baselines. The report does not compare candidates, does not state which benchmark is better, and computes nothing for H1/H2 or after 2022-12-30. The branch `claude/n3-benchmarks` is not yet merged into `main`.
+
 ## What would justify further attention
 
 | Milestone | Evidence required |
 |---|---|
 | N2: portfolio and execution | Tested accounting, cash constraints, corporate actions, and manual reconciliation (implemented; see [N2 report](docs/n2/N2_REPORT.md)) |
-| N3-N5: baselines and hypotheses | Comparable net returns, full attempt history, risk attribution, uncertainty, and cost/delay robustness |
+| N3: baselines | Benchmarks B0-B3 and REF_SPY with comparable net returns and a registered, reproduced run (implemented; see [N3 report](docs/n3/N3_REPORT.md)) |
+| N4-N5: hypotheses | Comparable net returns, full attempt history, risk attribution, uncertainty, and cost/delay robustness |
 | N6: reserved historical check | Frozen procedure, one recorded opening, and disclosure of historical familiarity |
 | N7-N8: conclusions and prospective observation | A reproducible report, explicit rejection criteria, and receipts for genuinely future observations |
 
@@ -63,6 +70,7 @@ Execution remains a research model: settlement, auction fills, liquidity, and re
 - [Research protocol](RESEARCH_PROTOCOL.md) and [decision history](DECISIONS.md)
 - [N1 data report](docs/n1/N1_REPORT.md), [source evidence](docs/n1/source_evidence.json), and [run record](docs/n1/execution_record.md)
 - [N2 execution model](EXECUTION_MODEL.md), [N2 report](docs/n2/N2_REPORT.md), and [manual reconciliations](docs/n2/manual_reconciliation.md)
+- [N3 benchmark report](docs/n3/N3_REPORT.md) and [decision D022](DECISIONS.md)
 - [Environment, replay commands, and reproduction limits](docs/REPRODUCIBILITY.md)
 - [Experiment journal](experiments/EXPERIMENT_LOG.jsonl) and [recording rules](experiments/README.md)
 - [N0 source assessment](docs/n0/N0_REPORT.md) and [prior-project reuse audit](docs/n0/AAPL_REUSE_AUDIT.md)

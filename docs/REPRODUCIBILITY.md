@@ -1,6 +1,6 @@
 # Reproducibility
 
-The repository implements N1 data preparation, the N2 account and execution engine and the N3 benchmark providers, metrics and report. Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. No strategy performance reproduction is available: the N2 run uses a test weight provider and publishes no returns, and the registered N3 benchmark runs described below have not been executed at the time of writing.
+The repository implements N1 data preparation, the N2 account and execution engine and the N3 benchmark providers, metrics and report. Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. Benchmark reproduction is available: the registered N3 runs of B0-B3 and REF_SPY and their report are listed below and in the [N3 report](n3/N3_REPORT.md). Reproduction of H1/H2 is not available, because no strategy has been run: the N2 run uses a test weight provider and publishes no returns.
 
 The [English documentation edition](DOCUMENTATION_EDITION.md) registers current document hashes separately. N0 receipts and the original experiment records are historical evidence; they do not certify the bytes of the rewritten documentation. See [HISTORY_REWRITE.md](HISTORY_REWRITE.md) for old-to-published commit mappings.
 
@@ -62,7 +62,7 @@ The run needs the local approved vintage and a clean working tree. It appends jo
 
 ## N3 benchmark runs
 
-The N3 runs use the approved vintage, the locked environment of `requirements.lock` and a clean working tree. The interpreter is `.venv/Scripts/python` in a checkout that has its own environment; the registered N3 runs used the environment of the N2 runs. All five runs and the report must come from the same environment and from commits with the same `src` tree (D022, item 16). Before the first run, `provenance.verify` on `data/derived/20261006T172442-80ef993493` and its manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2` must match. The window is 2008-12-31 to 2022-12-30 in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000); the first decision is the close of 2008-12-31 (D022, item 6).
+The N3 runs use the approved vintage, the locked environment of `requirements.lock` and a clean working tree. The interpreter is `.venv/Scripts/python` in a checkout that has its own environment; the registered N3 runs share one environment manifest, which the report checks. All five runs and the report must come from the same environment and from commits with the same `src` tree (D022, item 16). Before the first run, `provenance.verify` on `data/derived/20261006T172442-80ef993493` and its manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2` must match. The window is 2008-12-31 to 2022-12-30 in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000); the first decision is the close of 2008-12-31 (D022, item 6).
 
 ```bash
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B0 --start 2008-12-31 --end 2022-12-30 --root .
@@ -87,7 +87,20 @@ git commit -m "journal: benchmark report"
 
 Each `simulate` prints `data/runs/<run_id>`; substitute the five printed directories in `report`. The commands are shown as a sequence, not an unattended batch: each run must start on a clean tree and the journal lines of the previous run are committed first, because the report rejects a run whose records have `dirty_tree` true or no `git_sha`. A run started on a dirty tree is rejected by the report and remains in the append-only journal. A command that exits with code 3 has frozen its result and journaled `invariants_failed`; it stays in the journal and its cause is fixed before a repeat with `--parent`.
 
-A repeat uses `--parent <run id of the first run>` for each of the five runs and for the report. A repeated benchmark run and a repeated report are compared by the `files` dictionaries of their `manifest.json` (per-file SHA-256), not by the manifest bytes, which contain run identifiers. The report files `benchmarks.json` and `benchmarks.md` in `data/reports/<run_id>/` contain no run id. The `--expected-sha256` option of `simulate` and `report` exists for tests on synthetic vintages; registered runs use the default, the approved hash. Run identifiers and results are added to the repository after the runs; none is recorded here.
+A repeat uses `--parent <run id of the first run>` for each of the five runs and for the report. A repeated benchmark run and a repeated report are compared by the `files` dictionaries of their `manifest.json` (per-file SHA-256), not by the manifest bytes, which contain run identifiers. The report files `benchmarks.json` and `benchmarks.md` in `data/reports/<run_id>/` contain no run id. The `--expected-sha256` option of `simulate` and `report` exists for tests on synthetic vintages; registered runs use the default, the approved hash. The registered runs and their results are listed below.
+
+The registered N3 runs of 7 October 2026 (results, invariants and counts are in the [N3 report](n3/N3_REPORT.md)):
+
+| | First run | Repeat (parent: first run) |
+|---|---|---|
+| B0 | 20261007T180004-12aae80084 | 20261007T200819-ff620c4546 |
+| B1 | 20261007T180018-b6c98bd0aa | 20261007T200822-68dc462b5f |
+| B2 | 20261007T180026-dffe07154c | 20261007T200827-b8f9da8b3f |
+| B3 | 20261007T180033-bba99392df | 20261007T200831-bcab64c3eb |
+| REF_SPY | 20261007T180039-be7dd8f43a | 20261007T200835-3df74a38e0 |
+| report | 20261007T200805-c75aa41980 | 20261007T200847-cf60a2b2d9 |
+
+For all five benchmark pairs the `files` dictionaries of the manifests are identical, and so are those of the two reports. The result directories `data/runs` and `data/reports` are not in Git.
 
 ## Historical blocker-resolution sequence
 
