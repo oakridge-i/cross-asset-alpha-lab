@@ -110,7 +110,7 @@ Per period:
 
 All years are complete, so a partial-year total return does not arise in N3. Numbers that are undefined are `null`, never NaN or infinity.
 
-## 7. Report (`python -m alpha_lab report RUN_DIR... --root PROJECT`)
+## 7. Report (`python -m alpha_lab report --runs RUN_DIR... --root PROJECT [--parent ATTEMPT]`)
 
 A Run with purpose `N3 benchmark report` and `candidate_ids` B0, B1, B2, B3, REF_SPY. Before computing anything it requires, failing the Run with `ValueError` otherwise:
 
