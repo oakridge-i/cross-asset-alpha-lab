@@ -1,6 +1,6 @@
 # Project status
 
-As of 7 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. H1/H2 are `registered_not_tested`; reserved strategy performance has not been opened. The N2 account and execution engine is implemented and reviewed on the branch `claude/n2-execution`; a registered run on the approved vintage passed all seven financial invariants. The branch is not merged into `main` and not pushed. No strategy returns, B0-B3 results or H1/H2 results exist.
+As of 7 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. H1/H2 are `registered_not_tested`; reserved strategy performance has not been opened. The N2 account and execution engine is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n2-execution`, 7 October 2026); a registered run on the approved vintage passed all seven financial invariants. No strategy returns, B0-B3 results or H1/H2 results exist.
 
 This is the [English editorial edition](docs/DOCUMENTATION_EDITION.md). Historical receipts and test results refer to their original versions. Commit identifiers retained below and in the journal may predate publication history rewriting; consult the [commit mapping](docs/HISTORY_REWRITE.md). Test counts below are historical records, not a new execution of the current suite.
 
@@ -84,7 +84,7 @@ The N0 verifier is specific to the original N0 layout and state. It requires sib
 
 ## N2: account and execution engine
 
-Branch `claude/n2-execution`, created from `main` at `4516269`, local only and not pushed. The stage boundary is execution only: the section 5 weights, the section 11 metrics, B0-B3 and REF_SPY belong to N3. The design is in [the N2 specification](docs/superpowers/specs/2026-10-07-n2-execution-design.md). The mechanics are described in [EXECUTION_MODEL.md](EXECUTION_MODEL.md), the interpretations in D021, the hand calculations in [manual_reconciliation.md](docs/n2/manual_reconciliation.md), and the run results in the [N2 report](docs/n2/N2_REPORT.md).
+Branch `claude/n2-execution`, created from `main` at `4516269`, merged into `main` by fast-forward on 7 October 2026. The stage boundary is execution only: the section 5 weights, the section 11 metrics, B0-B3 and REF_SPY belong to N3. The design is in [the N2 specification](docs/superpowers/specs/2026-10-07-n2-execution-design.md). The mechanics are described in [EXECUTION_MODEL.md](EXECUTION_MODEL.md), the interpretations in D021, the hand calculations in [manual_reconciliation.md](docs/n2/manual_reconciliation.md), and the run results in the [N2 report](docs/n2/N2_REPORT.md).
 
 Implemented, with commits:
 
@@ -99,7 +99,7 @@ Checks: pytest 261 passed on `4b7a618`. All seven invariants in `invariants.json
 
 Interpretation choices made during implementation are recorded in D021: `execute_orders` returns `buy_fill`; default decision dates are the last XNYS session of a month whose execution is no later than the window end; the `proxy_payouts` list in `invariants.json`; the payable-date contract is checked only from 2007-05-30; a fractional purchase remainder after a split is cancelled with reason `fractional_quantity`; an invariant violation gives journal status `invariants_failed`, the result is frozen, and the command exits with code 0; the ticker index in `invariant_rotation` counts from zero.
 
-Review of the whole branch (`4516269..af59031`) found no Critical issues, 3 Important and 7 Minor. Fixes `af59031..fa9da85` (6 commits) addressed the Important items; pytest 265 passed on `fa9da85`, including with TEMP/TMP set to a directory with a Cyrillic name. Merging into `main` and pushing wait for the user's explicit approval. The merge of `main` at `02beaee` and the English translation of the N2 documents changed no source code or tests; the full suite was run again after the merge: 265 passed.
+Review of the whole branch (`4516269..af59031`) found no Critical issues, 3 Important and 7 Minor. Fixes `af59031..fa9da85` (6 commits) addressed the Important items; pytest 265 passed on `fa9da85`, including with TEMP/TMP set to a directory with a Cyrillic name. The merge of `main` at `02beaee` and the English translation of the N2 documents changed no source code or tests; the full suite was run again after the merge: 265 passed.
 
 Minor review findings deferred (examined at the final review; some are carried to the "Deferred" list below):
 
@@ -116,10 +116,9 @@ The N2 run does not remove the data limitations above: they remain disclosed in 
 
 Next step:
 
-1. Merge `claude/n2-execution` into `main` after the user's approval; do not push before then.
-2. Then N3 under the [research protocol](RESEARCH_PROTOCOL.md). H1/H2 returns and B0-B3 are not calculated before N3. New data or corrections require fresh reconciliation, QA and a new readiness decision.
+1. N3 under the [research protocol](RESEARCH_PROTOCOL.md). H1/H2 returns and B0-B3 are not calculated before N3. New data or corrections require fresh reconciliation, QA and a new readiness decision.
 
-Deferred (does not block the merge):
+Deferred:
 
 - (a) `market_from_frames` should reject events (dividends, splits) on sessions outside the common calendar, and payment dates on such sessions, with tests. Do this before any new vintage or N3; the approved vintage has no such events.
 - (b) N1, a separate branch: `pipeline.audit_snapshot` should verify `payable.json` against its snapshot manifest, also without `--corrections` (an external review comment), with a test using a substituted file. N2 is not affected, because the N2 loader pins the vintage hash.
