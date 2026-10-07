@@ -1,6 +1,6 @@
 # Project status
 
-As of 7 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. H1/H2 are `registered_not_tested`; reserved strategy performance has not been opened. The N2 account and execution engine is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n2-execution`, 7 October 2026); a registered run on the approved vintage passed all seven financial invariants. N3 (the benchmarks) is implemented on the branch `claude/n3-benchmarks`, which is not yet merged into `main`; the results of B0-B3 and REF_SPY for 2009-2022 are published in the [N3 report](docs/n3/N3_REPORT.md). H1/H2 remain `registered_not_tested`, no strategy returns exist, and the reserved period remains closed.
+As of 7 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. H1/H2 are `registered_not_tested`; reserved strategy performance has not been opened. The N2 account and execution engine is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n2-execution`, 7 October 2026); a registered run on the approved vintage passed all seven financial invariants. N3 (the benchmarks) is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n3-benchmarks`, 8 October 2026); the results of B0-B3 and REF_SPY for 2009-2022 are published in the [N3 report](docs/n3/N3_REPORT.md). H1/H2 remain `registered_not_tested`, no strategy returns exist, and the reserved period remains closed.
 
 This is the [English editorial edition](docs/DOCUMENTATION_EDITION.md). Historical receipts and test results refer to their original versions. Commit identifiers retained below and in the journal may predate publication history rewriting; consult the [commit mapping](docs/HISTORY_REWRITE.md). Test counts below are historical records, not a new execution of the current suite.
 
@@ -110,7 +110,7 @@ Minor review findings deferred (examined at the final review; some are carried t
 
 ## N3: benchmarks
 
-Branch `claude/n3-benchmarks`, created from `main` at `d8458b4`; not yet merged into `main`. The stage boundary is the benchmarks only: B0-B3 and REF_SPY with the section 11 metrics for 2009-2022. H1/H2 are not computed. The design is in [the N3 specification](docs/superpowers/specs/2026-10-07-n3-benchmarks-design.md), the interpretations in D022, the account mechanics in [EXECUTION_MODEL.md](EXECUTION_MODEL.md), and the results in the [N3 report](docs/n3/N3_REPORT.md).
+Branch `claude/n3-benchmarks`, created from `main` at `d8458b4`, merged into `main` by fast-forward on 8 October 2026. The stage boundary is the benchmarks only: B0-B3 and REF_SPY with the section 11 metrics for 2009-2022. H1/H2 are not computed. The design is in [the N3 specification](docs/superpowers/specs/2026-10-07-n3-benchmarks-design.md), the interpretations in D022, the account mechanics in [EXECUTION_MODEL.md](EXECUTION_MODEL.md), and the results in the [N3 report](docs/n3/N3_REPORT.md).
 
 Implemented, with commits:
 

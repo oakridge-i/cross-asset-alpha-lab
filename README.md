@@ -44,7 +44,7 @@ N3 computes the protocol benchmarks B0 (BIL only), B1 (equal weights), B2 (inver
 
 - Registered runs of the five benchmarks (window 2008-12-31 to 2022-12-30, 168 monthly decisions for B0-B3) passed all seven financial invariants, and a report over them verifies those results. A repeat of every run and of the report produced identical output file hashes.
 - The [N3 report](docs/n3/N3_REPORT.md) publishes the section 11 metrics for 2009-2022 by period and by year, with weight-construction diagnostics. Realized volatility and cash shares differ across the benchmarks, and the actual weights of B2 and B3 drift above the 25% target cap between decisions.
-- The benchmarks are baselines. The report does not compare candidates, does not state which benchmark is better, and computes nothing for H1/H2 or after 2022-12-30. The branch `claude/n3-benchmarks` is not yet merged into `main`.
+- The benchmarks are baselines. The report does not compare candidates, does not state which benchmark is better, and computes nothing for H1/H2 or after 2022-12-30. The branch `claude/n3-benchmarks` was merged into `main` on 8 October 2026.
 
 ## What would justify further attention
 
