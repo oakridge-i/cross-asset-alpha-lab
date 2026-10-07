@@ -1,8 +1,10 @@
+import math
+
 import numpy as np
 import pytest
 
 from alpha_lab.features import CASH, RISKY
-from alpha_lab.portfolio import common_risk, inverse_vol
+from alpha_lab.portfolio import capped, common_risk, inverse_vol, risk_detail
 
 
 def _q(**kw):
@@ -81,3 +83,73 @@ def test_result_is_python_floats_and_bil_non_negative():
     assert all(type(v) is float for v in w.values())
     assert w[CASH] >= 0.0
     assert all(type(v) is float for v in inverse_vol(_sigma(), ['SPY']).values())
+
+
+def _frozen_common_risk(q, cov):
+    """Inline copy of the N3 common_risk algorithm before the split (reference for bit identity)."""
+    groups = {'Equity': ('SPY', 'EFA', 'EEM'), 'Treasury': ('IEF', 'TLT'), 'Credit': ('LQD', 'HYG'), 'Real': ('GLD', 'DBC')}
+    v = {t: min(float(q[t]), 0.25) for t in RISKY}
+    for members in groups.values():
+        total = math.fsum(v[t] for t in members)
+        if total > 0.50:
+            for t in members:
+                v[t] = v[t] * 0.50 / total
+    vec = np.array([v[t] for t in RISKY], dtype=float)
+    variance = float(vec @ np.asarray(cov, dtype=float) @ vec)
+    if variance < -1e-12:
+        raise ValueError(f'negative portfolio variance {variance}')
+    vol = math.sqrt(max(variance, 0.0))
+    scale = 1.0 if vol == 0.0 else min(1.0, 0.10 / vol)
+    w = {t: float(scale * v[t]) for t in RISKY}
+    cash = 1.0 - math.fsum(w.values())
+    if cash < 0.0:
+        if cash < -1e-12:
+            raise ValueError(f'risky weights exceed 100%: cash {cash}')
+        cash = 0.0
+    w[CASH] = float(cash)
+    return w
+
+
+def test_risk_detail_matches_common_risk():
+    hand = [
+        (_q(SPY=0.4, EFA=0.2, EEM=0.1), np.zeros((9, 9))),
+        (_q(TLT=0.25), _cov(TLT=0.64)),
+        (_q(SPY=0.25), _cov(SPY=0.04)),
+        (_q(), _cov(SPY=0.04)),
+        (_q(SPY=0.1), _cov(SPY=-5e-11)),
+        (_q(SPY=0.3, TLT=0.1), _cov(SPY=0.04, TLT=0.01)),
+    ]
+    rng = np.random.default_rng(20261008)
+    random_cases = []
+    for _ in range(50):
+        q = {t: 0.0 for t in RISKY}
+        for i in rng.choice(9, size=4, replace=False):  # at most 4 names at the 25% cap keeps risky weight <= 100%
+            q[RISKY[i]] = float(rng.uniform(0.0, 0.45))
+        m = rng.normal(size=(9, 9)) * 0.1
+        random_cases.append((q, m @ m.T))
+    for q, cov in hand + random_cases:
+        expected = _frozen_common_risk(q, cov)
+        v, a, w = risk_detail(q, cov)
+        assert w == expected
+        assert common_risk(q, cov) == expected
+        assert v == capped(q)
+        assert type(a) is float and 0.0 < a <= 1.0
+        for t in RISKY:
+            assert w[t] == float(a * v[t])
+
+
+def test_risk_detail_scale_values():
+    v, a, w = risk_detail(_q(), _cov(SPY=0.04))
+    assert a == 1.0 and all(v[t] == 0.0 for t in RISKY)
+    v, a, w = risk_detail(_q(TLT=0.25), _cov(TLT=0.64))
+    assert a == pytest.approx(0.5)
+    assert w['TLT'] == a * v['TLT']
+
+
+def test_capped_group_cap_hand_case():
+    v = capped(_q(SPY=0.4, EFA=0.2, EEM=0.1))
+    assert set(v) == set(RISKY)
+    assert v['SPY'] == 0.25 * 0.5 / 0.55
+    assert v['EFA'] == 0.2 * 0.5 / 0.55
+    assert v['EEM'] == 0.1 * 0.5 / 0.55
+    assert all(v[t] == 0.0 for t in RISKY if t not in ('SPY', 'EFA', 'EEM'))

@@ -24,14 +24,20 @@ def inverse_vol(sigma, selected, k=9):
     return q
 
 
-def common_risk(q, cov):
-    """Apply ETF cap, group cap, volatility target and cash remainder; returns weights over RISKY + BIL."""
+def capped(q):
+    """Steps 1 and 2: ETF cap, then proportional group cap; returns v over RISKY."""
     v = {t: min(float(q[t]), ETF_CAP) for t in RISKY}
     for members in GROUPS.values():
         total = math.fsum(v[t] for t in members)
         if total > GROUP_CAP:
             for t in members:
                 v[t] = v[t] * GROUP_CAP / total
+    return v
+
+
+def risk_detail(q, cov):
+    """Steps 3 and 4 on capped(q); returns (v, scale, weights over RISKY + BIL)."""
+    v = capped(q)
     vec = np.array([v[t] for t in RISKY], dtype=float)
     variance = float(vec @ np.asarray(cov, dtype=float) @ vec)
     if variance < -VARIANCE_TOLERANCE:
@@ -45,4 +51,9 @@ def common_risk(q, cov):
             raise ValueError(f'risky weights exceed 100%: cash {cash}')
         cash = 0.0
     w[CASH] = float(cash)
-    return w
+    return v, scale, w
+
+
+def common_risk(q, cov):
+    """Apply ETF cap, group cap, volatility target and cash remainder; returns weights over RISKY + BIL."""
+    return risk_detail(q, cov)[2]
