@@ -72,8 +72,6 @@ PYTHONPATH=src .venv/Scripts/python -m alpha_lab replay data/derived/20261006T17
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider invariant_rotation --start 2007-05-31 --end 2022-12-30 --root .
 ```
 
-Известный дефект: на консоли cp1252 команда падает с UnicodeEncodeError при печати пути запуска, если путь содержит не-ASCII символы (запуск при этом успевает записаться в журнал). Сейчас нужно задавать PYTHONIOENCODING=utf-8. Исправление ожидает финального ревью ветки.
-
 ## Проверки N0
 
 Сейчас проверены команды просмотра репозитория из его корня:
