@@ -1,11 +1,15 @@
+from pathlib import Path
+
 import pytest
 from n3_fixtures import benchmark_frames
 
 from alpha_lab import benchmarks, engine
+from alpha_lab import market as m
 from alpha_lab.features import CASH, RISKY, covariance, sigma, total_return_index
 from alpha_lab.market import market_from_frames
 from alpha_lab.portfolio import common_risk, inverse_vol
 
+ROOT = Path(__file__).resolve().parents[1]
 T = '2008-12-31'
 PROVIDERS = (benchmarks.b0, benchmarks.b1, benchmarks.b2, benchmarks.b3, benchmarks.ref_spy)
 
@@ -74,3 +78,14 @@ def test_weights_pass_engine_check():
     for provider in PROVIDERS:
         w = engine.provider_weights(provider, market, T)
         assert all(type(v) is float for v in w.values())
+
+
+@pytest.mark.skipif(not (ROOT / m.VINTAGE / 'manifest.json').exists(), reason='derived vintage is not in this checkout')
+def test_real_vintage_providers_pass_engine_check(no_network):
+    market = m.load_market(ROOT, Path(m.VINTAGE))
+    names = [n for n, p in engine.PROVIDERS.items() if p.kind == 'benchmark']
+    assert names == ['B0', 'B1', 'B2', 'B3', 'REF_SPY']
+    for name in names:
+        for session in ('2008-12-31', '2022-11-30'):
+            w = engine.provider_weights(engine.PROVIDERS[name].function, market, session)
+            assert set(w) == set(market.tickers)
