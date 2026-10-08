@@ -87,6 +87,8 @@ def test_result_is_python_floats_and_bil_non_negative():
 
 def _frozen_common_risk(q, cov):
     """Inline copy of the N3 common_risk algorithm before the split (reference for bit identity)."""
+    # The constants below (0.25, 0.50, 0.10, 1e-12) are copied from the pre-split portfolio.common_risk, the parent of
+    # commit 8b224b4; do not regenerate them from the code under test.
     groups = {'Equity': ('SPY', 'EFA', 'EEM'), 'Treasury': ('IEF', 'TLT'), 'Credit': ('LQD', 'HYG'), 'Real': ('GLD', 'DBC')}
     v = {t: min(float(q[t]), 0.25) for t in RISKY}
     for members in groups.values():

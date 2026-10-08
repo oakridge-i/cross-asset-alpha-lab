@@ -11,7 +11,6 @@ from n3_fixtures import benchmark_frames
 from alpha_lab.features import CASH, RISKY, covariance, momentum, month_end_levels, monthly_excess, sigma, total_return_index
 from alpha_lab.hypotheses import SIGNAL_COLUMNS_H1, SIGNAL_COLUMNS_H2, Decision, h1, h2
 from alpha_lab.market import market_from_frames
-from alpha_lab.portfolio import risk_detail
 
 T = '2008-12-31'
 ASCII = sorted(RISKY)
@@ -69,7 +68,19 @@ def expected_h1(h, lookback, k):
     chosen = order[:k]
     inverse = {i: 1.0 / vol[i] for i in chosen}
     q = {i: len(chosen) / k * inverse[i] / math.fsum(inverse.values()) if i in chosen else 0.0 for i in RISKY}
-    v, scale, w = risk_detail(q, covariance(h))
+    # Protocol lines 66-71 written out: ETF cap 0.25, proportional group cap 0.50, then scale = min(1, 0.10 / vol)
+    # (1 when vol = 0) and BIL as the remainder; none of the portfolio helpers is used.
+    v = {i: min(q[i], 0.25) for i in RISKY}
+    for members in (('SPY', 'EFA', 'EEM'), ('IEF', 'TLT'), ('LQD', 'HYG'), ('GLD', 'DBC')):
+        total = math.fsum(v[i] for i in members)
+        if total > 0.50:
+            for i in members:
+                v[i] = v[i] * 0.50 / total
+    vector = np.array([v[i] for i in RISKY])
+    portfolio_vol = math.sqrt(float(vector @ np.asarray(covariance(h)) @ vector))
+    scale = 1.0 if portfolio_vol == 0.0 else min(1.0, 0.10 / portfolio_vol)
+    w = {i: scale * v[i] for i in RISKY}
+    w[CASH] = 1.0 - math.fsum(w.values())
     return {'momentum': mom, 'sigma': vol, 'score': score, 'order': order, 'chosen': chosen, 'q': q, 'v': v,
             'scale': scale, 'weights': w}
 
