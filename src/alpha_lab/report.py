@@ -80,8 +80,9 @@ def check_journal(root, run_dir, rows, config, base, purpose, label='benchmark')
     terminal = [r for r in mine if r['event'] != 'started']
     require(len(started) == 1 and len(terminal) == 1, f'{run_dir.name}: needs one started and one terminal record')
     started, terminal = started[0], terminal[0]
-    require(terminal['event'] == terminal['status'] == 'completed',
-            f'{run_dir.name}: run status is {terminal["status"]}, not completed')
+    # The N3 message is kept byte for byte; the N4 message names the run only and withholds the status value.
+    status = f'{terminal["status"]}, not completed' if label == 'benchmark' else 'not completed'
+    require(terminal['event'] == terminal['status'] == 'completed', f'{run_dir.name}: run status is {status}')
     for record in (started, terminal):
         require(record['dirty_tree'] is False, f'{run_dir.name}: dirty_tree is not false')
         require(record['git_sha'], f'{run_dir.name}: git_sha is null')

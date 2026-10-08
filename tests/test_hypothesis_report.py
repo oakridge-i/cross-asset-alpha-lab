@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import pytest
 from n2_fixtures import write_vintage
 from n3_fixtures import RISKY, benchmark_frames
@@ -28,6 +29,7 @@ WEIGHT_COLUMNS = ['decision_session', *(f'w_{t}' for t in TICKERS), 'usd']
 DRIFT = {'SPY': 0.0007, 'EFA': 0.002, 'GLD': 0.001, 'TLT': 0.001, 'LQD': 0.0006}
 LOUD = ('EEM', 'SPY')
 FALLING = {t: -0.003 for t in RISKY}
+REAL_GIT_STATE = provenance.git_state
 
 
 def amplify(frame, power):
@@ -299,17 +301,15 @@ def test_report_accepts_h2_with_filtered_ticker(project):
 
 
 def test_report_accepts_exponent_notation_weights(project):
-    name, session, ticker, row = find(project, ('H1_126_4',), lambda n, r: r['selected'] == 'True'
-                                      and float(r['q']) < 0.25)
-    scale = float(row['scale'])
-    v = '%.10g' % (5e-05 / scale)
-    weight = '%.10g' % (scale * float(v))
-    assert 'e-05' in v and 'e-05' in weight
-    w = weights_row(project, name, session)
-    risky = {t: float(weight) if t == ticker else float(w[f'w_{t}']) for t in RISKY}
-    bil = '%.10g' % (1 - math.fsum(risky.values()))
-    usd = '%.10g' % (1 - math.fsum([*risky.values(), float(bil)]))
-    edit_decision(project, name, session, {ticker: {'v': v, 'weight': weight}}, {'w_BIL': bil, 'usd': usd})
+    """A volatility scale of 0.0002 on one decision: v stays capped(q) and every selected weight is below 1e-4."""
+    name, session, _, _ = find(project, ('H1_126_4',), lambda n, r: r['selected'] == 'True')
+    mine = [r for r in rows(project, name) if r['decision_session'] == session]
+    weight = {r['ticker']: '%.10g' % (0.0002 * float(r['v'])) for r in mine}
+    assert any('e-05' in weight[r['ticker']] for r in mine if r['selected'] == 'True')
+    bil = '%.10g' % (1 - math.fsum(float(x) for x in weight.values()))
+    usd = '%.10g' % (1 - math.fsum([*(float(x) for x in weight.values()), float(bil)]))
+    edit_decision(project, name, session, {t: {'scale': '0.0002', 'weight': x} for t, x in weight.items()},
+                  {'w_BIL': bil, 'usd': usd})
     accepted(project)
 
 
@@ -373,7 +373,61 @@ def test_report_rejects_failed_status(project, monkeypatch):
         m.setattr(engine, 'nav', lambda account, closes: real(account, closes) + 1.0)
         bad = simulate(project.root, project.derived, project.digest, 'H1_126_4')
     assert journal(project.root)[-1]['event'] == 'invariants_failed'
-    reject(project, r'item 2-3, H1_126_4: .*not completed', runs=dirs(project, {'H1_126_4': bad}))
+    message = reject(project, r'item 2-3, H1_126_4: .*not completed', runs=dirs(project, {'H1_126_4': bad}))
+    assert message == f'item 2-3, H1_126_4: {bad.name}: run status is not completed'
+    assert 'invariants_failed' not in journal(project.root)[-1]['error']
+
+
+def test_report_withholds_a_crafted_terminal_status(project):
+    crafted = 'status-0.123456789'
+    edit_run(project, 'H2_4of6', 'completed', status=crafted)
+    message = reject(project, r'item 2-3, H2_4of6: .*run status is not completed$')
+    assert crafted not in message and crafted not in journal(project.root)[-1]['error']
+
+
+def test_report_withholds_an_unresolvable_git_sha(project, monkeypatch):
+    crafted = 'e' * 39 + 'f'
+
+    def src_tree(root, sha):
+        if sha != CLEAN[0]:
+            raise ValueError(f'cannot resolve the src tree of {sha}')
+        return SRC_TREE
+    monkeypatch.setattr(report, 'src_tree', src_tree)
+    edit_run(project, 'H1_126_3', 'started', git_sha=crafted)
+    edit_run(project, 'H1_126_3', 'completed', git_sha=crafted)
+    message = reject(project, rf'^item 3, H1_126_3: cannot resolve the src tree of {project.runs["H1_126_3"].name} '
+                              r'git_sha$')
+    assert crafted not in message and crafted not in journal(project.root)[-1]['error']
+
+
+def git(root, *args):
+    subprocess.run(['git', '-c', 'user.name=test', '-c', 'user.email=test@example.invalid', '-c',
+                    'commit.gpgsign=false', '-c', 'core.autocrlf=false', *args], cwd=root, check=True,
+                   capture_output=True)
+
+
+def real_git(p, monkeypatch):
+    """Commit the whole synthetic project to a fresh repository and let the report run read its real git state."""
+    monkeypatch.setattr(provenance, 'git_state', REAL_GIT_STATE)
+    (p.root / 'notes.txt').write_bytes(b'tracked\n')
+    git(p.root, 'init', '-q')
+    git(p.root, 'add', '-A')
+    git(p.root, 'commit', '-q', '-m', 'synthetic project')
+
+
+def test_report_accepts_a_clean_report_tree(project, monkeypatch):
+    real_git(project, monkeypatch)
+    verify_runs(project)
+    started, completed = journal(project.root)[-2:]
+    assert started['dirty_tree'] is False and started['git_sha'] and completed['event'] == 'completed'
+
+
+def test_report_rejects_a_dirty_report_tree(project, monkeypatch):
+    real_git(project, monkeypatch)
+    (project.root / 'notes.txt').write_bytes(b'modified\n')
+    message = reject(project, r'^item 3: the report tree is dirty$')
+    assert journal(project.root)[-2]['dirty_tree'] is True
+    assert journal(project.root)[-1]['error'] == f'ValueError: {message}'
 
 
 @pytest.mark.parametrize('event', ['started', 'completed'])
@@ -411,6 +465,49 @@ def test_report_rejects_failed_invariants(project):
     refreeze(project, 'H1_126_3', {'invariants.json': provenance.canonical_bytes(
         {**json.loads(path.read_bytes()), 'passed': False})})
     reject(project, r'item 4, H1_126_3: invariants did not pass')
+
+
+def edit_invariants(p, name, edit):
+    data = json.loads((p.runs[name] / 'invariants.json').read_bytes())
+    edit(data)
+    refreeze(p, name, {'invariants.json': provenance.canonical_bytes(data)})
+
+
+@pytest.mark.parametrize('value', [False, 1, 'true', None])
+def test_report_rejects_individual_invariant_flag_not_true(project, value):
+    """A false or non-boolean flag of one check under an overall true flag; the message names the check only."""
+    edit_invariants(project, 'H1_126_3', lambda d: d['costs'].update(passed=value))
+    assert json.loads((project.runs['H1_126_3'] / 'invariants.json').read_bytes())['passed'] is True
+    message = reject(project, r'item 4, H1_126_3: invariants.json check costs did not pass')
+    assert message == 'item 4, H1_126_3: invariants.json check costs did not pass'
+    assert journal(project.root)[-1]['error'] == f'ValueError: {message}'
+
+
+def test_check_config_rejects_individual_invariant_flag(project):
+    name = 'H1_252_4'
+    manifest = json.loads((project.runs[name] / 'manifest.json').read_bytes())
+    config = json.loads((project.runs[name] / 'config.json').read_bytes())
+    invariants = json.loads((project.runs[name] / 'invariants.json').read_bytes())
+    hr._check_config(name, manifest, config, invariants, project.digest)
+    invariants['nav_identity']['passed'] = False
+    with pytest.raises(ValueError, match='^invariants.json check nav_identity did not pass$'):
+        hr._check_config(name, manifest, config, invariants, project.digest)
+
+
+@pytest.mark.parametrize('value', [1, 'true', None])
+def test_report_rejects_non_boolean_overall_flag(project, value):
+    edit_invariants(project, 'H2_5of6', lambda d: d.update(passed=value))
+    reject(project, r'^item 4, H2_5of6: invariants did not pass$')
+
+
+def test_report_rejects_missing_invariant_check(project):
+    edit_invariants(project, 'H1_252_3', lambda d: d.pop('execution_timing'))
+    reject(project, r'^item 4, H1_252_3: invariants.json lacks the check execution_timing$')
+
+
+def test_report_rejects_extra_invariant_check(project):
+    edit_invariants(project, 'H1_252_3', lambda d: d.update(margin={'passed': True, 'detail': []}))
+    reject(project, r'^item 4, H1_252_3: invariants.json holds the unexpected check margin$')
 
 
 def test_report_rejects_stale_version(project, monkeypatch):
@@ -520,8 +617,8 @@ def test_report_rejects_risky_weight_above_the_etf_cap(project):
 def test_report_rejects_risky_weight_026(project):
     name, session, ticker, _ = etf_capped(project, 0.011)
     edit_decision(project, name, session, {ticker: {'v': '0.26', 'weight': '0.26'}}, rebalance=True)
-    # with scale 1 a weight of 0.26 needs v = 0.26, which the v bound also rejects
-    reject_rules(project, {'item 5 ETF cap', 'item 5 v bound'})
+    # with scale 1 a weight of 0.26 needs v = 0.26, which v = capped(q) also rejects
+    reject_rules(project, {'item 5 ETF cap', 'item 5 v capped'})
 
 
 def test_report_rejects_group_weight_051(project):
@@ -534,7 +631,8 @@ def test_report_rejects_group_weight_051(project):
     v = repr(float(row['v']) + 0.01)
     edit_decision(project, name, session, {ticker: {'v': v, 'weight': v}}, rebalance=True)
     assert abs(group_weight(project, name, session, ticker) - 0.51) < 1e-9
-    reject_rules(project, {'item 5 group cap'})
+    # v = capped(q) keeps every group sum of v at or below 0.50, so with scale 1 the raised v breaks it as well
+    reject_rules(project, {'item 5 group cap', 'item 5 v capped'})
 
 
 def test_report_rejects_bil_not_the_remainder(project):
@@ -614,7 +712,7 @@ def test_report_rejects_v_above_q(project):
     v = float(row['q']) + 0.001
     edit_decision(project, name, session, {ticker: {'v': repr(v), 'weight': repr(float(row['scale']) * v)}},
                   rebalance=True)
-    reject_rules(project, {'item 5 v bound'})
+    reject_rules(project, {'item 5 v capped'})
 
 
 def test_report_rejects_scale_text_varying(project):
@@ -675,37 +773,43 @@ def test_report_rejects_zero_q_on_a_selected_ticker(project):
     ticker = next(r['ticker'] for r in rows(project, 'H1_126_4') if r['decision_session'] == session
                   and r['selected'] == 'True')
     edit_decision(project, 'H1_126_4', session, {ticker: {'q': '0'}})
-    # q > 0 is also implied by the q sum, the q sigma equality and the v bound
-    reject_rules(project, {'item 5 q positive', 'item 5 q sum', 'item 5 q sigma', 'item 5 v bound'})
+    # q > 0 is also implied by the q sum, the q sigma equality and v = capped(q)
+    reject_rules(project, {'item 5 q positive', 'item 5 q sum', 'item 5 q sigma', 'item 5 v capped'})
+
+
+def capped_by_hand(q):
+    """Protocol lines 68-69 written out for the tests: ETF cap 0.25, then proportional group cap 0.50."""
+    c = {t: min(x, 0.25) for t, x in q.items()}
+    for members in GROUPS.values():
+        total = math.fsum(c[t] for t in members)
+        if total > 0.5:
+            c.update({t: c[t] * 0.5 / total for t in members})
+    return c
 
 
 def test_report_rejects_q_not_inverse_to_sigma(project):
-    def selected(n, s):
-        return [r for r in rows(project, n) if r['decision_session'] == s and r['selected'] == 'True']
+    """q moves by 0.01 between two selected tickers (the q sum is kept); v, weight and BIL follow the new q."""
     shift = 0.01
-    for name in NON_PARENT:
-        for session in SESSIONS:
-            chosen = selected(name, session)
-            donor = next((r for r in chosen if min(float(r['q']) - shift, 0.25) >= float(r['v'])), None)
-            if donor and len(chosen) >= 2:
-                break
-        else:
-            continue
-        break
-    else:
-        raise AssertionError('no decision with room to move q in the synthetic template')
-    taker = next(r for r in chosen if r is not donor)
-    edit_decision(project, name, session, {donor['ticker']: {'q': repr(float(donor['q']) - shift)},
-                                           taker['ticker']: {'q': repr(float(taker['q']) + shift)}})
+    name, session, _, donor = find(project, NON_PARENT, lambda n, r: r['selected'] == 'True'
+                                   and float(r['q']) > 2 * shift and sum(
+                                       x['selected'] == 'True' and x['decision_session'] == r['decision_session']
+                                       for x in rows(project, n)) >= 2)
+    mine = [r for r in rows(project, name) if r['decision_session'] == session]
+    taker = next(r for r in mine if r['selected'] == 'True' and r is not donor and r['ticker'] != donor['ticker'])
+    q = {r['ticker']: float(r['q']) for r in mine}
+    q[donor['ticker']] -= shift
+    q[taker['ticker']] += shift
+    v = capped_by_hand(q)
+    scale = float(donor['scale'])
+    changes = {t: {'q': repr(q[t]), 'v': repr(v[t]), 'weight': repr(scale * v[t])} for t in q if q[t] > 0}
+    edit_decision(project, name, session, changes, rebalance=True)
     reject_rules(project, {'item 5 q sigma'})
 
 
-def test_report_rejects_scale_above_one(project):
-    name, session, _, _ = find(project, ('H1_126_4',), lambda n, r: r['scale'] == '1')
-    mine = [r for r in rows(project, name) if r['decision_session'] == session]
-    edit_decision(project, name, session, {r['ticker']: {'scale': '1.5', 'v': repr(float(r['weight']) / 1.5)}
-                                           for r in mine})
-    reject_rules(project, {'item 5 scale bound'})
+def test_report_rejects_scale_above_one(empty):
+    """With an empty selection v = capped(q) and weight = scale x v stay 0, so only the scale bound fails."""
+    edit_decision(empty, 'H1_126_4', SESSIONS[1], {t: {'scale': '1.5'} for t in RISKY})
+    reject_rules(empty, {'item 5 scale bound'})
 
 
 # --- item 6 -------------------------------------------------------------------------------------------------------
@@ -900,6 +1004,98 @@ def test_item_5_rejects_negative_bil():
     assert fail.items == []
 
 
+def hand_decision(chosen, v, scale='1'):
+    """One consistent decision of selected tickers {ticker: (q, sigma)} in descending score order, with the v texts
+    given by hand (the test states the expected capped values); weight = scale x v, BIL the remainder, all %.10g."""
+    rows = []
+    for rank, (t, (q, sigma)) in enumerate(chosen.items(), 1):
+        score = 0.1 * (10 - rank)
+        momentum = '%.10g' % (score * sigma)
+        rows.append({'ticker': t, 'momentum': momentum, 'sigma': '%.10g' % sigma,
+                     'score': '%.10g' % (float(momentum) / sigma), 'eligible': 'True', 'rank': str(rank),
+                     'selected': 'True', 'q': '%.10g' % q, 'v': v[t], 'scale': scale,
+                     'weight': '%.10g' % (float(scale) * float(v[t]))})
+    for t in RISKY:
+        if t not in chosen:
+            rows.append({'ticker': t, 'momentum': '-0.1', 'sigma': '0.1', 'score': '-1', 'eligible': 'False',
+                         'rank': '', 'selected': 'False', 'q': '0', 'v': '0', 'scale': scale, 'weight': '0'})
+    rows.sort(key=lambda r: r['ticker'])
+    weights = {'decision_session': '2009-01-30', **{f'w_{r["ticker"]}': r['weight'] for r in rows}}
+    weights['w_BIL'] = '%.10g' % (1 - math.fsum(float(r['weight']) for r in rows))
+    weights['usd'] = '%.10g' % (1 - math.fsum(float(weights[f'w_{t}']) for t in TICKERS))
+    return weights, rows
+
+
+# K = 4: two equity tickers with q 0.30 capped at 0.25 each; the equity group sums to 0.50 exactly and is not scaled.
+TWO_EQUITY = {'SPY': (0.3, 0.1), 'EFA': (0.3, 0.1), 'GLD': (0.2, 0.15), 'IEF': (0.2, 0.15)}
+TWO_EQUITY_V = {'SPY': '0.25', 'EFA': '0.25', 'GLD': '0.2', 'IEF': '0.2'}
+# K = 3: three equity tickers with q 0.40, 0.35, 0.25 (q x sigma = 0.07) capped at 0.25 each; the group sum 0.75 is
+# scaled to 0.50, so each v is 0.25 x 0.50 / 0.75 = 1/6.
+THREE_EQUITY = {'SPY': (0.4, 0.175), 'EFA': (0.35, 0.2), 'EEM': (0.25, 0.28)}
+THREE_EQUITY_V = {'SPY': '0.1666666667', 'EFA': '0.1666666667', 'EEM': '0.1666666667'}
+
+
+def item5_labels(name, weights, rows):
+    fail = hr.Failures()
+    hr._check_decision(fail, name, '2009-01-30', weights, rows)
+    return fail.items
+
+
+def test_item_5_accepts_capped_weights_with_a_binding_group_cap():
+    assert item5_labels('H1_252_4', *hand_decision(TWO_EQUITY, TWO_EQUITY_V)) == []
+    weights, rows = hand_decision(THREE_EQUITY, THREE_EQUITY_V, scale='0.6')
+    assert {r['weight'] for r in rows if r['selected'] == 'True'} == {'0.1'}
+    assert item5_labels('H1_252_3', weights, rows) == []
+
+
+def test_item_5_rejects_v_ignoring_a_binding_group_cap():
+    """v at the ETF cap without the proportional group scaling; the weights stay within every cap."""
+    weights, rows = hand_decision(THREE_EQUITY, {t: '0.25' for t in THREE_EQUITY}, scale='0.6')
+    assert item5_labels('H1_252_3', weights, rows) == [('item 5 v capped', f'H1_252_3 2009-01-30 {t}')
+                                                        for t in ('EEM', 'EFA', 'SPY')]
+
+
+def test_item_5_rejects_v_above_the_etf_cap():
+    weights, rows = hand_decision(TWO_EQUITY, {**TWO_EQUITY_V, 'SPY': '0.26'}, scale='0.5')
+    assert item5_labels('H1_252_4', weights, rows) == [('item 5 v capped', 'H1_252_4 2009-01-30 SPY')]
+
+
+def test_report_rejects_selected_v_zeroed(project):
+    """A decision with every selected v and weight zero and BIL = 1 is consistent apart from v = capped(q)."""
+    name, session, _, _ = find(project, NON_PARENT, lambda n, r: r['selected'] == 'True')
+    chosen = [r['ticker'] for r in rows(project, name) if r['decision_session'] == session and r['selected'] == 'True']
+    edit_decision(project, name, session, {t: {'v': '0', 'weight': '0'} for t in chosen},
+                  {'w_BIL': '1', 'usd': '0'})
+    message = reject_rules(project, {'item 5 v capped'})
+    assert all(f'{name} {session} {t}' in message for t in chosen)
+
+
+def turnover_or_fill(p, name, column, text):
+    def edit(body):
+        body[1][column] = text
+    tamper(p, name, {'decisions.csv': edit})
+
+
+@pytest.mark.parametrize('column, text', [('turnover', '-1e-06'), ('buy_fill', '1.0000001'), ('buy_fill', '-0.1')])
+def test_report_rejects_turnover_or_buy_fill_out_of_range(project, column, text):
+    turnover_or_fill(project, 'H1_126_4', column, text)
+    message = reject_rules(project, {f'item 5 {column}'})
+    assert f'H1_126_4 {SESSIONS[1]}' in message and text not in message
+    assert text not in journal(project.root)[-1]['error']
+
+
+@pytest.mark.parametrize('text', ['1', '0'])
+def test_report_accepts_buy_fill_at_its_bounds(project, text):
+    turnover_or_fill(project, 'H2_4of6', 'buy_fill', text)
+    accepted(project)
+
+
+def test_report_rejects_malformed_turnover_without_its_text(project):
+    turnover_or_fill(project, 'H1_252_3', 'turnover', '0.1x')
+    message = reject(project, rf'item 5 parse: H1_252_3 decisions.csv {SESSIONS[1]} turnover is not a finite')
+    assert '0.1x' not in message and '0.1x' not in journal(project.root)[-1]['error']
+
+
 @pytest.mark.parametrize('text', ['١', '0.٥', '1e٣', '１'])
 def test_number_rejects_non_ascii_digits(text):
     assert math.isfinite(float(text))  # Python's float accepts these digits; frozen %.10g text never has them
@@ -1022,6 +1218,37 @@ def test_hand_counted_diagnostics():
     assert h2['full']['ticker_pass'] == {**{t: None for t in RISKY}, 'SPY': 0.5, 'TLT': 0.0, 'IEF': 1.0}
     assert h2['full']['targets']['mean_risky'] == approx(0.35 / 3)
     assert h2['full']['selection'] == full['selection']  # the parent's selection columns
+
+
+@pytest.mark.parametrize('edit, match', [
+    (lambda inv: inv['checks'].update(costs=False), 'invariants.json check costs did not pass'),
+    (lambda inv: inv['checks'].update(costs=1), 'invariants.json check costs did not pass'),
+    (lambda inv: inv.update(passed=1), 'invariants did not pass'),
+    (lambda inv: inv['checks'].pop('costs'), 'invariants.json lacks the check costs'),
+    (lambda inv: inv['checks'].update(margin=True), 'invariants.json holds the unexpected check margin')])
+def test_integrity_rejects_what_item_4_rejects(edit, match):
+    runs = hand_runs()
+    invariants = json.loads(json.dumps(runs['H1_252_3'].invariants))
+    edit(invariants)
+    runs['H1_252_3'] = runs['H1_252_3']._replace(invariants=invariants)
+    with pytest.raises(ValueError, match=f'^diagnostics: H1_252_3 {match}$'):
+        hr.diagnostics(runs)
+
+
+@pytest.mark.parametrize('builder', ['_trading', '_h2_filter', '_counts'])
+def test_builder_enforces_the_whitelist(monkeypatch, builder):
+    real = getattr(hr, builder)
+    monkeypatch.setattr(hr, builder, lambda *args: {**real(*args), 'leak': 1.0})
+    section = builder.lstrip('_')
+    with pytest.raises(ValueError, match=f'diagnostics: .* {section} keys are not the whitelist'):
+        hr.diagnostics(hand_runs())
+
+
+def test_builder_enforces_nested_whitelists(monkeypatch):
+    real = hr._counts
+    monkeypatch.setattr(hr, '_counts', lambda *args: {**real(*args), 'trades': {'buy': 0, 'sell': 0, 'short': 0}})
+    with pytest.raises(ValueError, match='diagnostics: .* trades keys are not the whitelist'):
+        hr.diagnostics(hand_runs())
 
 
 def test_annual_attribution():
@@ -1205,6 +1432,14 @@ def test_markdown_layout_and_formats():
     assert row('## Annual trading', '2015', 'H1_252_3')['turnover_mean'] == 'n/a'
     assert row('## Annual counts', '2009', 'H1_252_3')['decisions'] == '2'
     assert 'H1_252_3' not in row('## Full period: H2 filter', 'H2_4of6').values()
+
+
+def test_markdown_note_explains_n_a_max_etf_and_h2_selection():
+    text = hr.render_markdown(json.loads(provenance.canonical_bytes(hr.diagnostics(hand_runs()))))
+    note = text.split('\n\n')[1]
+    assert 'n/a marks a zero denominator or a minimum or maximum without values' in note
+    assert 'max_etf covers the nine risky ETFs only' in note
+    assert 'For H2 the selection columns are those of the parent H1_252_3' in note
 
 
 def report_files(target):

@@ -153,15 +153,28 @@ def _sessions_match(name, actual, expected):
 
 
 def _invariant_flags(invariants):
-    """Flags and event lists only; the detail fields carry USD amounts and are not kept."""
+    """Flags and event lists only; the detail fields carry USD amounts and are not kept. The check entries are the
+    dict-valued keys of invariants.json."""
     return {'passed': invariants['passed'],
             'checks': {k: v['passed'] for k, v in invariants.items() if isinstance(v, dict)},
             'split_events': invariants['split_events'], 'proxy_payouts': invariants['proxy_payouts']}
 
 
+def _check_invariant_flags(flags):
+    """Item 4: exactly the seven checks of INVARIANT_CHECKS, each `passed` flag and the overall flag the boolean True
+    (1, "true" and None are rejected). Messages name the check, never the flag value."""
+    missing = [c for c in INVARIANT_CHECKS if c not in flags['checks']]
+    report.require(not missing, f'invariants.json lacks the check {missing[0] if missing else ""}')
+    extra = sorted(c for c in flags['checks'] if c not in INVARIANT_CHECKS)
+    report.require(not extra, f'invariants.json holds the unexpected check {extra[0] if extra else ""}')
+    for check in INVARIANT_CHECKS:
+        report.require(flags['checks'][check] is True, f'invariants.json check {check} did not pass')
+    report.require(flags['passed'] is True, 'invariants did not pass')
+
+
 def _check_config(name, manifest, config, invariants, expected_sha256):
-    """Item 4, configuration part."""
-    report.require(invariants['passed'] is True, 'invariants did not pass')
+    """Item 4, configuration part; the invariant flags are checked first."""
+    _check_invariant_flags(_invariant_flags(invariants))
     report.require(config['provider']['version'] == PROVIDERS[name].version, 'provider version is not current')
     report.require(config['manifest_sha256'] == expected_sha256 == manifest['metadata']['derived_manifest_sha256'],
                    'vintage manifest hash is not the approved one')
@@ -222,22 +235,27 @@ def _parse_rule(item):
     return item if isinstance(item, str) else f'item {item}'
 
 
+def _where(item, name, file, session, ticker, column):
+    """'<rule> parse: <configuration> <file> <session> [<ticker>] <column>'; a field without a ticker omits it."""
+    return f'{_parse_rule(item)} parse: ' + ' '.join(x for x in (name, file, session, ticker, column) if x)
+
+
 def number(text, item, name, file, session, ticker, column):
     """Float of a %.10g field; a malformed or non-finite field is reported without its text."""
     if NUMBER.fullmatch(text) is None or not math.isfinite(float(text)):
-        raise ValueError(f'{_parse_rule(item)} parse: {name} {file} {session} {ticker} {column} is not a finite number')
+        raise ValueError(f'{_where(item, name, file, session, ticker, column)} is not a finite number')
     return float(text)
 
 
 def integer(text, item, name, file, session, ticker, column):
     if INTEGER.fullmatch(text) is None:
-        raise ValueError(f'{_parse_rule(item)} parse: {name} {file} {session} {ticker} {column} is not an integer')
+        raise ValueError(f'{_where(item, name, file, session, ticker, column)} is not an integer')
     return int(text)
 
 
 def flag(text, item, name, file, session, ticker, column):
     if text not in ('True', 'False'):
-        raise ValueError(f'{_parse_rule(item)} parse: {name} {file} {session} {ticker} {column} is not True or False')
+        raise ValueError(f'{_where(item, name, file, session, ticker, column)} is not True or False')
     return text == 'True'
 
 
@@ -261,9 +279,23 @@ def _parse_decision(name, session, weights_row, rows):
     return w, usd, parsed
 
 
+def _capped(q):
+    """Steps 1 and 2 of the target weights (protocol lines 68-69), held here independently of portfolio.capped: each q
+    capped at ETF_CAP, then the members of every group whose capped fsum exceeds GROUP_CAP scaled by GROUP_CAP / that
+    sum, once and without reallocation."""
+    c = {t: min(q[t], ETF_CAP) for t in RISKY}
+    for members in GROUPS.values():
+        total = math.fsum(c[t] for t in members)
+        if total > GROUP_CAP:
+            for t in members:
+                c[t] = c[t] * GROUP_CAP / total
+    return c
+
+
 def _check_decision(fail, name, session, weights_row, rows):
     """Item 5 for one configuration and decision."""
     w, usd, p = _parse_decision(name, session, weights_row, rows)
+    capped = _capped({t: p[t]['q'] for t in RISKY})
     for t in RISKY:
         fail.require(-ABS_TOL <= w[t] <= ETF_CAP + ABS_TOL, 'item 5 ETF cap', name, session, t)
     for group, members in GROUPS.items():
@@ -289,7 +321,7 @@ def _check_decision(fail, name, session, weights_row, rows):
         else:
             fail.require(s['q'] == 0 and s['v'] == 0 and s['sizing'] == 0, 'item 5 non-selected zero', name,
                          session, t)
-        fail.require(s['v'] <= min(s['q'], ETF_CAP) + ABS_TOL, 'item 5 v bound', name, session, t)
+        fail.require(abs(s['v'] - capped[t]) <= ABS_TOL, 'item 5 v capped', name, session, t)
         fail.require(abs(s['sizing'] - s['scale'] * s['v']) <= ABS_TOL, 'item 5 weight scale', name, session, t)
     ranked = sorted((s['rank'], t) for t, s in p.items() if s['rank'] is not None)
     fail.require([r for r, _ in ranked] == list(range(1, len(ranked) + 1)), 'item 5 rank sequence', name, session)
@@ -346,6 +378,24 @@ def _check_h2(fail, blocks, weights, bil):
                              second, session, t)
 
 
+def _check_trading(fail, name, decisions):
+    """Item 5, decisions.csv: turnover >= 0 and 0 <= buy_fill <= 1, exact."""
+    for row in decisions:
+        session = row['decision_session']
+        turnover = number(row['turnover'], 5, name, 'decisions.csv', session, None, 'turnover')
+        buy_fill = number(row['buy_fill'], 5, name, 'decisions.csv', session, None, 'buy_fill')
+        fail.require(turnover >= 0, 'item 5 turnover', name, session)
+        fail.require(0 <= buy_fill <= 1, 'item 5 buy_fill', name, session)
+
+
+def _src_tree(root, sha, whose):
+    """report.src_tree with a message that names the record, not the journaled git_sha value."""
+    try:
+        return report.src_tree(root, sha)
+    except ValueError:
+        raise ValueError(f'cannot resolve the src tree of {whose}') from None
+
+
 def verified_hypothesis_runs(root, run_dirs, expected_sha256, base):
     """Items 1-7 of spec section 7 in order; returns {configuration: RunFiles} holding permitted columns only."""
     root = Path(root)
@@ -369,7 +419,8 @@ def verified_hypothesis_runs(root, run_dirs, expected_sha256, base):
             report.require(terminal['purpose'] == PURPOSE and terminal['candidate_ids'] == [name],
                            f'{path.name}: terminal record purpose or candidate_ids is not that of a {name} hypothesis run')
         with rule(3, name):
-            report.require(report.src_tree(root, started['git_sha']) == report.src_tree(root, base['git_sha']),
+            report.require(_src_tree(root, started['git_sha'], f'{path.name} git_sha') ==
+                           _src_tree(root, base['git_sha'], 'the report git_sha'),
                            f'{path.name}: src tree differs from the report commit')
         with rule(4, name):
             invariants = report.read_json(path / 'invariants.json')
@@ -387,6 +438,7 @@ def verified_hypothesis_runs(root, run_dirs, expected_sha256, base):
         for session, by_ticker in blocks[name].items():
             w = _check_decision(fail, name, session, weights[name][session], [by_ticker[t] for t in RISKY])
             bil[name][session] = w[CASH]
+        _check_trading(fail, name, out[name].decisions)
     _check_across(fail, blocks)
     _check_h2(fail, blocks, weights, bil)
     fail.raise_any()
@@ -443,10 +495,14 @@ def _year(session):
     return session[:4]
 
 
-def _in(period, session):
-    """`full` is 2009-01-01 to 2022-12-31, the union of the years; a year holds the sessions of that calendar year."""
-    year = _year(session)
+def _in_year(period, year):
+    """`full` is 2009-01-01 to 2022-12-31, the union of the years; a year holds that calendar year."""
     return year in YEARS if period == 'full' else year == period
+
+
+def _in(period, session):
+    """The session belongs to the period by its calendar year."""
+    return _in_year(period, _year(session))
 
 
 def _known(value, allowed, name, file, session, column):
@@ -513,6 +569,7 @@ def _counts(name, files, period, decisions):
         status = _known(o['status'], ORDER_STATUSES, name, 'orders.csv', session, 'status')
         if status == 'filled':
             _known(o['cancel_reason'], ('',), name, 'orders.csv', session, 'cancel_reason')
+            reason = None
         else:
             reason = _known(o['cancel_reason'], CANCEL_REASONS, name, 'orders.csv', session, 'cancel_reason')
         if _in(period, session):
@@ -598,11 +655,41 @@ def _per_ticker(decisions, h2):
 
 def _integrity(name, invariants):
     """Whole run only: the seven invariant flags, the overall flag and the numbers of split events and proxy
-    payouts."""
-    report.require(sorted(invariants['checks']) == sorted(INVARIANT_CHECKS),
-                   f'{DIAGNOSTICS}: {name} invariants.json does not hold the seven expected checks')
+    payouts; it accepts only what item 4 accepts."""
+    try:
+        _check_invariant_flags(invariants)
+    except ValueError as exc:
+        raise ValueError(f'{DIAGNOSTICS}: {name} {exc}') from None
     return {'passed': invariants['passed'], 'checks': {c: invariants['checks'][c] for c in INVARIANT_CHECKS},
             'split_events': len(invariants['split_events']), 'proxy_payouts': len(invariants['proxy_payouts'])}
+
+
+def _enforce_whitelist(name, candidate):
+    """The built document of one configuration holds exactly the keys of DOCUMENT_KEYS and of the fixed value lists,
+    in order, at every level; the message names the section."""
+    h2 = name in H
+
+    def keys(label, block, expected):
+        report.require(list(block) == list(expected), f'{DIAGNOSTICS}: {name} {label} keys are not the whitelist')
+    keys('candidate', candidate, DOCUMENT_KEYS['candidate'])
+    keys('integrity', candidate['integrity'], DOCUMENT_KEYS['integrity'])
+    keys('checks', candidate['integrity']['checks'], INVARIANT_CHECKS)
+    keys('periods', candidate['periods'], DOCUMENT_KEYS['periods'])
+    for period, block in candidate['periods'].items():
+        sections = [s for s in DOCUMENT_KEYS['period'] if h2 or s != 'h2_filter']
+        if period == 'full':
+            sections += [s for s in DOCUMENT_KEYS['full'] if h2 or s != 'ticker_pass']
+        keys('period', block, sections)
+        for section in sections:
+            keys(section, block[section], RISKY if section in DOCUMENT_KEYS['full'] else DOCUMENT_KEYS[section])
+        counts = block['counts']
+        for label, expected in (('orders', ORDER_STATUSES), ('order_reasons', REASON_STATUSES), ('trades', SIDES),
+                                ('payout_status', PAYOUT_STATUSES), ('payout_basis', PAY_BASES)):
+            keys(label, counts[label], expected)
+        for status in REASON_STATUSES:
+            keys('order_reasons', counts['order_reasons'][status], CANCEL_REASONS)
+        keys('selected_distribution', block['selection']['selected_distribution'],
+             [str(k) for k in range(K[name] + 1)])
 
 
 def diagnostics(runs):
@@ -620,7 +707,7 @@ def diagnostics(runs):
             cost = files.config['scenario']['cost']
             periods = {}
             for period in PERIODS:
-                mine = [d for d in records if period == 'full' and d['year'] in YEARS or d['year'] == period]
+                mine = [d for d in records if _in_year(period, d['year'])]
                 block = {'counts': _counts(name, files, period, mine), 'selection': _selection(name, mine),
                          'targets': _targets(mine), 'trading': _trading(cost, mine)}
                 if h2:
@@ -629,6 +716,7 @@ def diagnostics(runs):
                     block.update(_per_ticker(mine, h2))
                 periods[period] = block
             out[name] = {'integrity': _integrity(name, files.invariants), 'periods': periods}
+            _enforce_whitelist(name, out[name])
     return out
 
 
@@ -693,7 +781,9 @@ def render_markdown(document):
            'Permitted diagnostics of the six H1/H2 configurations. A decision belongs to the year of its execution '
            'session, an order to the year of its execution session, a trade to the year of its session and a payout '
            'to the year of its ex-dividend session, with its status at the end of the run. The full period is '
-           '2009-01-01 to 2022-12-31. n/a marks a zero denominator.', '',
+           '2009-01-01 to 2022-12-31. n/a marks a zero denominator or a minimum or maximum without values. '
+           'max_etf covers the nine risky ETFs only. For H2 the selection columns are those of the parent H1_252_3.',
+           '',
            '## Integrity (whole run)', '',
            report.table(['configuration', 'passed', *INVARIANT_CHECKS, 'split_events', 'proxy_payouts'],
                         [[n, _cell('passed', document[n]['integrity']['passed']),
@@ -732,6 +822,7 @@ def build_hypothesis_report(root, run_dirs, parent=None, expected_sha256=VINTAGE
     root = Path(root).resolve()
     config = {'runs': [project_path(root, (root / d).resolve()) for d in run_dirs], 'expected_sha256': expected_sha256}
     with Run(root, REPORT_PURPOSE, config, parent, candidate_ids=HYPOTHESES) as run:
+        report.require(run.base['dirty_tree'] is False, 'item 3: the report tree is dirty')
         runs = verified_hypothesis_runs(root, run_dirs, expected_sha256, run.base)
         body = canonical_bytes(diagnostics(runs))
         files = {'hypotheses.json': body, 'hypotheses.md': render_markdown(json.loads(body)).encode('utf-8')}
