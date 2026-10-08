@@ -585,10 +585,35 @@ The status means that the configuration has been computed once on the approved v
 - No run or report failed, and none ended `invariants_failed`. No run was repeated after a bug fix; the six repeats and the repeat report are the repeats with `--parent` of the registered procedure. No quantity excluded by D023, item 6 was shown, published or described during the runs, the reports or the preparation of this document.
 - These are historical simulations on a retrospective universe. They do not establish an investable track record or an alpha.
 
-## Post-run validation correction — replacement campaign pending
+## Post-run validation correction and D024 replacement campaign
 
-The final review at `92dd78f` identified numerical error handling in the report validator: a non-finite momentum/sigma intermediate could satisfy the relative score comparison, and malformed finite weights or q values could overflow a sum without an item-5 location. The working-copy correction rejects these cases under the existing rules. D024 records the correction and its consequences; provider formulas, parameters, versions and tolerances are unchanged.
+The final review at `92dd78f` identified numerical error handling in report validation: a non-finite momentum/sigma intermediate could satisfy the relative score comparison, and malformed finite weights or q values could overflow a sum without an item-5 location. Commit `bd71fc0` rejects these cases under the existing rules. D024 records the correction; provider formulas, parameters, versions and tolerances are unchanged.
 
-The code-only check of the twelve saved hypothesis runs found no non-finite derived score in their 18,144 signal rows. Both original report input sets passed read-only revalidation with the corrected validator, and the permitted JSON/Markdown outputs matched their frozen bytes. The full suite on the corrected uncommitted working copy based on `92dd78f` passed 610 tests, zero skipped, including the approved-vintage checks; the scoped review of the correction found no open issue. These checks are not new research attempts and do not certify the original runs against a new committed source tree.
+The corrected patch passed 610 tests, zero skipped, including the approved-vintage checks; the scoped correction review found no open issue. The source and test hashes were checked against that tested patch before committing. Historical input revalidation accepted both original report input sets and reproduced their permitted JSON/Markdown output bytes. The code-only check of the twelve original hypothesis runs found no non-finite derived score in 18,144 signal rows.
 
-All tables, run identifiers and hashes above remain the evidence of the original campaign on source tree `b2791448e4888b9a8cc3677458b3bd5a28afd9ae`. The correction is uncommitted at the user's request. The replacement campaign required by D023, item 8 has not started; it requires committing the correction on a clean tree, rerunning the six configurations and the report with parent links, repeating them and verifying all seven pairs. The original attempts are retained. The historical status `computed_not_evaluated` remains, and merge readiness for the corrected source is pending the replacement campaign.
+The required registered replacement campaign is now complete. All fourteen successful attempts below are `completed` without quality warnings. They share source tree `16ffaf71b09c540cdc094121d040deacdeb3dab9` and environment `5226dc9b0f21363873eb9a8420891733bbad1bc6c536262a3341eead520ce773`, use the approved D020 vintage and the original window/scenario, and start with clean provenance. Every successful hypothesis run passes all seven financial invariants; none freezes `metrics.json`. The journal commit follows each step before the next starts.
+
+| Configuration / report | Role | Run ID | Parent | Source commit | Journal commit |
+|---|---|---|---|---|---|
+| H1_252_3 | Replacement | `20261008T192727-e5e184b7db` | `20261008T192545-3e84621fc4` | `ad9ec2f` | `65d53f5` |
+| H1_252_4 | Replacement | `20261008T192731-0f8d083cb0` | `20261008T174343-bda6d756d5` | `65d53f5` | `b720eba` |
+| H1_126_3 | Replacement | `20261008T192734-866ab4b3d7` | `20261008T174347-8fc8ed2441` | `b720eba` | `1ec5a69` |
+| H1_126_4 | Replacement | `20261008T192737-45e578bd7c` | `20261008T174355-8d6580f98d` | `1ec5a69` | `71d53cc` |
+| H2_4of6 | Replacement | `20261008T192740-f8be1b1ad3` | `20261008T174358-e5b5bd731e` | `71d53cc` | `26bf028` |
+| H2_5of6 | Replacement | `20261008T192745-708215766a` | `20261008T174405-a2006cbd61` | `26bf028` | `1348f06` |
+| Report | Replacement | `20261008T192750-922eb4e4b7` | `20261008T174417-e6157ee9c6` | `1348f06` | `22b6e31` |
+| H1_252_3 | Repeat | `20261008T192753-ecbedef345` | `20261008T192727-e5e184b7db` | `22b6e31` | `0859cfd` |
+| H1_252_4 | Repeat | `20261008T192757-ecb65a91e3` | `20261008T192731-0f8d083cb0` | `0859cfd` | `af1bd4d` |
+| H1_126_3 | Repeat | `20261008T192801-cd2cf8da52` | `20261008T192734-866ab4b3d7` | `af1bd4d` | `5181bcc` |
+| H1_126_4 | Repeat | `20261008T192804-5d7dda6b7e` | `20261008T192737-45e578bd7c` | `5181bcc` | `791c3a0` |
+| H2_4of6 | Repeat | `20261008T192808-88c4261f87` | `20261008T192740-f8be1b1ad3` | `791c3a0` | `44f42ce` |
+| H2_5of6 | Repeat | `20261008T192812-bf50777423` | `20261008T192745-708215766a` | `44f42ce` | `5d1fc57` |
+| Report | Repeat | `20261008T192817-09e39bfc79` | `20261008T192750-922eb4e4b7` | `5d1fc57` | `f927314` |
+
+All fourteen new manifests and their contents verify. The `files` dictionaries match for all seven new pairs and for all seven comparisons with the original repeat set. Thus the historical diagnostics and tables above also describe the replacement campaign without changing any published value. The original source tree, identifiers, hashes and table bytes above remain historical evidence, not rewritten receipts.
+
+Failed launch `20261008T192545-3e84621fc4` (source commit `bd71fc0`, parent `20261008T174340-dfb6a1c558`) failed before loading the vintage: a relative root resolved to an unexpected nested directory. No output artifact was frozen. Its original two records were retained unchanged in the canonical journal and committed as `ad9ec2f`; the first successful replacement uses an absolute root and links to that failure. The commands and absolute-root reproduction form are in [REPRODUCIBILITY.md](../REPRODUCIBILITY.md).
+
+Attempt accounting adds six successful bug-driven calculations, six repeats, two reports and one failed launch; none is a new candidate or an independent experiment. The original 94 journal events remain an unchanged byte prefix; 30 new events bring the total to 124 (58 N4 events). The last successful campaign journal commit is `f927314`. All original immutable artifacts remain retained.
+
+The six configurations retain `computed_not_evaluated`. N4 verification is complete on `claude/n4-hypotheses`, which remains unmerged. No H1/H2 return, risk, utility or USD-cost result was computed or disclosed; the reserved period remains closed. Data remain local in this worktree. N5 is the next research stage.
