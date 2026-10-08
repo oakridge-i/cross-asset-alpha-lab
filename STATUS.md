@@ -157,10 +157,12 @@ Completed, with commits:
 - Shared report checks parameterized with N3 report bytes unchanged: `d6eb037`.
 - N4 report verification (spec section 7): `dd2c3e3`; diagnostics document, Markdown and the `hypothesis-report` command: `d5d6b3a`.
 - D023, EXECUTION_MODEL.md, experiments/README.md and the N4 procedure in docs/REPRODUCIBILITY.md: `54100ac`.
+- Amended report contract before the runs (spec sections 6.4 and 7, D023 items 1, 3, 6, 7 and 10): `d95bffc`, `9b962e3`.
+- Report checks for all seven invariant flags, capped weights recomputed from `q`, turnover and `buy_fill` bounds, a clean report tree and value-free messages: `64ef609`; withheld serialization and freeze errors, month-end and test fixes: `2bbf709` to `ca54711`; H2 scale note, D023 provenance, `Provider` fields and real-vintage failure output: `bbf7640`.
 
-Checks: pytest 556 passed on `d5d6b3a` in an isolated copy with the approved vintage, none skipped; `54100ac` changed documents only. The real-vintage tests found 45 of 45 N3 file hashes equal and no selection difference in the recomputation (maximum absolute weight difference 2.2e-16). These tests evaluate target weights and benchmark files only; no H1/H2 account was computed.
+Checks: pytest 602 passed, none skipped, on `bbf7640` in an isolated copy (`git archive`) with the approved vintage; this includes both real-vintage tests (N3 regression of 45 benchmark file hashes; independent recomputation of the H1/H2 target weights at 168 decisions). At `d6a1b2f` these tests found 45 of 45 N3 file hashes equal and no selection difference in the recomputation (maximum absolute weight difference 2.2e-16). Earlier: 556 passed on `d5d6b3a` (historical). A review of the whole branch before the registered runs found no critical or important defect. These tests evaluate target weights and benchmark files only; no H1/H2 account was computed.
 
-Next action: review of the whole branch before the registered runs, one round of fixes for its findings and the open minor items (source changes must precede the first registered run), then the registered runs of D023 item 8.
+Next action: the registered runs of D023 item 8 on the source tree of `bbf7640`, then the repeats and the N4 report.
 
 ## Limitations and next milestone
 
@@ -170,7 +172,7 @@ The N2 and N3 runs do not remove the data limitations above: they remain disclos
 
 Next step:
 
-1. N4: H1/H2 under the [research protocol](RESEARCH_PROTOCOL.md), after the N3 branch is merged into `main`. New data or corrections require fresh reconciliation, QA and a new readiness decision.
+1. N4: complete the registered H1/H2 runs, repeats and report (D023 item 8); then N5. New data or corrections require fresh reconciliation, QA and a new readiness decision.
 
 Deferred:
 
