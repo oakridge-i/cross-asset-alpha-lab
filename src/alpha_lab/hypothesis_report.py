@@ -1,4 +1,5 @@
-"""N4 hypothesis report: verification of the six H1/H2 runs (spec section 7, items 1-7).
+"""N4 hypothesis report: verification of the six H1/H2 runs (spec section 7, items 1-7), the permitted diagnostics of
+spec 6.2 and the frozen hypotheses.json and hypotheses.md.
 
 Run files are read as text and only the columns the report may read (spec section 7, last paragraph); daily.csv is
 never opened by this module. Error messages name the rule, the configuration and, where applicable, the session and
@@ -8,6 +9,7 @@ from contextlib import contextmanager
 import csv
 from datetime import date, timedelta
 from itertools import groupby
+import json
 import math
 from pathlib import Path
 import re
@@ -16,7 +18,7 @@ from alpha_lab.engine import PROVIDERS
 from alpha_lab.market import VINTAGE_MANIFEST_SHA256
 from alpha_lab.normalize import calendar
 from alpha_lab.pipeline import project_path
-from alpha_lab.provenance import Run, canonical_bytes
+from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256
 
 HYPOTHESES = ('H1_252_3', 'H1_252_4', 'H1_126_3', 'H1_126_4', 'H2_4of6', 'H2_5of6')
 PURPOSE = 'N4 hypothesis run'
@@ -62,8 +64,9 @@ PERMITTED = {'decisions.csv': ('decision_session', 'execution_session', 'turnove
 
 RunFiles = namedtuple('RunFiles', 'path config decisions weights signals orders trades payouts invariants')
 
-NUMBER = re.compile(r'-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?')
-INTEGER = re.compile(r'\d+')
+# ASCII digits only: float() and int() also accept other Unicode decimal digits, which %.10g never writes.
+NUMBER = re.compile(r'-?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?')
+INTEGER = re.compile(r'[0-9]+')
 
 
 def close_rel(a, b):
@@ -214,22 +217,27 @@ class Failures:
         raise ValueError(f'failed checks ({", ".join(labels)}): {shown}' + (f'; and {more} more' if more > 0 else ''))
 
 
+def _parse_rule(item):
+    """'item <n>' for a numbered rule of spec section 7; a text label (the diagnostics) is used as it is."""
+    return item if isinstance(item, str) else f'item {item}'
+
+
 def number(text, item, name, file, session, ticker, column):
     """Float of a %.10g field; a malformed or non-finite field is reported without its text."""
     if NUMBER.fullmatch(text) is None or not math.isfinite(float(text)):
-        raise ValueError(f'item {item} parse: {name} {file} {session} {ticker} {column} is not a finite number')
+        raise ValueError(f'{_parse_rule(item)} parse: {name} {file} {session} {ticker} {column} is not a finite number')
     return float(text)
 
 
 def integer(text, item, name, file, session, ticker, column):
     if INTEGER.fullmatch(text) is None:
-        raise ValueError(f'item {item} parse: {name} {file} {session} {ticker} {column} is not an integer')
+        raise ValueError(f'{_parse_rule(item)} parse: {name} {file} {session} {ticker} {column} is not an integer')
     return int(text)
 
 
 def flag(text, item, name, file, session, ticker, column):
     if text not in ('True', 'False'):
-        raise ValueError(f'item {item} parse: {name} {file} {session} {ticker} {column} is not True or False')
+        raise ValueError(f'{_parse_rule(item)} parse: {name} {file} {session} {ticker} {column} is not True or False')
     return text == 'True'
 
 
@@ -262,6 +270,7 @@ def _check_decision(fail, name, session, weights_row, rows):
         fail.require(math.fsum(w[t] for t in members) <= GROUP_CAP + ABS_TOL, 'item 5 group cap', name, session, group)
     fail.require(abs(w[CASH] - (1 - math.fsum(w[t] for t in RISKY))) <= ABS_TOL, 'item 5 BIL remainder', name,
                  session, CASH)
+    fail.require(w[CASH] >= -ABS_TOL, 'item 5 BIL non-negative', name, session, CASH)
     fail.require(abs(usd - (1 - math.fsum(w.values()))) <= ABS_TOL, 'item 5 usd remainder', name, session)
     fail.require(abs(usd) <= ABS_TOL, 'item 5 usd bound', name, session)
     for row in rows:
@@ -384,10 +393,351 @@ def verified_hypothesis_runs(root, run_dirs, expected_sha256, base):
     return out
 
 
-def _verify_in_run(root, run_dirs, parent=None, expected_sha256=VINTAGE_MANIFEST_SHA256):
-    """Journaled verification without output; a rejection ends the Run as failed. The report builder adds the
-    document and finishes the Run."""
+# --- permitted diagnostics (spec 6.2) ------------------------------------------------------------------------------
+
+INVARIANT_CHECKS = ('cash_non_negative', 'nav_identity', 'cash_flow', 'split_quantity_only', 'receivable_conservation',
+                    'execution_timing', 'costs')
+YEARS = tuple(str(y) for y in range(2009, 2023))
+PERIODS = ('full', *YEARS)
+ORDER_STATUSES = ('filled', 'partial', 'cancelled')
+REASON_STATUSES = ('partial', 'cancelled')
+CANCEL_REASONS = ('no_valid_open', 'insufficient_cash', 'fractional_quantity', 'exceeds_position')
+SIDES = ('buy', 'sell')
+PAYOUT_STATUSES = ('paid', 'receivable')
+PAY_BASES = ('actual', 'proxy')
+ACTUAL_BASIS = 'actual'
+# The whitelist of the report document, mirroring spec 6.2. A candidate holds `integrity` (whole run) and `periods`;
+# each period holds the `period` sections (`h2_filter` for H2 only); `full` alone adds the `full` per-ticker items
+# (`ticker_pass` for H2 only). Nested count dictionaries are keyed by the fixed value lists above, the selection
+# distribution by '0' to str(K), the integrity checks by INVARIANT_CHECKS and the per-ticker items by RISKY.
+DOCUMENT_KEYS = {
+    'candidate': ('integrity', 'periods'),
+    'integrity': ('passed', 'checks', 'split_events', 'proxy_payouts'),
+    'periods': PERIODS,
+    'period': ('counts', 'selection', 'targets', 'trading', 'h2_filter'),
+    'full': ('ticker_selection', 'ticker_pass'),
+    'counts': ('decisions', 'orders', 'order_reasons', 'trades', 'payout_status', 'payout_basis'),
+    'selection': ('mean_eligible', 'mean_selected', 'selected_distribution', 'empty_selections'),
+    'targets': ('mean_risky', 'max_risky', 'mean_bil', 'max_etf', 'max_group', 'scale_binding', 'scale_binding_share',
+                'mean_scale'),
+    'trading': ('turnover_sum', 'turnover_mean', 'cost_ratio', 'min_buy_fill', 'partial_fills'),
+    'h2_filter': ('pass_share', 'removal_decisions', 'mean_removed_share'),
+}
+DIAGNOSTICS = 'diagnostics'
+
+
+def _mean(values):
+    """fsum / count; None for no values (zero denominator)."""
+    return math.fsum(values) / len(values) if values else None
+
+
+def _share(count, total):
+    return count / total if total else None
+
+
+def _largest(values):
+    return max(values, default=None)
+
+
+def _year(session):
+    return session[:4]
+
+
+def _in(period, session):
+    """`full` is 2009-01-01 to 2022-12-31, the union of the years; a year holds the sessions of that calendar year."""
+    year = _year(session)
+    return year in YEARS if period == 'full' else year == period
+
+
+def _known(value, allowed, name, file, session, column):
+    """A categorical field must be one of the expected values; the message names the place, not the value."""
+    if value not in allowed:
+        raise ValueError(f'{DIAGNOSTICS}: {name} {file} {session} {column} is not a known value')
+    return value
+
+
+def _decision_records(name, files, parent):
+    """One record per decision, from the parsed %.10g text of the permitted columns.
+
+    - year: the year of the decision's execution_session (D022 item 12); signals and target weights follow it.
+    - eligible, selected: the number of the nine signal rows with `eligible` / `selected` True (for H2 these are the
+      parent's columns); selected_tickers lists the selected tickers.
+    - passed_tickers (H2): selected tickers whose `filter_pass` is True.
+    - scale: the `scale` field of the decision's signal rows (one text per decision, item 5).
+    - risky: fsum of the nine w_<ticker> fields of weights.csv; bil: w_BIL; etf: the largest of the nine risky
+      w_<ticker>; group: the largest group fsum (BIL excluded).
+    - parent_risky (H2): fsum of the nine w_<ticker> fields of the parent's weights.csv at the same decision.
+    - turnover, buy_fill: the decisions.csv fields."""
+    signals = {s: {r['ticker']: r for r in rows} for s, rows in
+               groupby(files.signals, key=lambda r: r['decision_session'])}
+    weights = {r['decision_session']: r for r in files.weights}
+    parent_weights = {r['decision_session']: r for r in parent.weights} if parent else {}
+    records = []
+    for row in files.decisions:
+        session = row['decision_session']
+
+        def num(text, file, ticker, column):
+            return number(text, DIAGNOSTICS, name, file, session, ticker, column)
+
+        def risky_weights(w_row):
+            return {t: num(w_row[f'w_{t}'], 'weights.csv', t, f'w_{t}') for t in RISKY}
+        rows = signals[session]
+        w = risky_weights(weights[session])
+        selected = [t for t in RISKY if rows[t]['selected'] == 'True']
+        record = {'year': _year(row['execution_session']),
+                  'turnover': num(row['turnover'], 'decisions.csv', None, 'turnover'),
+                  'buy_fill': num(row['buy_fill'], 'decisions.csv', None, 'buy_fill'),
+                  'eligible': sum(rows[t]['eligible'] == 'True' for t in RISKY),
+                  'selected': len(selected), 'selected_tickers': selected,
+                  'scale': num(rows[RISKY[0]]['scale'], 'signals.csv', RISKY[0], 'scale'),
+                  'risky': math.fsum(w.values()),
+                  'bil': num(weights[session][f'w_{CASH}'], 'weights.csv', CASH, f'w_{CASH}'),
+                  'etf': max(w.values()),
+                  'group': max(math.fsum(w[t] for t in members) for members in GROUPS.values())}
+        if parent:
+            record['passed_tickers'] = [t for t in selected if rows[t]['filter_pass'] == 'True']
+            record['parent_risky'] = math.fsum(risky_weights(parent_weights[session]).values())
+        records.append(record)
+    return records
+
+
+def _counts(name, files, period, decisions):
+    """Counts of one period: decisions by execution year; orders by execution_session with status and, for partial
+    and cancelled orders, cancel_reason; trades by session and side; payouts by ex_session with their end-of-run
+    status and basis (actual, or proxy for the scenario's proxy basis)."""
+    proxy = f"proxy_ex_plus_{files.config['scenario']['proxy_pay_days']}_calendar_days"
+    orders = {s: 0 for s in ORDER_STATUSES}
+    reasons = {s: {r: 0 for r in CANCEL_REASONS} for s in REASON_STATUSES}
+    for o in files.orders:
+        session = o['execution_session']
+        status = _known(o['status'], ORDER_STATUSES, name, 'orders.csv', session, 'status')
+        if status == 'filled':
+            _known(o['cancel_reason'], ('',), name, 'orders.csv', session, 'cancel_reason')
+        else:
+            reason = _known(o['cancel_reason'], CANCEL_REASONS, name, 'orders.csv', session, 'cancel_reason')
+        if _in(period, session):
+            orders[status] += 1
+            if status != 'filled':
+                reasons[status][reason] += 1
+    trades = {s: 0 for s in SIDES}
+    for t in files.trades:
+        side = _known(t['side'], SIDES, name, 'trades.csv', t['session'], 'side')
+        if _in(period, t['session']):
+            trades[side] += 1
+    status_counts, basis_counts = {s: 0 for s in PAYOUT_STATUSES}, {b: 0 for b in PAY_BASES}
+    for r in files.payouts:
+        status = _known(r['status'], PAYOUT_STATUSES, name, 'payouts.csv', r['ex_session'], 'status')
+        basis = _known(r['pay_basis'], (ACTUAL_BASIS, proxy), name, 'payouts.csv', r['ex_session'], 'pay_basis')
+        if _in(period, r['ex_session']):
+            status_counts[status] += 1
+            basis_counts['actual' if basis == ACTUAL_BASIS else 'proxy'] += 1
+    return {'decisions': len(decisions), 'orders': orders, 'order_reasons': reasons, 'trades': trades,
+            'payout_status': status_counts, 'payout_basis': basis_counts}
+
+
+def _selection(name, decisions):
+    """mean_eligible / mean_selected: mean over the period's decisions of the number of eligible (S > 0) / selected
+    tickers; selected_distribution: the number of decisions with 0 to K selected tickers; empty_selections: the
+    number of decisions with none selected. For H2 these are the parent's selection columns."""
+    return {'mean_eligible': _mean([d['eligible'] for d in decisions]),
+            'mean_selected': _mean([d['selected'] for d in decisions]),
+            'selected_distribution': {str(k): sum(d['selected'] == k for d in decisions) for k in range(K[name] + 1)},
+            'empty_selections': sum(d['selected'] == 0 for d in decisions)}
+
+
+def _targets(decisions):
+    """mean_risky / max_risky: mean and maximum over decisions of the target risky weight (fsum of the nine
+    w_<ticker>); mean_bil: mean target w_BIL; max_etf: the largest single risky target weight; max_group: the largest
+    group sum; scale_binding: the number of decisions with parsed `scale` < 1; scale_binding_share: that number over
+    the number of decisions; mean_scale: mean `scale`."""
+    binding = sum(d['scale'] < 1 for d in decisions)
+    return {'mean_risky': _mean([d['risky'] for d in decisions]),
+            'max_risky': _largest([d['risky'] for d in decisions]),
+            'mean_bil': _mean([d['bil'] for d in decisions]),
+            'max_etf': _largest([d['etf'] for d in decisions]),
+            'max_group': _largest([d['group'] for d in decisions]),
+            'scale_binding': binding, 'scale_binding_share': _share(binding, len(decisions)),
+            'mean_scale': _mean([d['scale'] for d in decisions])}
+
+
+def _trading(cost, decisions):
+    """turnover_sum: fsum of one-way turnover (0.0 without decisions); turnover_mean: that sum over the number of
+    decisions; cost_ratio: scenario cost x turnover_sum (D022 item 13 up to rounding, because costs = cost x
+    notional); min_buy_fill: the smallest parsed buy_fill; partial_fills: the number of decisions with parsed
+    buy_fill < 1."""
+    total = math.fsum(d['turnover'] for d in decisions)
+    return {'turnover_sum': total, 'turnover_mean': _share(total, len(decisions)), 'cost_ratio': cost * total,
+            'min_buy_fill': min((d['buy_fill'] for d in decisions), default=None),
+            'partial_fills': sum(d['buy_fill'] < 1 for d in decisions)}
+
+
+def _h2_filter(decisions):
+    """pass_share: the number of parent-selected ticker-decisions whose filter_pass is True over the number of
+    parent-selected ticker-decisions; removal_decisions: the number of decisions in which at least one
+    parent-selected ticker fails the filter; mean_removed_share: mean, over decisions with a positive parent risky
+    target weight, of (parent risky - H2 risky) / parent risky, both fsums of the nine w_<ticker> of weights.csv."""
+    selected = sum(d['selected'] for d in decisions)
+    passed = sum(len(d['passed_tickers']) for d in decisions)
+    removed = [(d['parent_risky'] - d['risky']) / d['parent_risky'] for d in decisions if d['parent_risky'] > 0]
+    return {'pass_share': _share(passed, selected),
+            'removal_decisions': sum(len(d['passed_tickers']) < d['selected'] for d in decisions),
+            'mean_removed_share': _mean(removed)}
+
+
+def _per_ticker(decisions, h2):
+    """`full` only. ticker_selection: per risky ticker, the number of decisions selecting it over the number of
+    decisions (for H2 the parent's selection); ticker_pass (H2): per ticker, the number of its parent selections that
+    pass the filter over the number of its parent selections."""
+    out = {'ticker_selection': {t: _share(sum(t in d['selected_tickers'] for d in decisions), len(decisions))
+                                for t in RISKY}}
+    if h2:
+        out['ticker_pass'] = {t: _share(sum(t in d['passed_tickers'] for d in decisions),
+                                        sum(t in d['selected_tickers'] for d in decisions)) for t in RISKY}
+    return out
+
+
+def _integrity(name, invariants):
+    """Whole run only: the seven invariant flags, the overall flag and the numbers of split events and proxy
+    payouts."""
+    report.require(sorted(invariants['checks']) == sorted(INVARIANT_CHECKS),
+                   f'{DIAGNOSTICS}: {name} invariants.json does not hold the seven expected checks')
+    return {'passed': invariants['passed'], 'checks': {c: invariants['checks'][c] for c in INVARIANT_CHECKS},
+            'split_events': len(invariants['split_events']), 'proxy_payouts': len(invariants['proxy_payouts'])}
+
+
+def diagnostics(runs):
+    """The spec 6.2 document, a pure function of the RunFiles (permitted columns only) and the scenario cost of
+    config.json: {configuration: {'integrity', 'periods': {period: sections}}} with the keys of DOCUMENT_KEYS.
+    Configurations follow HYPOTHESES; an H2 configuration needs the RunFiles of its parent. A decision belongs to the
+    year of its execution session, an order to that of its execution_session, a trade to that of its session and a
+    payout to that of its ex_session; a mean, share, minimum or maximum without any value is None."""
+    out = {}
+    for name in (n for n in HYPOTHESES if n in runs):
+        files, h2 = runs[name], name in H
+        report.require(not h2 or PARENT in runs, f'{DIAGNOSTICS}: {name} needs the {PARENT} run')
+        with report.well_formed(f'{DIAGNOSTICS}: {name}'):
+            records = _decision_records(name, files, runs[PARENT] if h2 else None)
+            cost = files.config['scenario']['cost']
+            periods = {}
+            for period in PERIODS:
+                mine = [d for d in records if period == 'full' and d['year'] in YEARS or d['year'] == period]
+                block = {'counts': _counts(name, files, period, mine), 'selection': _selection(name, mine),
+                         'targets': _targets(mine), 'trading': _trading(cost, mine)}
+                if h2:
+                    block['h2_filter'] = _h2_filter(mine)
+                if period == 'full':
+                    block.update(_per_ticker(mine, h2))
+                periods[period] = block
+            out[name] = {'integrity': _integrity(name, files.invariants), 'periods': periods}
+    return out
+
+
+# --- Markdown -------------------------------------------------------------------------------------------------------
+
+SECTION_TITLES = {'counts': 'counts', 'selection': 'selection', 'targets': 'targets', 'trading': 'trading',
+                  'h2_filter': 'H2 filter'}
+PERCENT = {'mean_risky', 'max_risky', 'mean_bil', 'max_etf', 'max_group', 'scale_binding_share', 'pass_share',
+           'mean_removed_share'}
+FOUR = {'mean_scale', 'turnover_sum', 'turnover_mean', 'cost_ratio', 'min_buy_fill'}
+TWO = {'mean_eligible', 'mean_selected'}
+MISSING = object()
+
+
+def _cell(key, value):
+    """Shares as percentages with 2 decimals, scale, buy_fill, turnover and cost_ratio with 4 decimals, mean ticker
+    counts with 2 decimals, counts as integers; null as n/a."""
+    if value is MISSING:
+        return '-'
+    if value is None:
+        return 'n/a'
+    if isinstance(value, bool):
+        return str(value)
+    if key in PERCENT:
+        return f'{value * 100:.2f}%'
+    if key in FOUR:
+        return f'{value:.4f}'
+    if key in TWO:
+        return f'{value:.2f}'
+    return f'{value:d}'
+
+
+def _columns(section, block, k_max):
+    """(label, key, value) of one section in a fixed order."""
+    if section == 'counts':
+        out = [('decisions', 'decisions', block['decisions'])]
+        out += [(f'orders {s}', 'n', block['orders'][s]) for s in ORDER_STATUSES]
+        out += [(f'{s} {r}', 'n', block['order_reasons'][s][r]) for s in REASON_STATUSES for r in CANCEL_REASONS]
+        out += [(f'trades {s}', 'n', block['trades'][s]) for s in SIDES]
+        out += [(f'payouts {s}', 'n', block['payout_status'][s]) for s in PAYOUT_STATUSES]
+        out += [(f'payouts {b}', 'n', block['payout_basis'][b]) for b in PAY_BASES]
+        return out
+    if section == 'selection':
+        dist = block['selected_distribution']
+        return [('mean_eligible', 'mean_eligible', block['mean_eligible']),
+                ('mean_selected', 'mean_selected', block['mean_selected']),
+                *((f'selected {k}', 'n', dist.get(str(k), MISSING)) for k in range(k_max + 1)),
+                ('empty_selections', 'empty_selections', block['empty_selections'])]
+    return [(key, key, block[key]) for key in DOCUMENT_KEYS[section]]
+
+
+def _names(document):
+    return [n for n in HYPOTHESES if n in document]
+
+
+def render_markdown(document):
+    """Deterministic Markdown of the diagnostics document: the whole-run integrity table, the `full` tables, then the
+    annual aggregate tables, which carry no ticker or group names. A pure function of the document."""
+    names = _names(document)
+    k_max = max((K[n] for n in names), default=0)
+    out = ['# N4 hypothesis diagnostics', '',
+           'Permitted diagnostics of the six H1/H2 configurations. A decision belongs to the year of its execution '
+           'session, an order to the year of its execution session, a trade to the year of its session and a payout '
+           'to the year of its ex-dividend session, with its status at the end of the run. The full period is '
+           '2009-01-01 to 2022-12-31. n/a marks a zero denominator.', '',
+           '## Integrity (whole run)', '',
+           report.table(['configuration', 'passed', *INVARIANT_CHECKS, 'split_events', 'proxy_payouts'],
+                        [[n, _cell('passed', document[n]['integrity']['passed']),
+                          *(_cell(c, document[n]['integrity']['checks'][c]) for c in INVARIANT_CHECKS),
+                          _cell('n', document[n]['integrity']['split_events']),
+                          _cell('n', document[n]['integrity']['proxy_payouts'])] for n in names]), '']
+    for section in DOCUMENT_KEYS['period']:
+        mine = [n for n in names if section in document[n]['periods']['full']]
+        if not mine:
+            continue
+        columns = [label for label, _, _ in _columns(section, document[mine[0]]['periods']['full'][section], k_max)]
+        rows = [[n, *(_cell(key, value) for _, key, value in
+                      _columns(section, document[n]['periods']['full'][section], k_max))] for n in mine]
+        out += [f'## Full period: {SECTION_TITLES[section]}', '', report.table(['configuration', *columns], rows), '']
+    for key, title in (('ticker_selection', 'ticker selection frequency'), ('ticker_pass', 'H2 ticker pass share')):
+        mine = [n for n in names if key in document[n]['periods']['full']]
+        if mine:
+            rows = [[n, *(_cell('pass_share', document[n]['periods']['full'][key][t]) for t in RISKY)] for n in mine]
+            out += [f'## Full period: {title}', '', report.table(['configuration', *RISKY], rows), '']
+    for section in DOCUMENT_KEYS['period']:
+        mine = [n for n in names if section in document[n]['periods']['full']]
+        if not mine:
+            continue
+        columns = [label for label, _, _ in _columns(section, document[mine[0]]['periods']['full'][section], k_max)]
+        rows = [[year, n, *(_cell(key, value) for _, key, value in
+                            _columns(section, document[n]['periods'][year][section], k_max))]
+                for year in YEARS for n in mine]
+        out += [f'## Annual {SECTION_TITLES[section]}', '', report.table(['year', 'configuration', *columns], rows), '']
+    return '\n'.join(out)
+
+
+def build_hypothesis_report(root, run_dirs, parent=None, expected_sha256=VINTAGE_MANIFEST_SHA256):
+    """Journaled N4 report: verifies the six runs (items 1-7), then freezes hypotheses.json (canonical JSON of the
+    diagnostics) and hypotheses.md in data/reports/<run_id>; run ids and run manifest hashes go to the manifest
+    metadata only. A rejection ends the Run as failed. Returns the report directory."""
     root = Path(root).resolve()
     config = {'runs': [project_path(root, (root / d).resolve()) for d in run_dirs], 'expected_sha256': expected_sha256}
     with Run(root, REPORT_PURPOSE, config, parent, candidate_ids=HYPOTHESES) as run:
-        return verified_hypothesis_runs(root, run_dirs, expected_sha256, run.base)
+        runs = verified_hypothesis_runs(root, run_dirs, expected_sha256, run.base)
+        body = canonical_bytes(diagnostics(runs))
+        files = {'hypotheses.json': body, 'hypotheses.md': render_markdown(json.loads(body)).encode('utf-8')}
+        sources = [{'candidate': n, 'run_id': runs[n].path.name,
+                    'manifest_sha256': sha256((runs[n].path / 'manifest.json').read_bytes())} for n in HYPOTHESES]
+        target = root / 'data/reports' / run.run_id
+        freeze(target, files, {'sources': sources, 'environment': run.env, 'run_id': run.run_id})
+        run.finish('completed', [project_path(root, target)], sha256((target / 'manifest.json').read_bytes()), [])
+    return target

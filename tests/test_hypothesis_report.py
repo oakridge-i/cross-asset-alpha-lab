@@ -1,5 +1,5 @@
-"""N4 hypothesis report verification (spec 7 items 1-7): one rejection per rule, acceptance cases and value-free
-parse errors, on synthetic six-run projects."""
+"""N4 hypothesis report (spec 6.2 and 7): verification items 1-7 with one rejection per rule, acceptance cases and
+value-free parse errors, the permitted diagnostics, the frozen document and Markdown, and the CLI, on synthetic data."""
 import csv
 import io
 import json
@@ -90,7 +90,14 @@ def dirs(p, replace=None):
 
 
 def verify_runs(p, runs=None, expected_sha256=None):
-    return hr._verify_in_run(p.root, runs or dirs(p), expected_sha256=expected_sha256 or p.digest)
+    return hr.build_hypothesis_report(p.root, runs or dirs(p), expected_sha256=expected_sha256 or p.digest)
+
+
+def verified(p, runs=None):
+    """The verified RunFiles outside a Run, with the base of the runs' own started records."""
+    first = next(r for r in journal(p.root) if r.get('run_id') == p.runs[HYPOTHESES[0]].name)
+    base = {'git_sha': CLEAN[0], 'environment_manifest_sha256': first['environment_manifest_sha256']}
+    return hr.verified_hypothesis_runs(p.root, runs or dirs(p), p.digest, base)
 
 
 def reject(p, match, runs=None, expected_sha256=None):
@@ -116,9 +123,10 @@ def reject_rules(p, expected, runs=None):
 
 
 def accepted(p, runs=None):
-    out = verify_runs(p, runs)
-    assert journal(p.root)[-1]['error'] == 'finish not called'
-    return out
+    target = verify_runs(p, runs)
+    assert journal(p.root)[-1]['event'] == 'completed'
+    assert provenance.verify(target)
+    return verified(p, runs)
 
 
 # --- run file access and controlled edits ------------------------------------------------------------------------
@@ -853,3 +861,402 @@ def test_report_rejects_short_csv_row(project):
 def test_report_rejects_malformed_invariants(project):
     refreeze(project, 'H2_4of6', {'invariants.json': provenance.canonical_bytes({'passed': True})})
     reject(project, r'item 4, H2_4of6: .*malformed run data')
+
+
+def bil_negative_decision():
+    """A K = 4 decision that satisfies every item 5 rule except a BIL weight below -ABS_TOL: four risky weights at
+    the ETF cap plus 0.9e-9, one per group, so the risky sum exceeds 1 by 3.6e-9."""
+    chosen = ('GLD', 'IEF', 'LQD', 'SPY')
+    rows = []
+    for rank, t in enumerate(chosen, 1):
+        momentum = repr(0.1 * (5 - rank))
+        rows.append({'ticker': t, 'momentum': momentum, 'sigma': '0.1', 'score': repr(float(momentum) / 0.1),
+                     'eligible': 'True', 'rank': str(rank), 'selected': 'True', 'q': '0.25', 'v': '0.25',
+                     'scale': '1', 'weight': '0.2500000009'})
+    for t in RISKY:
+        if t not in chosen:
+            rows.append({'ticker': t, 'momentum': '-0.1', 'sigma': '0.1', 'score': '-1', 'eligible': 'False',
+                         'rank': '', 'selected': 'False', 'q': '0', 'v': '0', 'scale': '1', 'weight': '0'})
+    rows.sort(key=lambda r: r['ticker'])
+    weights = {'decision_session': '2009-01-30', **{f'w_{t}': '0' for t in TICKERS}, 'usd': '0'}
+    weights.update({f'w_{t}': '0.2500000009' for t in chosen})
+    weights['w_BIL'] = '-3.6e-09'
+    return weights, rows
+
+
+def test_item_5_rejects_negative_bil():
+    weights, rows = bil_negative_decision()
+    fail = hr.Failures()
+    hr._check_decision(fail, 'H1_252_4', '2009-01-30', weights, rows)
+    assert {label for label, _ in fail.items} == {'item 5 BIL non-negative'}
+    # a BIL weight of -9e-10 is within the tolerance
+    weights['w_BIL'] = '-9e-10'
+    weights['w_SPY'] = weights['w_IEF'] = weights['w_LQD'] = '0.25'
+    for r in rows:
+        if r['ticker'] in ('SPY', 'IEF', 'LQD'):
+            r['weight'] = '0.25'
+    fail = hr.Failures()
+    hr._check_decision(fail, 'H1_252_4', '2009-01-30', weights, rows)
+    assert fail.items == []
+
+
+@pytest.mark.parametrize('text', ['١', '0.٥', '1e٣', '１'])
+def test_number_rejects_non_ascii_digits(text):
+    assert math.isfinite(float(text))  # Python's float accepts these digits; frozen %.10g text never has them
+    with pytest.raises(ValueError, match='is not a finite number') as info:
+        hr.number(text, 5, 'H1_252_3', 'signals.csv', '2009-01-30', 'SPY', 'q')
+    assert text not in str(info.value)
+
+
+@pytest.mark.parametrize('text', ['٣', '1٢', '４'])
+def test_integer_rejects_non_ascii_digits(text):
+    assert int(text) >= 0
+    with pytest.raises(ValueError, match='is not an integer'):
+        hr.integer(text, 5, 'H1_252_3', 'signals.csv', '2009-01-30', 'SPY', 'rank')
+
+
+# --- diagnostics (spec 6.2) ---------------------------------------------------------------------------------------
+
+YEARS = [str(y) for y in range(2009, 2023)]
+PERIODS = ['full', *YEARS]
+CHECKS = ('cash_non_negative', 'nav_identity', 'cash_flow', 'split_quantity_only', 'receivable_conservation',
+          'execution_timing', 'costs')
+PROXY = 'proxy_ex_plus_10_calendar_days'
+# Hand-built decisions: (decision, execution, eligible, selected, scale, risky weights, turnover, buy_fill).
+HAND = [('2008-12-31', '2009-01-02', ('EEM', 'IEF', 'SPY', 'TLT'), ('IEF', 'SPY', 'TLT'), '0.8',
+         {'SPY': '0.2', 'TLT': '0.25', 'IEF': '0.15'}, '0.6', '1'),
+        ('2009-06-30', '2009-07-01', ('SPY',), ('SPY',), '0.9999999999', {'SPY': '0.25'}, '0.3', '0.98'),
+        ('2009-12-31', '2010-01-04', (), (), '1', {}, '0.25', '0.9999999999')]
+# H2_4of6 filter passes per decision; EEM passes without being selected and must not count.
+PASSES = [('EEM', 'IEF', 'SPY'), (), ()]
+H2_WEIGHTS = [{'SPY': '0.2', 'IEF': '0.15'}, {}, {}]
+
+
+def weight_row(session, risky):
+    row = {'decision_session': session, **{f'w_{t}': risky.get(t, '0') for t in RISKY}, 'usd': '0'}
+    row['w_BIL'] = repr(1 - math.fsum(float(v) for v in risky.values()))
+    return row
+
+
+def hand_runs():
+    """RunFiles of H1_252_3 and H2_4of6 holding only the fields the diagnostics read."""
+    decisions = [{'decision_session': d, 'execution_session': e, 'turnover': tu, 'buy_fill': bf}
+                 for d, e, _, _, _, _, tu, bf in HAND]
+    orders = [{'execution_session': '2009-01-02', 'status': 'filled', 'cancel_reason': ''},
+              {'execution_session': '2009-01-02', 'status': 'partial', 'cancel_reason': 'insufficient_cash'},
+              {'execution_session': '2009-07-01', 'status': 'cancelled', 'cancel_reason': 'no_valid_open'},
+              {'execution_session': '2010-01-04', 'status': 'filled', 'cancel_reason': ''}]
+    trades = [{'session': '2009-01-02', 'side': 'buy'}, {'session': '2009-01-02', 'side': 'buy'},
+              {'session': '2009-07-01', 'side': 'sell'}, {'session': '2010-01-04', 'side': 'sell'}]
+    payouts = [{'ex_session': '2008-12-31', 'status': 'paid', 'pay_basis': 'actual'},
+               {'ex_session': '2009-03-20', 'status': 'paid', 'pay_basis': PROXY},
+               {'ex_session': '2009-12-30', 'status': 'receivable', 'pay_basis': 'actual'},
+               {'ex_session': '2010-12-20', 'status': 'receivable', 'pay_basis': 'actual'}]
+    invariants = {'passed': True, 'checks': {c: True for c in CHECKS}, 'split_events': [['BIL', '2009-05-01']],
+                  'proxy_payouts': [['SPY', '2009-03-20', '2009-03-30'], ['TLT', '2008-12-31', '2009-01-12']]}
+    config = {'scenario': {'cost': 0.001, 'lag': 1, 'reserve': 0.01, 'proxy_pay_days': 10}}
+
+    def signals(h2):
+        out = []
+        for i, (d, _, eligible, selected, scale, _, _, _) in enumerate(HAND):
+            for t in RISKY:
+                row = {'decision_session': d, 'ticker': t, 'eligible': str(t in eligible),
+                       'selected': str(t in selected), 'scale': scale}
+                if h2:
+                    row['filter_pass'] = str(t in PASSES[i])
+                out.append(row)
+        return out
+    parent = hr.RunFiles(None, config, decisions, [weight_row(d, w) for d, _, _, _, _, w, _, _ in HAND],
+                         signals(False), orders, trades, payouts, invariants)
+    h2 = parent._replace(weights=[weight_row(h[0], w) for h, w in zip(HAND, H2_WEIGHTS)], signals=signals(True))
+    return {'H1_252_3': parent, 'H2_4of6': h2}
+
+
+def approx(expected):
+    return pytest.approx(expected, rel=1e-12, abs=1e-15)
+
+
+def test_hand_counted_diagnostics():
+    doc = hr.diagnostics(hand_runs())
+    assert list(doc) == ['H1_252_3', 'H2_4of6']
+    h1 = doc['H1_252_3']
+    assert h1['integrity'] == {'passed': True, 'checks': {c: True for c in CHECKS}, 'split_events': 1,
+                               'proxy_payouts': 2}
+    full = h1['periods']['full']
+    assert full['counts'] == {
+        'decisions': 3, 'orders': {'filled': 2, 'partial': 1, 'cancelled': 1},
+        'order_reasons': {'partial': {'no_valid_open': 0, 'insufficient_cash': 1, 'fractional_quantity': 0,
+                                      'exceeds_position': 0},
+                          'cancelled': {'no_valid_open': 1, 'insufficient_cash': 0, 'fractional_quantity': 0,
+                                        'exceeds_position': 0}},
+        'trades': {'buy': 2, 'sell': 2}, 'payout_status': {'paid': 1, 'receivable': 2},
+        'payout_basis': {'actual': 2, 'proxy': 1}}
+    assert full['selection'] == {'mean_eligible': approx(5 / 3), 'mean_selected': approx(4 / 3),
+                                 'selected_distribution': {'0': 1, '1': 1, '2': 0, '3': 1}, 'empty_selections': 1}
+    assert full['targets'] == {'mean_risky': approx(0.85 / 3), 'max_risky': approx(0.6), 'mean_bil': approx(2.15 / 3),
+                               'max_etf': 0.25, 'max_group': approx(0.4), 'scale_binding': 2,
+                               'scale_binding_share': approx(2 / 3), 'mean_scale': approx(2.7999999999 / 3)}
+    assert full['trading'] == {'turnover_sum': approx(1.15), 'turnover_mean': approx(1.15 / 3),
+                               'cost_ratio': approx(0.00115), 'min_buy_fill': 0.98, 'partial_fills': 2}
+    assert full['ticker_selection'] == {**{t: 0.0 for t in RISKY}, 'SPY': approx(2 / 3), 'TLT': approx(1 / 3),
+                                        'IEF': approx(1 / 3)}
+    assert 'h2_filter' not in full and 'ticker_pass' not in full
+    y2009, y2010 = h1['periods']['2009'], h1['periods']['2010']
+    assert y2009['selection'] == {'mean_eligible': 2.5, 'mean_selected': 2.0,
+                                  'selected_distribution': {'0': 0, '1': 1, '2': 0, '3': 1}, 'empty_selections': 0}
+    assert y2009['targets'] == {'mean_risky': approx(0.425), 'max_risky': approx(0.6), 'mean_bil': approx(0.575),
+                                'max_etf': 0.25, 'max_group': approx(0.4), 'scale_binding': 2,
+                                'scale_binding_share': 1.0, 'mean_scale': approx(1.7999999999 / 2)}
+    assert y2009['trading'] == {'turnover_sum': approx(0.9), 'turnover_mean': approx(0.45),
+                                'cost_ratio': approx(0.0009), 'min_buy_fill': 0.98, 'partial_fills': 1}
+    assert y2010['targets'] == {'mean_risky': 0.0, 'max_risky': 0.0, 'mean_bil': 1.0, 'max_etf': 0.0,
+                                'max_group': 0.0, 'scale_binding': 0, 'scale_binding_share': 0.0, 'mean_scale': 1.0}
+    assert y2010['trading'] == {'turnover_sum': 0.25, 'turnover_mean': 0.25, 'cost_ratio': approx(0.00025),
+                                'min_buy_fill': 0.9999999999, 'partial_fills': 1}
+    h2 = doc['H2_4of6']['periods']
+    # passes among selected: decision 1 IEF and SPY of three, decision 2 none of one
+    assert h2['full']['h2_filter'] == {'pass_share': 0.5, 'removal_decisions': 2,
+                                       'mean_removed_share': approx(((0.6 - 0.35) / 0.6 + 1.0) / 2)}
+    assert h2['2009']['h2_filter'] == h2['full']['h2_filter']
+    assert h2['2010']['h2_filter'] == {'pass_share': None, 'removal_decisions': 0, 'mean_removed_share': None}
+    assert h2['full']['ticker_pass'] == {**{t: None for t in RISKY}, 'SPY': 0.5, 'TLT': 0.0, 'IEF': 1.0}
+    assert h2['full']['targets']['mean_risky'] == approx(0.35 / 3)
+    assert h2['full']['selection'] == full['selection']  # the parent's selection columns
+
+
+def test_annual_attribution():
+    doc = hr.diagnostics(hand_runs())['H1_252_3']['periods']
+    # the 2008-12-31 decision executes on 2009-01-02 and belongs to 2009, with its signals and turnover
+    assert doc['2009']['counts']['decisions'] == 2 and doc['2010']['counts']['decisions'] == 1
+    assert doc['2009']['selection']['selected_distribution']['3'] == 1
+    assert doc['2009']['trading']['turnover_sum'] == approx(0.9)
+    # orders by execution_session, trades by session
+    assert doc['2009']['counts']['orders'] == {'filled': 1, 'partial': 1, 'cancelled': 1}
+    assert doc['2010']['counts']['orders'] == {'filled': 1, 'partial': 0, 'cancelled': 0}
+    assert doc['2009']['counts']['trades'] == {'buy': 2, 'sell': 1}
+    assert doc['2010']['counts']['trades'] == {'buy': 0, 'sell': 1}
+    # payouts by ex_session with the end-of-run status; the 2008 entitlement belongs to no period
+    assert doc['2009']['counts']['payout_status'] == {'paid': 1, 'receivable': 1}
+    assert doc['2009']['counts']['payout_basis'] == {'actual': 1, 'proxy': 1}
+    assert doc['2010']['counts']['payout_status'] == {'paid': 0, 'receivable': 1}
+    for key in ('decisions', 'orders', 'trades', 'payout_status'):
+        total = doc['full']['counts'][key]
+        if isinstance(total, dict):
+            assert all(total[k] == sum(doc[y]['counts'][key][k] for y in YEARS) for k in total)
+        else:
+            assert total == sum(doc[y]['counts'][key] for y in YEARS)
+
+
+def test_null_denominators():
+    doc = hr.diagnostics(hand_runs())
+    empty = doc['H1_252_3']['periods']['2015']
+    assert empty['counts']['decisions'] == 0
+    assert empty['selection'] == {'mean_eligible': None, 'mean_selected': None,
+                                  'selected_distribution': {'0': 0, '1': 0, '2': 0, '3': 0}, 'empty_selections': 0}
+    assert empty['targets'] == {'mean_risky': None, 'max_risky': None, 'mean_bil': None, 'max_etf': None,
+                                'max_group': None, 'scale_binding': 0, 'scale_binding_share': None,
+                                'mean_scale': None}
+    assert empty['trading'] == {'turnover_sum': 0.0, 'turnover_mean': None, 'cost_ratio': 0.0, 'min_buy_fill': None,
+                                'partial_fills': 0}
+    assert doc['H2_4of6']['periods']['2015']['h2_filter'] == {'pass_share': None, 'removal_decisions': 0,
+                                                              'mean_removed_share': None}
+    assert doc['H2_4of6']['periods']['full']['ticker_pass']['GLD'] is None
+    # a null survives the canonical JSON and renders as n/a
+    text = hr.render_markdown(json.loads(provenance.canonical_bytes(doc)))
+    assert 'n/a' in text and 'None' not in text and 'nan' not in text
+
+
+def leaf_paths(value, prefix=()):
+    if isinstance(value, dict):
+        for k, v in value.items():
+            yield from leaf_paths(v, (*prefix, k))
+    else:
+        yield prefix
+
+
+def test_document_keys_are_the_whitelist(project):
+    doc = hr.diagnostics(verified(project))
+    keys = hr.DOCUMENT_KEYS
+    assert list(doc) == list(HYPOTHESES)
+    assert keys['candidate'] == ('integrity', 'periods')
+    assert keys['periods'] == tuple(PERIODS)
+    assert keys['period'] == ('counts', 'selection', 'targets', 'trading', 'h2_filter')
+    assert keys['full'] == ('ticker_selection', 'ticker_pass')
+    assert keys['integrity'] == ('passed', 'checks', 'split_events', 'proxy_payouts')
+    assert keys['counts'] == ('decisions', 'orders', 'order_reasons', 'trades', 'payout_status', 'payout_basis')
+    assert keys['selection'] == ('mean_eligible', 'mean_selected', 'selected_distribution', 'empty_selections')
+    assert keys['targets'] == ('mean_risky', 'max_risky', 'mean_bil', 'max_etf', 'max_group', 'scale_binding',
+                               'scale_binding_share', 'mean_scale')
+    assert keys['trading'] == ('turnover_sum', 'turnover_mean', 'cost_ratio', 'min_buy_fill', 'partial_fills')
+    assert keys['h2_filter'] == ('pass_share', 'removal_decisions', 'mean_removed_share')
+    for name, candidate in doc.items():
+        h2 = name in hr.H
+        assert list(candidate) == list(keys['candidate'])
+        assert list(candidate['integrity']) == list(keys['integrity'])
+        assert list(candidate['integrity']['checks']) == list(CHECKS)
+        assert list(candidate['periods']) == PERIODS
+        for period, block in candidate['periods'].items():
+            sections = [s for s in keys['period'] if h2 or s != 'h2_filter']
+            if period == 'full':
+                sections += [s for s in keys['full'] if h2 or s != 'ticker_pass']
+            assert list(block) == sections, (name, period)
+            for section in sections:
+                if section in keys:
+                    assert list(block[section]) == list(keys[section])
+            counts = block['counts']
+            assert list(counts['orders']) == ['filled', 'partial', 'cancelled']
+            assert list(counts['order_reasons']) == ['partial', 'cancelled']
+            assert all(list(r) == ['no_valid_open', 'insufficient_cash', 'fractional_quantity', 'exceeds_position']
+                       for r in counts['order_reasons'].values())
+            assert list(counts['trades']) == ['buy', 'sell']
+            assert list(counts['payout_status']) == ['paid', 'receivable']
+            assert list(counts['payout_basis']) == ['actual', 'proxy']
+            assert list(block['selection']['selected_distribution']) == [str(k) for k in range(hr.K[name] + 1)]
+        full = candidate['periods']['full']
+        assert list(full['ticker_selection']) == list(hr.RISKY)
+        if h2:
+            assert list(full['ticker_pass']) == list(hr.RISKY)
+        # every leaf is a flag, a count, a finite number or null
+        for path in leaf_paths(candidate):
+            leaf = candidate
+            for k in path:
+                leaf = leaf[k]
+            assert leaf is None or isinstance(leaf, (bool, int)) or math.isfinite(leaf), path
+    assert doc['H1_252_3']['periods']['full']['counts']['decisions'] == len(SESSIONS)
+
+
+EXCLUDED_REPLACEMENT = '7777.5'
+
+
+def test_document_ignores_excluded_columns(project):
+    """Every column the report may not read, including all quantities, is replaced in all six runs."""
+    before = provenance.canonical_bytes(hr.diagnostics(verified(project)))
+    replaced = set()
+    for name in HYPOTHESES:
+        files = {}
+        for file in ('decisions.csv', 'orders.csv', 'trades.csv', 'payouts.csv', 'daily.csv'):
+            header, body = read_csv(project, name, file)
+            keep = hr.PERMITTED.get(file, ())
+            for r in body:
+                r.update({c: EXCLUDED_REPLACEMENT for c in header if c not in keep})
+            replaced |= {c for c in header if c not in keep}
+            files[file] = csv_bytes(header, body)
+        invariants = json.loads((project.runs[name] / 'invariants.json').read_bytes())
+        for check in CHECKS:
+            invariants[check]['detail'] = EXCLUDED_REPLACEMENT
+        files['invariants.json'] = provenance.canonical_bytes(invariants)
+        refreeze(project, name, files)
+    named = {'nav', 'costs_usd', 'cash', 'receivables', 'positions_value', 'notional', 'cost', 'cash_after', 'amount',
+             'target_qty', 'held_qty', 'order_qty', 'filled_qty', 'qty', *(f'qty_{t}' for t in TICKERS)}
+    assert named <= replaced
+    after = provenance.canonical_bytes(hr.diagnostics(verified(project)))
+    assert after == before
+
+
+def test_ticker_items_full_only(project):
+    doc = hr.diagnostics(verified(project))
+    for name, candidate in doc.items():
+        for period, block in candidate['periods'].items():
+            assert ('ticker_selection' in block) == (period == 'full')
+            assert ('ticker_pass' in block) == (period == 'full' and name in hr.H)
+            if period != 'full':
+                text = json.dumps(block)
+                assert not any(t in text for t in TICKERS) and not any(g in text for g in GROUPS)
+    text = hr.render_markdown(json.loads(provenance.canonical_bytes(doc)))
+    annual = text[text.index('## Annual'):]
+    assert not any(t in annual for t in TICKERS) and not any(g in annual for g in GROUPS)
+    assert all(t in text[:text.index('## Annual')] for t in RISKY)
+
+
+def test_markdown_layout_and_formats():
+    doc = json.loads(provenance.canonical_bytes(hr.diagnostics(hand_runs())))
+    text = hr.render_markdown(doc)
+    assert text == hr.render_markdown(doc)
+    headings = [line for line in text.splitlines() if line.startswith('## ')]
+    assert headings[0] == '## Integrity (whole run)'
+    first_annual = next(i for i, h in enumerate(headings) if h.startswith('## Annual'))
+    assert all(h.startswith('## Full period') for h in headings[1:first_annual])
+    assert all(h.startswith('## Annual') for h in headings[first_annual:])
+    lines = text.splitlines()
+
+    def row(heading, first, second=None):
+        start = lines.index(heading)
+        header = [c.strip() for c in lines[start + 2].strip('|').split('|')]
+        for line in lines[start + 4:]:
+            if not line.startswith('|'):
+                break
+            cells = [c.strip() for c in line.strip('|').split('|')]
+            if cells[0] == first and (second is None or cells[1] == second):
+                return dict(zip(header, cells))
+        raise AssertionError((heading, first, second))
+    integrity = row('## Integrity (whole run)', 'H1_252_3')
+    assert integrity['passed'] == 'True' and integrity['split_events'] == '1' and integrity['proxy_payouts'] == '2'
+    targets = row('## Full period: targets', 'H1_252_3')
+    assert targets['mean_risky'] == '28.33%' and targets['scale_binding'] == '2'
+    assert targets['scale_binding_share'] == '66.67%' and targets['mean_scale'] == '0.9333'
+    trading = row('## Full period: trading', 'H1_252_3')
+    # 0.001 x 1.15 is 0.0011499999999999999 in binary floating point
+    assert trading['turnover_sum'] == '1.1500' and trading['cost_ratio'] == '0.0011'
+    assert trading['min_buy_fill'] == '0.9800' and trading['partial_fills'] == '2'
+    selection = row('## Full period: selection', 'H1_252_3')
+    assert selection['mean_eligible'] == '1.67' and selection['selected 3'] == '1'
+    assert row('## Full period: H2 filter', 'H2_4of6')['pass_share'] == '50.00%'
+    assert row('## Full period: H2 ticker pass share', 'H2_4of6')['GLD'] == 'n/a'
+    assert row('## Annual trading', '2015', 'H1_252_3')['turnover_mean'] == 'n/a'
+    assert row('## Annual counts', '2009', 'H1_252_3')['decisions'] == '2'
+    assert 'H1_252_3' not in row('## Full period: H2 filter', 'H2_4of6').values()
+
+
+def report_files(target):
+    manifest = provenance.verify(target)
+    return manifest, {n: (target / n).read_bytes() for n in manifest['files']}
+
+
+def test_report_freezes_without_run_ids(project):
+    target = verify_runs(project)
+    assert target.parent == project.root / 'data/reports'
+    manifest, files = report_files(target)
+    assert set(files) == {'hypotheses.json', 'hypotheses.md'}
+    document = json.loads(files['hypotheses.json'])
+    assert files['hypotheses.json'] == provenance.canonical_bytes(hr.diagnostics(verified(project)))
+    assert files['hypotheses.md'] == hr.render_markdown(document).encode('utf-8')
+    ids = [d.name for d in project.runs.values()] + [target.name]
+    for body in files.values():
+        text = body.decode('utf-8')
+        assert not any(i in text for i in ids) and 'data/' not in text and 'created_at' not in text
+        assert str(project.root) not in text and project.digest not in text
+        assert '\r' not in text
+    meta = manifest['metadata']
+    assert meta['run_id'] == target.name and 'environment' in meta
+    assert meta['sources'] == [{'candidate': n, 'run_id': project.runs[n].name,
+                                'manifest_sha256': provenance.sha256((project.runs[n] / 'manifest.json').read_bytes())}
+                               for n in HYPOTHESES]
+    started, completed = journal(project.root)[-2:]
+    assert (started['event'], completed['event']) == ('started', 'completed')
+    assert completed['purpose'] == 'N4 hypothesis report' and completed['candidate_ids'] == list(HYPOTHESES)
+    assert started['config'] == {'runs': [f'data/runs/{project.runs[n].name}' for n in HYPOTHESES],
+                                 'expected_sha256': project.digest}
+    assert completed['output_paths'] == [f'data/reports/{target.name}']
+    assert completed['data_sha256'] == provenance.sha256((target / 'manifest.json').read_bytes())
+
+
+def test_report_is_reproducible(project):
+    first = verify_runs(project)
+    second = hr.build_hypothesis_report(project.root, list(reversed(dirs(project))), expected_sha256=project.digest)
+    assert first != second
+    assert report_files(first)[0]['files'] == report_files(second)[0]['files']
+
+
+def test_cli_hypothesis_report(project, capsys):
+    from alpha_lab.__main__ import main
+    argv = ['hypothesis-report', '--runs', *(f'data/runs/{project.runs[n].name}' for n in HYPOTHESES),
+            '--root', str(project.root), '--expected-sha256', project.digest]
+    main(argv)
+    printed = capsys.readouterr().out.strip()
+    assert printed.startswith('data/reports/') and '\\' not in printed
+    assert set(provenance.verify(project.root / printed)['files']) == {'hypotheses.json', 'hypotheses.md'}
+    main([*argv, '--parent', 'x'])
+    assert journal(project.root)[-1]['parent_attempt_id'] == 'x'
+    assert journal(project.root)[-1]['event'] == 'completed'
+    with pytest.raises(SystemExit):
+        main(['hypothesis-report', '--root', str(project.root)])
