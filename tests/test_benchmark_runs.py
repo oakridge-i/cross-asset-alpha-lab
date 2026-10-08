@@ -21,7 +21,13 @@ def test_registry_describes_every_provider():
     assert {n: (p.version, p.schedule, p.kind) for n, p in PROVIDERS.items()} == {
         'invariant_rotation': ('1', 'monthly', 'test'),
         **{n: ('1', 'monthly', 'benchmark') for n in ('B0', 'B1', 'B2', 'B3')},
-        'REF_SPY': ('1', 'first_only', 'benchmark')}
+        'REF_SPY': ('1', 'first_only', 'benchmark'),
+        'H1_252_3': ('1', 'monthly', 'hypothesis'),
+        'H1_252_4': ('1', 'monthly', 'hypothesis'),
+        'H1_126_3': ('1', 'monthly', 'hypothesis'),
+        'H1_126_4': ('1', 'monthly', 'hypothesis'),
+        'H2_4of6': ('1', 'monthly', 'hypothesis'),
+        'H2_5of6': ('1', 'monthly', 'hypothesis')}
 
 
 def test_benchmark_run_is_journaled_with_candidate(tmp_path, no_network):

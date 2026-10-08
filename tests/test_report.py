@@ -121,6 +121,15 @@ def test_report_freezes_tables_without_run_ids(project):
     assert completed['data_sha256'] == provenance.sha256((target / 'manifest.json').read_bytes())
 
 
+N3_BYTES = {'benchmarks.json': '2792c7e4b349524144316e2754c3735823892a70ebb5fe9d19b5965e54e11af9',
+            'benchmarks.md': 'df43f5c6613f072853d5df4c03d67dcd8ef639d7ec9e3107fd9c1bac126811ab'}
+
+
+def test_n3_report_bytes_unchanged(project):
+    target = make(project)
+    assert {name: provenance.sha256((target / name).read_bytes()) for name in N3_BYTES} == N3_BYTES
+
+
 def test_markdown_tables_and_formats(project):
     document = document_of(make(project))
     text = render_markdown(document)
@@ -319,6 +328,27 @@ def test_src_tree_resolves_a_commit_and_rejects_an_unknown_one(tmp_path):
 def test_report_rejects_purpose_or_candidate_mismatch(project, changes):
     edit_run(project, 'B1', 'started', **changes)
     reject(project, 'purpose or candidate_ids')
+
+
+def test_verify_run_dir_requires_the_given_file_set_inside_data_runs(project):
+    path = project.runs['B0']
+    manifest, config = report.verify_run_dir(project.root, path, report.RUN_FILES)
+    assert set(manifest['files']) == report.RUN_FILES and config['provider']['name'] == 'B0'
+    with pytest.raises(ValueError, match='not a benchmark run'):
+        report.verify_run_dir(project.root, path, report.RUN_FILES - {'metrics.json'})
+    with pytest.raises(ValueError, match='outside data/runs'):
+        report.verify_run_dir(project.root, project.derived, report.RUN_FILES)
+
+
+def test_check_journal_takes_the_expected_purpose(project):
+    path = project.runs['B0']
+    config = json.loads((path / 'config.json').read_bytes())
+    rows = report.journal_rows(project.root)
+    base = {'environment_manifest_sha256': next(r for r in rows if r.get('run_id') == path.name)['environment_manifest_sha256']}
+    started = report.check_journal(project.root, path, rows, config, base, 'N3 benchmark run')
+    assert started['event'] == 'started'
+    with pytest.raises(ValueError, match='purpose or candidate_ids'):
+        report.check_journal(project.root, path, rows, config, base, 'N4 hypothesis run')
 
 
 def test_report_rejects_malformed_run_data_with_value_error(project):

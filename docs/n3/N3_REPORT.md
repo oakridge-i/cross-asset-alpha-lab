@@ -8,7 +8,7 @@ N3 computes the benchmarks of the [research protocol](../../RESEARCH_PROTOCOL.md
 
 ## Vintage and commands
 
-Vintage: `data/derived/20261006T172442-80ef993493` (corrected, with `corrections.json`; D019, approved by D020), manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2`. Window 2008-12-31 to 2022-12-30; the first decision is at the close of 2008-12-31 and is executed at the open of 2009-01-02. Main scenario: cost 0.001 per side, lag 1, reserve 0.01, proxy payment lag 10 sessions; initial cash 100000.
+Vintage: `data/derived/20261006T172442-80ef993493` (corrected, with `corrections.json`; D019, approved by D020), manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2`. Window 2008-12-31 to 2022-12-30; the first decision is at the close of 2008-12-31 and is executed at the open of 2009-01-02. Main scenario: cost 0.001 per side, lag 1, reserve 0.01, proxy payment lag 10 calendar days, then the first eligible session; initial cash 100000.
 
 ```bash
 PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B0 --start 2008-12-31 --end 2022-12-30 --root .
@@ -84,7 +84,7 @@ The tables below are reproduced from the frozen `benchmarks.md` of report `20261
 Definitions (the full ones are in [D022](../../DECISIONS.md) and in section 11 of the [protocol](../../RESEARCH_PROTOCOL.md)):
 
 - `cost_ratio`: the sum over the period's decisions of costs in USD divided by NAV at the decision close (a sum of relative costs, not the exact loss of compound return; D022, item 13).
-- `turnover_annual`: one-way turnover, the sum of absolute trade notional divided by pretrade NAV, expressed as a multiple of NAV per year (`x`); it is not divided by 2 (D022, item 11).
+- `turnover_annual`: one-way turnover, the sum of absolute trade notional divided by NAV at the decision close, expressed as a multiple of NAV per year (`x`); it is not divided by 2 (D022, item 11).
 - `mean_cash_plus_bil`, `mean_receivables`, `mean_risky`: mean shares of NAV held in USD cash plus BIL, in receivables, and in the risky ETFs (all tickers except BIL).
 - `mean_target_risky`: the mean total target weight of the risky ETFs over the period's decisions; `n/a` where the period has no decision.
 - `sharpe_bil`, `mean_excess` and `utility` use excess returns over the theoretical total-return index of BIL, not over B0 (D022, item 10).
@@ -268,3 +268,7 @@ Window 2008-12-31 to 2022-12-30, initial cash 100000.00, scenario {"cost": 0.001
 - This is a historical simulation on data that are not point-in-time; `available_at` is a modeling assumption. The seven Yahoo corrections were accepted by the user's decision that the issuer is authoritative and have no independent confirmation (D016). The `confirmed_no_distributions` basis for GLD is weaker than a statement that distributions never occurred (D018). The completeness of DBC before 2007-12-17 is not proven by the issuer document (D017). The universe is retrospective. The data readiness conditions and their disclosure: D019, D020.
 - Costs are modeled at 10 bps per side, not measured, and Open is a modeled price; the results do not reflect settlement, auction fills, liquidity or brokerage constraints. The payable-date contract check starts at 2007-05-30 (D021, item 13).
 - The results describe the behavior of the benchmark rules on this history. They do not establish an investable track record or an alpha.
+
+## Corrections
+
+- 8 October 2026: two wording corrections. In "Vintage and commands", "proxy payment lag 10 sessions" is replaced by "proxy payment lag 10 calendar days, then the first eligible session", the contract of protocol line 42 and D021 item 5; no proxy payout falls inside the N3 window. In the definition of `turnover_annual`, "divided by pretrade NAV" is replaced by "divided by NAV at the decision close", the denominator chosen in D022 item 11 and used by the engine. Numbers, tables, run identifiers and hashes are unchanged. See [D023](../../DECISIONS.md).

@@ -56,7 +56,23 @@ def src_tree(root, sha):
     return tree
 
 
-def check_journal(root, run_dir, rows, config, base):
+def run_path(root, path):
+    """Resolved run directory, which must lie directly inside data/runs."""
+    resolved = (root / path).resolve()
+    require(resolved.parent == (root / 'data/runs').resolve(), f'run directory outside data/runs: {path}')
+    return resolved
+
+
+def verify_run_dir(root, path, files, label='benchmark'):
+    """Resolve a run directory inside data/runs, verify its manifest, require exactly the given file set and read
+    config.json; returns (manifest, config)."""
+    path = run_path(root, path)
+    manifest = verify(path)
+    require(set(manifest['files']) == set(files), f'{path.name}: not a {label} run')
+    return manifest, read_json(path / 'config.json')
+
+
+def check_journal(root, run_dir, rows, config, base, purpose, label='benchmark'):
     """Check 3: one started and one completed record, clean tree, outputs, data hash, config and environment
     agreement; returns the started record."""
     mine = [r for r in rows if r.get('run_id') == run_dir.name]
@@ -64,8 +80,9 @@ def check_journal(root, run_dir, rows, config, base):
     terminal = [r for r in mine if r['event'] != 'started']
     require(len(started) == 1 and len(terminal) == 1, f'{run_dir.name}: needs one started and one terminal record')
     started, terminal = started[0], terminal[0]
-    require(terminal['event'] == terminal['status'] == 'completed',
-            f'{run_dir.name}: run status is {terminal["status"]}, not completed')
+    # The N3 message is kept byte for byte; the N4 message names the run only and withholds the status value.
+    status = f'{terminal["status"]}, not completed' if label == 'benchmark' else 'not completed'
+    require(terminal['event'] == terminal['status'] == 'completed', f'{run_dir.name}: run status is {status}')
     for record in (started, terminal):
         require(record['dirty_tree'] is False, f'{run_dir.name}: dirty_tree is not false')
         require(record['git_sha'], f'{run_dir.name}: git_sha is null')
@@ -77,8 +94,8 @@ def check_journal(root, run_dir, rows, config, base):
     for key in AGREE:
         require(started['config'].get(key) == config.get(key), f'{run_dir.name}: journaled {key} differs from config.json')
     name = config['provider']['name']
-    require(started['purpose'] == 'N3 benchmark run' and started['candidate_ids'] == [name],
-            f'{run_dir.name}: journaled purpose or candidate_ids is not that of a {name} benchmark run')
+    require(started['purpose'] == purpose and started['candidate_ids'] == [name],
+            f'{run_dir.name}: journaled purpose or candidate_ids is not that of a {name} {label} run')
     require(started['environment_manifest_sha256'] == base['environment_manifest_sha256'],
             f'{run_dir.name}: environment differs from the report environment')
     return started
@@ -94,17 +111,11 @@ def common_periods(metrics):
 def verified_runs(root, run_dirs, expected_sha256, base):
     """Checks 1-5 in order; returns {benchmark: (run_dir, manifest, config, metrics)}."""
     require(len(run_dirs) == len(BENCHMARKS), f'exactly five run directories required, got {len(run_dirs)}')
-    dirs = []
-    for d in run_dirs:
-        path = (root / d).resolve()
-        require(path.parent == (root / 'data/runs').resolve(), f'run directory outside data/runs: {d}')
-        dirs.append(path)
+    dirs = [run_path(root, d) for d in run_dirs]
     found = {}
     for path in dirs:
         with well_formed(path.name):
-            manifest = verify(path)
-            require(set(manifest['files']) == RUN_FILES, f'{path.name}: not a benchmark run')
-            config = read_json(path / 'config.json')
+            manifest, config = verify_run_dir(root, path, RUN_FILES)
             found.setdefault(config['provider']['name'], []).append((path, manifest, config))
     require(sorted(found) == sorted(BENCHMARKS) and all(len(v) == 1 for v in found.values()),
             'each of B0, B1, B2, B3 and REF_SPY is required exactly once')
@@ -113,7 +124,7 @@ def verified_runs(root, run_dirs, expected_sha256, base):
     for name in BENCHMARKS:
         path, manifest, config = found[name][0]
         with well_formed(path.name):
-            started = check_journal(root, path, rows, config, base)
+            started = check_journal(root, path, rows, config, base, 'N3 benchmark run')
             require(src_tree(root, started['git_sha']) == src_tree(root, base['git_sha']),
                     f'{path.name}: src tree differs from the report commit')
             require(read_json(path / 'invariants.json')['passed'] is True, f'{path.name}: invariants did not pass')
