@@ -110,31 +110,22 @@ def pay_map(market, scenario):
 
 
 def provider_decision(provider, market, session):
-	"""Call a provider and extract weights and signals. Returns (weights_dict, signals_list).
-	Providers may return a dict (signals=[]) or a Decision namedtuple."""
-	result = provider(session, market.history(session))
-	# Check if result is a Decision namedtuple with weights and signals
-	if hasattr(result, 'weights') and hasattr(result, 'signals'):
-		raw = result.weights
-		signals = result.signals
-	else:
-		# Assume it's a dict of weights
-		raw = result
-		signals = []
-	if set(raw) != set(market.tickers):
-		raise ValueError(f'weights on {session} must cover exactly {list(market.tickers)}: got {sorted(raw)}')
-	weights = {t: raw[t] for t in market.tickers}
-	bad = [t for t, w in weights.items() if not (finite_number(w) and w >= 0)]
-	if bad:
-		raise ValueError(f'weights on {session} must be finite and >= 0: {bad}')
-	if math.fsum(weights.values()) > 1 + WEIGHT_SUM_TOLERANCE:
-		raise ValueError(f'weights on {session} sum to {math.fsum(weights.values())} > 1')
-	return weights, signals
+    """Validated (weights, signals) of a provider that returns a weight dictionary or a Decision."""
+    decision = provider(session, market.history(session))
+    raw, signals = (decision.weights, decision.signals) if hasattr(decision, 'signals') else (decision, [])
+    if set(raw) != set(market.tickers):
+        raise ValueError(f'weights on {session} must cover exactly {list(market.tickers)}: got {sorted(raw)}')
+    weights = {t: raw[t] for t in market.tickers}
+    bad = [t for t, w in weights.items() if not (finite_number(w) and w >= 0)]
+    if bad:
+        raise ValueError(f'weights on {session} must be finite and >= 0: {bad}')
+    if math.fsum(weights.values()) > 1 + WEIGHT_SUM_TOLERANCE:
+        raise ValueError(f'weights on {session} sum to {math.fsum(weights.values())} > 1')
+    return weights, signals
 
 
 def provider_weights(provider, market, session):
-	weights, _ = provider_decision(provider, market, session)
-	return weights
+    return provider_decision(provider, market, session)[0]
 
 
 def check(passed, detail):
@@ -266,17 +257,17 @@ PROVIDERS = {'invariant_rotation': Provider(invariant_rotation, '1', 'monthly', 
              'B3': Provider(b3, '1', 'monthly', 'benchmark'),
              'REF_SPY': Provider(ref_spy, '1', 'first_only', 'benchmark'),
              'H1_252_3': Provider(functools.partial(h1, lookback=252, k=3), '1', 'monthly', 'hypothesis',
-             	{'lookback': 252, 'k': 3}),
+                                  {'lookback': 252, 'k': 3}),
              'H1_252_4': Provider(functools.partial(h1, lookback=252, k=4), '1', 'monthly', 'hypothesis',
-             	{'lookback': 252, 'k': 4}),
+                                  {'lookback': 252, 'k': 4}),
              'H1_126_3': Provider(functools.partial(h1, lookback=126, k=3), '1', 'monthly', 'hypothesis',
-             	{'lookback': 126, 'k': 3}),
+                                  {'lookback': 126, 'k': 3}),
              'H1_126_4': Provider(functools.partial(h1, lookback=126, k=4), '1', 'monthly', 'hypothesis',
-             	{'lookback': 126, 'k': 4}),
+                                  {'lookback': 126, 'k': 4}),
              'H2_4of6': Provider(functools.partial(h2, h=4), '1', 'monthly', 'hypothesis',
-             	{'h': 4, 'parent': 'H1_252_3'}),
+                                 {'h': 4, 'parent': 'H1_252_3'}),
              'H2_5of6': Provider(functools.partial(h2, h=5), '1', 'monthly', 'hypothesis',
-             	{'h': 5, 'parent': 'H1_252_3'})}
+                                 {'h': 5, 'parent': 'H1_252_3'})}
 DECISION_COLUMNS = ['decision_session', 'execution_session', 'nav', 'buy_fill', 'turnover', 'costs_usd']
 ORDER_COLUMNS = ['decision_session', 'execution_session', 'ticker', 'weight', 'close', 'target_qty', 'held_qty',
                  'order_qty', 'filled_qty', 'status', 'cancel_reason']
@@ -290,14 +281,14 @@ def weight_columns(tickers):
 
 
 def config_record(config, provider_name):
-	"""JSON form of the run parameters, journaled with the run and frozen in config.json."""
-	sessions = config.decision_sessions
-	provider_entry = PROVIDERS[provider_name]
-	provider_info = {'name': provider_name, 'version': provider_entry.version}
-	if provider_entry.kind == 'hypothesis':
-		provider_info['parameters'] = provider_entry.parameters
-	return {**asdict(config), 'decision_sessions': None if sessions is None else list(sessions),
-			'provider': provider_info}
+    """JSON form of the run parameters, journaled with the run and frozen in config.json."""
+    sessions = config.decision_sessions
+    entry = PROVIDERS[provider_name]
+    provider = {'name': provider_name, 'version': entry.version}
+    if entry.kind == 'hypothesis':
+        provider['parameters'] = entry.parameters
+    return {**asdict(config), 'decision_sessions': None if sessions is None else list(sessions),
+            'provider': provider}
 
 
 def csv_bytes(rows, columns):
@@ -306,85 +297,65 @@ def csv_bytes(rows, columns):
                                                       float_format='%.10g').encode()
 
 
+def weight_rows(result, tickers):
+    return [{**{f'w_{t}': w[t] for t in tickers}, 'decision_session': w['decision_session'],
+             'usd': 1 - math.fsum(w[t] for t in tickers)} for w in result.weights]
+
+
 def result_files(result, config, provider_name, market):
-	"""The seven frozen files, plus weights.csv for benchmark and hypothesis; signals.csv for hypothesis only."""
-	tickers = market.tickers
-	orders = [{**asdict(o), 'order_qty': o.qty} for o in result.orders]  # qty at execution, after split conversion
-	payouts = [{**asdict(r), 'pay_basis': r.basis, 'amount': r.amount} for r in result.payouts]
-	daily = [{**d, **{f'qty_{t}': d[t] for t in tickers}} for d in result.daily]
-	record = {**config_record(config, provider_name), 'vintage': market.vintage,
-			  'manifest_sha256': market.manifest_sha256}
-	files = {'config.json': canonical_bytes(record),
-			 'decisions.csv': csv_bytes(result.decisions, DECISION_COLUMNS),
-			 'orders.csv': csv_bytes(orders, ORDER_COLUMNS),
-			 'trades.csv': csv_bytes([asdict(t) for t in result.trades], TRADE_COLUMNS),
-			 'payouts.csv': csv_bytes(payouts, PAYOUT_COLUMNS),
-			 'daily.csv': csv_bytes(daily, [*DAILY_COLUMNS, *(f'qty_{t}' for t in tickers)]),
-			 'invariants.json': canonical_bytes(result.invariants)}
-	provider_kind = PROVIDERS[provider_name].kind
-	if provider_kind == 'benchmark':
-		rows = [{**{f'w_{t}': w[t] for t in tickers}, 'decision_session': w['decision_session'],
-				 'usd': 1 - math.fsum(w[t] for t in tickers)} for w in result.weights]
-		files['weights.csv'] = csv_bytes(rows, weight_columns(tickers))
-		files['metrics.json'] = canonical_bytes(compute_metrics(market, result))
-	elif provider_kind == 'hypothesis':
-		# Add weights.csv for hypothesis
-		rows = [{**{f'w_{t}': w[t] for t in tickers}, 'decision_session': w['decision_session'],
-				 'usd': 1 - math.fsum(w[t] for t in tickers)} for w in result.weights]
-		files['weights.csv'] = csv_bytes(rows, weight_columns(tickers))
-		# Add signals.csv for hypothesis - determine if H1 or H2 based on presence of 'parent_weight'
-		if result.signals and 'parent_weight' in result.signals[0]:
-			signal_columns = SIGNAL_COLUMNS_H2
-		else:
-			signal_columns = SIGNAL_COLUMNS_H1
-		# Convert signal row values to strings where needed
-		signal_rows = []
-		for sig in result.signals:
-			row = {}
-			for col in signal_columns:
-				val = sig.get(col)
-				# Handle empty rank for non-eligible tickers
-				if col == 'rank' and val is None:
-					row[col] = ''
-				# Convert booleans to True/False
-				elif isinstance(val, bool):
-					row[col] = val
-				else:
-					row[col] = val
-			signal_rows.append(row)
-		files['signals.csv'] = csv_bytes(signal_rows, signal_columns)
-	return files
+    """The seven frozen files, plus weights.csv for a benchmark or hypothesis provider, metrics.json for a benchmark
+    and signals.csv for a hypothesis; none holds a run id, timestamp or path."""
+    tickers = market.tickers
+    orders = [{**asdict(o), 'order_qty': o.qty} for o in result.orders]  # qty at execution, after split conversion
+    payouts = [{**asdict(r), 'pay_basis': r.basis, 'amount': r.amount} for r in result.payouts]
+    daily = [{**d, **{f'qty_{t}': d[t] for t in tickers}} for d in result.daily]
+    record = {**config_record(config, provider_name), 'vintage': market.vintage,
+              'manifest_sha256': market.manifest_sha256}
+    files = {'config.json': canonical_bytes(record),
+             'decisions.csv': csv_bytes(result.decisions, DECISION_COLUMNS),
+             'orders.csv': csv_bytes(orders, ORDER_COLUMNS),
+             'trades.csv': csv_bytes([asdict(t) for t in result.trades], TRADE_COLUMNS),
+             'payouts.csv': csv_bytes(payouts, PAYOUT_COLUMNS),
+             'daily.csv': csv_bytes(daily, [*DAILY_COLUMNS, *(f'qty_{t}' for t in tickers)]),
+             'invariants.json': canonical_bytes(result.invariants)}
+    entry = PROVIDERS[provider_name]
+    if entry.kind in ('benchmark', 'hypothesis'):
+        files['weights.csv'] = csv_bytes(weight_rows(result, tickers), weight_columns(tickers))
+    if entry.kind == 'benchmark':
+        files['metrics.json'] = canonical_bytes(compute_metrics(market, result))
+    if entry.kind == 'hypothesis':
+        files['signals.csv'] = csv_bytes(result.signals, SIGNAL_COLUMNS_H2 if 'h' in entry.parameters
+                                         else SIGNAL_COLUMNS_H1)
+    return files
 
 
 def run_simulation(root, derived, provider_name, config, parent=None, expected_sha256=VINTAGE_MANIFEST_SHA256):
-	"""Journaled N2/N3/N4 run on a verified vintage; data/runs/<run_id> is frozen only after simulate succeeds."""
-	root = Path(root).resolve()
-	derived = (root / derived).resolve()
-	entry = PROVIDERS[provider_name]
-	if entry.schedule == 'first_only':
-		config = replace(config, decision_sessions=(config.start_session,))
-	cfg = {**config_record(config, provider_name), 'derived_snapshot': project_path(root, derived),
-		   'expected_sha256': expected_sha256}
-	kind = entry.kind
-	benchmark = kind == 'benchmark'
-	hypothesis = kind == 'hypothesis'
-	purpose = ('N3 benchmark run' if benchmark else 'N4 hypothesis run' if hypothesis else 'N2 execution run')
-	candidate_ids = [provider_name] if (benchmark or hypothesis) else None
-	with Run(root, purpose, cfg, parent, candidate_ids=candidate_ids) as run:
-		try:
-			require_inside(root, derived)
-			market = load_market(root, derived, expected_sha256)
-			run.base['universe'] = list(market.tickers)
-			result = simulate(market, entry.function, config)
-		except Exception as exc:
-			if hypothesis:
-				raise RuntimeError(f'{type(exc).__name__} in {provider_name} run; message withheld under the N4 viewing restriction') from None
-			raise
-		target = root / 'data/runs' / run.run_id
-		freeze(target, result_files(result, config, provider_name, market),
-			   {'derived_snapshot': cfg['derived_snapshot'], 'derived_manifest_sha256': market.manifest_sha256,
-				'environment': run.env, 'run_id': run.run_id})
-		failed = [name for name, c in result.invariants.items() if isinstance(c, dict) and not c['passed']]
-		run.finish('completed' if result.invariants['passed'] else 'invariants_failed', [project_path(root, target)],
-				   sha256((target / 'manifest.json').read_bytes()), failed)
-	return target
+    """Journaled N2/N3/N4 run on a verified vintage; data/runs/<run_id> is frozen only after simulate succeeds."""
+    root = Path(root).resolve()
+    derived = (root / derived).resolve()
+    entry = PROVIDERS[provider_name]
+    if entry.schedule == 'first_only':
+        config = replace(config, decision_sessions=(config.start_session,))
+    cfg = {**config_record(config, provider_name), 'derived_snapshot': project_path(root, derived),
+           'expected_sha256': expected_sha256}
+    purpose = {'benchmark': 'N3 benchmark run', 'hypothesis': 'N4 hypothesis run'}.get(entry.kind, 'N2 execution run')
+    with Run(root, purpose, cfg, parent,
+             candidate_ids=[provider_name] if entry.kind != 'test' else None) as run:
+        try:
+            require_inside(root, derived)
+            market = load_market(root, derived, expected_sha256)
+            run.base['universe'] = list(market.tickers)
+            result = simulate(market, entry.function, config)
+        except Exception as exc:
+            if entry.kind != 'hypothesis':
+                raise
+            raise RuntimeError(f'{type(exc).__name__} in {provider_name} run; '
+                               'message withheld under the N4 viewing restriction') from None
+        target = root / 'data/runs' / run.run_id
+        freeze(target, result_files(result, config, provider_name, market),
+               {'derived_snapshot': cfg['derived_snapshot'], 'derived_manifest_sha256': market.manifest_sha256,
+                'environment': run.env, 'run_id': run.run_id})
+        failed = [name for name, c in result.invariants.items() if isinstance(c, dict) and not c['passed']]
+        run.finish('completed' if result.invariants['passed'] else 'invariants_failed', [project_path(root, target)],
+                   sha256((target / 'manifest.json').read_bytes()), failed)
+    return target
