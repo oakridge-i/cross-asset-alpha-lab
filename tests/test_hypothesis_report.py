@@ -246,6 +246,40 @@ def test_close_rel():
     assert hr.close_rel(-2.0, -2.0 * (1 + 0.9e-8)) and not hr.close_rel(1.0, -1.0)
 
 
+@pytest.mark.parametrize('a,b', [(math.inf, math.inf), (-math.inf, -math.inf), (1.0, math.inf),
+                                 (-1.0, -math.inf), (math.nan, 0.0)])
+def test_close_rel_rejects_non_finite_operands(a, b):
+    assert not hr.close_rel(a, b)
+
+
+def test_report_rejects_overflowing_derived_score_as_item_5_score(empty):
+    session, ticker = SESSIONS[1], 'DBC'
+    for name in HYPOTHESES:
+        edit = {'momentum': '-1', 'sigma': '1e-309', 'score': '-1'}
+        edit_decision(empty, name, session, {ticker: edit})
+    message = reject_rules(empty, {'item 5 score'})
+    assert all(part in message for part in ('item 5 score', session, ticker))
+    assert '1e-309' not in message and '-1' not in message
+
+
+def test_report_collects_group_weight_fsum_overflow(empty):
+    session = SESSIONS[1]
+    edit_decision(empty, 'H1_126_3', session,
+                  weights={'w_SPY': '1e308', 'w_EFA': '1e308', 'w_EEM': '1e308'})
+    message = reject(empty, 'failed checks')
+    assert 'item 5 group cap' in failed_rules(message)
+    assert 'H1_126_3' in message and session in message and 'Equity' in message
+
+
+def test_report_collects_q_sum_fsum_overflow(empty):
+    session = SESSIONS[1]
+    edit_decision(empty, 'H1_126_3', session,
+                  {ticker: {'q': '1e308'} for ticker in RISKY})
+    message = reject(empty, 'failed checks')
+    assert 'item 5 q sum' in failed_rules(message)
+    assert 'H1_126_3' in message and session in message
+
+
 # --- acceptance ---------------------------------------------------------------------------------------------------
 
 def test_report_accepts_the_template_with_permitted_columns_only(project):

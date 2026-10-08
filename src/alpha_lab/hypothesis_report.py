@@ -71,7 +71,17 @@ INTEGER = re.compile(r'[0-9]+')
 
 def close_rel(a, b):
     """|a - b| <= REL_TOL * max(|a|, |b|); exact when both are 0."""
+    if not math.isfinite(a) or not math.isfinite(b):
+        return False
     return abs(a - b) <= REL_TOL * max(abs(a), abs(b))
+
+
+def _safe_fsum(values):
+    """Return None when finite malformed inputs overflow the report's sum."""
+    try:
+        return math.fsum(values)
+    except OverflowError:
+        return None
 
 
 def _months():
@@ -285,8 +295,8 @@ def _capped(q):
     sum, once and without reallocation."""
     c = {t: min(q[t], ETF_CAP) for t in RISKY}
     for members in GROUPS.values():
-        total = math.fsum(c[t] for t in members)
-        if total > GROUP_CAP:
+        total = _safe_fsum(c[t] for t in members)
+        if total is not None and total > GROUP_CAP:
             for t in members:
                 c[t] = c[t] * GROUP_CAP / total
     return c
@@ -299,11 +309,15 @@ def _check_decision(fail, name, session, weights_row, rows):
     for t in RISKY:
         fail.require(-ABS_TOL <= w[t] <= ETF_CAP + ABS_TOL, 'item 5 ETF cap', name, session, t)
     for group, members in GROUPS.items():
-        fail.require(math.fsum(w[t] for t in members) <= GROUP_CAP + ABS_TOL, 'item 5 group cap', name, session, group)
-    fail.require(abs(w[CASH] - (1 - math.fsum(w[t] for t in RISKY))) <= ABS_TOL, 'item 5 BIL remainder', name,
-                 session, CASH)
+        total = _safe_fsum(w[t] for t in members)
+        fail.require(total is not None and total <= GROUP_CAP + ABS_TOL, 'item 5 group cap', name, session, group)
+    risky_total = _safe_fsum(w[t] for t in RISKY)
+    fail.require(risky_total is not None and abs(w[CASH] - (1 - risky_total)) <= ABS_TOL,
+                 'item 5 BIL remainder', name, session, CASH)
     fail.require(w[CASH] >= -ABS_TOL, 'item 5 BIL non-negative', name, session, CASH)
-    fail.require(abs(usd - (1 - math.fsum(w.values()))) <= ABS_TOL, 'item 5 usd remainder', name, session)
+    all_weights = _safe_fsum(w.values())
+    fail.require(all_weights is not None and abs(usd - (1 - all_weights)) <= ABS_TOL,
+                 'item 5 usd remainder', name, session)
     fail.require(abs(usd) <= ABS_TOL, 'item 5 usd bound', name, session)
     for row in rows:
         t = row['ticker']
@@ -328,7 +342,8 @@ def _check_decision(fail, name, session, weights_row, rows):
     for (_, a), (_, b) in zip(ranked, ranked[1:]):
         fail.require(p[a]['score'] >= p[b]['score'], 'item 5 rank order', name, session, b)
     selected = [t for t, s in p.items() if s['selected']]
-    fail.require(abs(math.fsum(s['q'] for s in p.values()) - len(selected) / K[name]) <= ABS_TOL, 'item 5 q sum', name,
+    q_total = _safe_fsum(s['q'] for s in p.values())
+    fail.require(q_total is not None and abs(q_total - len(selected) / K[name]) <= ABS_TOL, 'item 5 q sum', name,
                  session)
     for t in selected[1:]:
         fail.require(close_rel(p[t]['q'] * p[t]['sigma'], p[selected[0]]['q'] * p[selected[0]]['sigma']),

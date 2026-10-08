@@ -24,6 +24,8 @@ The registered sequence, each step on a clean tree with its journal lines commit
 
 Status. `computed_not_evaluated` means that the configuration has a completed registered run on the approved vintage, the first completed N4 report over the final set of six runs has accepted it, the repeat comparison has found all seven pairs equal, and no decision under protocol section 13 exists. The journal records no status event. The current status of the six configurations is `computed_not_evaluated`; the three conditions were met on 8 October 2026 by the records below (D023, item 9). Hypothesis run directories are storage read only by code; only the diagnostics permitted by D023, item 6 may be published or shown.
 
+The records below are the original N4 campaign. A post-run numerical validation correction is recorded in D024. The replacement campaign required by D023, item 8 has not started: the correction is uncommitted and registered reports require clean source provenance. Historical records and the status they establish are retained.
+
 Registered N4 records, all `completed` (the journal commit of each step is in the [N4 report](../docs/n4/N4_REPORT.md)):
 
 | Configuration | First run | Repeat (parent: first run) |

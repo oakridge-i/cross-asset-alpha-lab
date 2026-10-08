@@ -184,9 +184,19 @@ Checks performed in this stage (8 October 2026):
 
 Limitations: the viewing restriction is procedural; the published aggregates combined with public prices permit approximate inference about exposures, and 2014-2022 is familiar history, not an independent test. The window excludes most of the 2008 crisis (protocol line 141). `require_warmup` counts rows, not XNYS sessions (D023 item 3); the approved vintage holds all 4869 sessions. The data limitations of D016-D020 apply. The status `computed_not_evaluated` states neither that a configuration is useful nor that it is rejected.
 
-Next action: final review of the branch, then merge into `main` on the user's approval (the `data/runs` and `data/reports` directories of the working copy are then moved to the project root, and the project-root form of the commands has not yet been executed); then N5, which computes the section 11 metrics of H1/H2 with its own frozen code.
+Next action: after authorization to commit, record the corrected source on a clean tree and complete the replacement campaign required by D023, item 8, with parent-linked runs, reports, repeats and all seven pair comparisons. Review that evidence before any authorized merge, push or transfer of `data/runs` and `data/reports`; then N5 computes the section 11 metrics of H1/H2 with its own frozen code.
 
-Verified commit: `f921b41`, the last journal commit of the runs (the source tree is that of `bbf7640`). Publication commits: `81f7772` (N4 report and document updates), `48ae9ad` (one accounting line per repeat; the executed comparison script in docs/REPRODUCIBILITY.md), `5e574ca` (code block fix); they change documents only. The final review of the whole branch before merge has not been performed yet.
+Verified commit: `f921b41`, the last journal commit of the runs (the source tree is that of `bbf7640`). Publication commits: `81f7772` (N4 report and document updates), `48ae9ad` (one accounting line per repeat; the executed comparison script in docs/REPRODUCIBILITY.md), `5e574ca` (code block fix); they change documents only. The final review at `92dd78f` found one important report-validation defect and one minor documentation contradiction; the working-copy correction is described below.
+
+## Post-review correction: uncommitted, replacement campaign pending
+
+The final review of `a1d734e..92dd78f` independently checked the journal, approved vintage, source/environment identity, all seven original repeat pairs, both frozen report outputs and the publication tables. Its full suite passed 602 tests, zero skipped, at the unchanged `92dd78f`; this is the pre-fix historical baseline.
+
+The working copy corrects non-finite score intermediates and overflowing sums in N4 report validation, with synthetic regression cases and value-free rule/configuration/session errors. It also replaces the stale sentence in EXECUTION_MODEL.md that stated no H1/H2 run had been executed. D024 and the dated addition to the N4 report disclose the correction. Provider formulas, parameters, versions and tolerances are unchanged.
+
+Full-suite result for the corrected uncommitted patch based on `92dd78f`: 610 passed, zero skipped, in 463.22 seconds; pytest exited with code 0. This includes the approved-vintage N3 regression and independent H1/H2 target checks. The new regressions failed on the old implementation (five failed, three already passed) and passed after the correction; the focused verification passed eleven cases. The scoped review of the fix passed both requirements and code-quality checks. Read-only revalidation with the corrected validator accepted both historical report input sets and reproduced their two output files byte-for-byte. The historical experiment journal, all fourteen original attempt manifests and their file hashes, and the run/report directory inventories are unchanged; no replacement attempt has been started. This revalidation is not a registered report on the corrected source.
+
+The six configurations retain the historical status `computed_not_evaluated`. The corrected source is not yet ready to merge: the user requires no commits at this stage, while the replacement campaign requires committed clean source provenance and a journal commit between attempts. Commit authorization is therefore the prerequisite for that campaign. No merge, push, data transfer or N5/N6 evaluation is performed.
 
 ## Limitations and next milestone
 
@@ -196,7 +206,7 @@ The N2 and N3 runs do not remove the data limitations above: they remain disclos
 
 Next step:
 
-1. N4: final review of the branch and merge into `main` on the user's approval; then N5 (walk-forward selection and the section 11 metrics, computed by frozen code); N6 holds the section 12 scenarios. New data or corrections require fresh reconciliation, QA and a new readiness decision.
+1. N4: after commit authorization, commit the verified correction and complete its registered replacement campaign and review the new evidence before an authorized merge; then N5 (walk-forward selection and the section 11 metrics, computed by frozen code); N6 holds the section 12 scenarios. New data or corrections require fresh reconciliation, QA and a new readiness decision.
 
 Deferred:
 
