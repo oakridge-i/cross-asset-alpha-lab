@@ -169,3 +169,16 @@ def test_month_end_levels_rejects_index_of_another_history(no_network):
     m = market_from_frames(benchmark_frames())
     with pytest.raises(ValueError, match='index'):
         month_end_levels(m.history('2009-02-27'), total_return_index(m))
+
+
+def test_month_end_levels_reuses_the_exchange_calendar(monkeypatch, no_network):
+    from alpha_lab import features
+    frames = benchmark_frames()
+    history_levels(frames, '2009-02-27')                                      # warm any calendar cache
+    calls = []
+    original = features.calendar
+    monkeypatch.setattr(features, 'calendar', lambda *args: calls.append(args) or original(*args))
+    ends = ('2008-06-30', '2008-07-31', *MONTH_ENDS)                          # last XNYS sessions of 2008-06 ... 2009-02
+    for t, first in (('2009-02-27', 2), ('2009-01-30', 1), ('2008-12-31', 0)):
+        assert tuple(history_levels(frames, t).index) == ends[first:first + 7]
+    assert calls == []

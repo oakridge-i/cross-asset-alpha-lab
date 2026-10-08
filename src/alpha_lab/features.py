@@ -1,6 +1,6 @@
 """Causal features: theoretical total-return index, sigma, excess-return covariance, momentum and month-end levels
 (protocol lines 40, 52-60, 93-107)."""
-from datetime import date
+from functools import lru_cache
 import numpy as np
 from alpha_lab.normalize import calendar
 
@@ -93,6 +93,20 @@ def _month_number(month):
     return 12 * int(year) + int(number)
 
 
+@lru_cache(maxsize=None)
+def _xnys_month_ends(year):
+    """Last XNYS session of each calendar month of `year`, keyed 'YYYY-MM' (one calendar build per year)."""
+    ends = {}
+    for day in calendar(f'{year}-01-01', f'{year}-12-31').sessions:
+        ends[day.date().isoformat()[:7]] = day.date().isoformat()
+    return ends
+
+
+def xnys_month_end(month):
+    """Last XNYS session of the calendar month 'YYYY-MM'."""
+    return _xnys_month_ends(int(month[:4]))[month]
+
+
 def month_end_levels(market, index, count=MONTH_LEVELS):
     """Index rows at the last session of each of the latest `count` calendar months of the history, ascending.
 
@@ -110,13 +124,8 @@ def month_end_levels(market, index, count=MONTH_LEVELS):
     numbers = [_month_number(m) for m in months]
     if any(b - a != 1 for a, b in zip(numbers, numbers[1:])):
         raise ValueError(f'month-end months are not consecutive: {months[0]} to {months[-1]}')
-    year, number = divmod(numbers[-1], 12)  # first day of the month after the last month
-    xnys = calendar(f'{months[0]}-01', date(year, number + 1, 1).isoformat())
-    month_end = {}
-    for day in xnys.sessions:
-        month_end[day.date().isoformat()[:7]] = day.date().isoformat()
     for m in months:
-        if last[m] != month_end[m]:
+        if last[m] != xnys_month_end(m):
             raise ValueError(f'{last[m]} is not the last XNYS session of {m}')
     return index.loc[[last[m] for m in months]].copy()
 
