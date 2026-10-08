@@ -4,7 +4,7 @@ An auditable study of whether relative momentum and persistence of returns can i
 
 The research is intended to distinguish a useful allocation rule from a result explained by familiar market exposures, favorable execution assumptions, or repeated testing. Its value will depend on evidence against transparent baselines, including the possibility that added complexity has no economic benefit.
 
-**Stage as of 7 October 2026: data preparation, the account and execution engine (N2) and the benchmarks (N3) are implemented; results for B0-B3 and REF_SPY for 2009-2022 are in the [N3 report](docs/n3/N3_REPORT.md); strategy (H1/H2) performance is untested.** The approved dataset was released for portfolio-engine development under D020. The repository implements the N1 data pipeline and the N2 engine for positions, cash, orders, costs, splits and distributions. It contains no strategy backtest or H1/H2 performance results. The N2 engine was exercised with a test weight provider that is not a strategy, and no returns or NAV from that run are published. N3 adds the baselines B0-B3 and REF_SPY, whose results are reported without comparison to any candidate. No positive alpha or investable track record has been established.
+**Stage as of 8 October 2026: data preparation, the account and execution engine (N2) and the benchmarks (N3) are implemented; results for B0-B3 and REF_SPY for 2009-2022 are in the [N3 report](docs/n3/N3_REPORT.md). Stage N4 is complete on the branch `claude/n4-hypotheses` (not merged into `main`): the six H1/H2 configurations have been run and reproduced and have the status `computed_not_evaluated` ([N4 report](docs/n4/N4_REPORT.md)). H1/H2 returns are not published before N5, and strategy performance is untested.** The approved dataset was released for portfolio-engine development under D020. The repository implements the N1 data pipeline and the N2 engine for positions, cash, orders, costs, splits and distributions. Six H1/H2 runs exist on the N4 branch; their return and risk results are not computed or published in N4, and no H1/H2 performance result exists. The N2 engine was exercised with a test weight provider that is not a strategy, and no returns or NAV from that run are published. N3 adds the baselines B0-B3 and REF_SPY, whose results are reported without comparison to any candidate. N4 adds the six H1/H2 runs, whose permitted diagnostics are published without any performance metric. No positive alpha or investable track record has been established.
 
 ## Research design
 
@@ -46,14 +46,21 @@ N3 computes the protocol benchmarks B0 (BIL only), B1 (equal weights), B2 (inver
 - The [N3 report](docs/n3/N3_REPORT.md) publishes the section 11 metrics for 2009-2022 by period and by year, with weight-construction diagnostics. Realized volatility and cash shares differ across the benchmarks, and the actual weights of B2 and B3 drift above the 25% target cap between decisions.
 - The benchmarks are baselines. The report does not compare candidates, does not state which benchmark is better, and computes nothing for H1/H2 or after 2022-12-30. The branch `claude/n3-benchmarks` was merged into `main` on 8 October 2026.
 
+N4 implements the six H1/H2 configurations as weight providers on the approved vintage, with causal signal records and the interpretations recorded in [D023](DECISIONS.md). It is complete on the branch `claude/n4-hypotheses`; the branch has not been merged into `main`.
+
+- One registered run of each configuration (window 2008-12-31 to 2022-12-30, 168 monthly decisions) passed all seven financial invariants, and a report over the six runs accepted them. A repeat of every run and of the report produced identical output file hashes. The six configurations have the status `computed_not_evaluated`: computed once on the approved vintage, reproduced, and not evaluated.
+- The [N4 report](docs/n4/N4_REPORT.md) lists the run identifiers and publishes only counts, selection and target-weight aggregates, turnover and a cost ratio. No return, volatility, drawdown, utility or USD-cost figure of H1/H2 is computed or published, and the configurations are not compared with each other or with B0-B3. These metrics are first computed in N5 by code that is fixed beforehand.
+- The restriction on viewing the results is procedural. The published aggregates, combined with public prices, permit approximate inference about exposures, and 2014-2022 remains familiar history rather than an independent test.
+
 ## What would justify further attention
 
 | Milestone | Evidence required |
 |---|---|
 | N2: portfolio and execution | Tested accounting, cash constraints, corporate actions, and manual reconciliation (implemented; see [N2 report](docs/n2/N2_REPORT.md)) |
 | N3: baselines | Benchmarks B0-B3 and REF_SPY with comparable net returns and a registered, reproduced run (implemented; see [N3 report](docs/n3/N3_REPORT.md)) |
-| N4-N5: hypotheses | Comparable net returns, full attempt history, risk attribution, uncertainty, and cost/delay robustness |
-| N6: reserved historical check | Frozen procedure, one recorded opening, and disclosure of historical familiarity |
+| N4: hypotheses | Six registered configurations with causal signals and a registered, reproduced run for each, with only permitted diagnostics published (computed on the branch `claude/n4-hypotheses`; see [N4 report](docs/n4/N4_REPORT.md)) |
+| N5: walk-forward and statistics | Comparable net returns, full attempt history, risk attribution, and uncertainty |
+| N6: robustness and reserved historical check | Cost and delay scenarios of protocol section 12, a frozen procedure, one recorded opening, and disclosure of historical familiarity |
 | N7-N8: conclusions and prospective observation | A reproducible report, explicit rejection criteria, and receipts for genuinely future observations |
 
 The protocol requires both economic relevance and statistical support, together with robustness across costs, execution delays, asset classes, and years. A negative result is a valid outcome; a favorable backtest alone is insufficient.
@@ -71,6 +78,7 @@ Execution remains a research model: settlement, auction fills, liquidity, and re
 - [N1 data report](docs/n1/N1_REPORT.md), [source evidence](docs/n1/source_evidence.json), and [run record](docs/n1/execution_record.md)
 - [N2 execution model](EXECUTION_MODEL.md), [N2 report](docs/n2/N2_REPORT.md), and [manual reconciliations](docs/n2/manual_reconciliation.md)
 - [N3 benchmark report](docs/n3/N3_REPORT.md) and [decision D022](DECISIONS.md)
+- [N4 hypothesis report](docs/n4/N4_REPORT.md) and [decision D023](DECISIONS.md)
 - [Environment, replay commands, and reproduction limits](docs/REPRODUCIBILITY.md)
 - [Experiment journal](experiments/EXPERIMENT_LOG.jsonl) and [recording rules](experiments/README.md)
 - [N0 source assessment](docs/n0/N0_REPORT.md) and [prior-project reuse audit](docs/n0/AAPL_REUSE_AUDIT.md)

@@ -1,6 +1,6 @@
 # Project status
 
-As of 7 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. H1/H2 are `registered_not_tested`; reserved strategy performance has not been opened. The N2 account and execution engine is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n2-execution`, 7 October 2026); a registered run on the approved vintage passed all seven financial invariants. N3 (the benchmarks) is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n3-benchmarks`, 8 October 2026); the results of B0-B3 and REF_SPY for 2009-2022 are published in the [N3 report](docs/n3/N3_REPORT.md). H1/H2 remain `registered_not_tested`, no strategy returns exist, and the reserved period remains closed.
+As of 8 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. The six H1/H2 configurations have the status `computed_not_evaluated` after the N4 runs on the branch `claude/n4-hypotheses` (not merged into `main`); reserved strategy performance has not been opened. The N2 account and execution engine is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n2-execution`, 7 October 2026); a registered run on the approved vintage passed all seven financial invariants. N3 (the benchmarks) is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n3-benchmarks`, 8 October 2026); the results of B0-B3 and REF_SPY for 2009-2022 are published in the [N3 report](docs/n3/N3_REPORT.md). N4 (the six H1/H2 configurations) is implemented, run, repeated and reported on the branch `claude/n4-hypotheses`, which has not been merged; its diagnostics are published in the [N4 report](docs/n4/N4_REPORT.md). No H1/H2 return, risk or utility result is computed or published, and the reserved period remains closed.
 
 This is the [English editorial edition](docs/DOCUMENTATION_EDITION.md). Historical receipts and test results refer to their original versions. Commit identifiers retained below and in the journal may predate publication history rewriting; consult the [commit mapping](docs/HISTORY_REWRITE.md). Test counts below are historical records, not a new execution of the current suite.
 
@@ -141,9 +141,9 @@ Summary: all seven invariants passed in every run; 168 decisions for B0-B3 and o
 
 N2 deferred items closed by N3: (a) events and payments outside the common calendar, `9b8a721`; numeric weights and non-positive initial cash, `874beb2`; exit code 3 on failed checks, `74af51a` (D022, items 1-5).
 
-## N4: hypotheses H1/H2 (in progress)
+## N4: hypotheses H1/H2 (runs registered; branch not merged)
 
-Branch `claude/n4-hypotheses`, created from `main` at `a1d734e`; not merged. The design is in [the N4 specification](docs/superpowers/specs/2026-10-08-n4-hypotheses-design.md); the interpretations are recorded in D023. No H1/H2 run has been registered, the journal is unchanged since `a1d734e`, and H1/H2 remain `registered_not_tested`.
+Branch `claude/n4-hypotheses`, created from `main` at `a1d734e`; not merged. The design is in [the N4 specification](docs/superpowers/specs/2026-10-08-n4-hypotheses-design.md); the interpretations are recorded in D023; the registered runs, the permitted diagnostics and the disclosures are published in the [N4 report](docs/n4/N4_REPORT.md). The six configurations H1_252_3, H1_252_4, H1_126_3, H1_126_4, H2_4of6 and H2_5of6 have the status `computed_not_evaluated` (D023, item 9).
 
 Completed, with commits:
 
@@ -159,20 +159,44 @@ Completed, with commits:
 - D023, EXECUTION_MODEL.md, experiments/README.md and the N4 procedure in docs/REPRODUCIBILITY.md: `54100ac`.
 - Amended report contract before the runs (spec sections 6.4 and 7, D023 items 1, 3, 6, 7 and 10): `d95bffc`, `9b962e3`.
 - Report checks for all seven invariant flags, capped weights recomputed from `q`, turnover and `buy_fill` bounds, a clean report tree and value-free messages: `64ef609`; withheld serialization and freeze errors, month-end and test fixes: `2bbf709` to `ca54711`; H2 scale note, D023 provenance, `Provider` fields and real-vintage failure output: `bbf7640`.
+- Pre-run state recorded in STATUS: `353196a`.
+- Registered runs, report, repeats and repeat report on 8 October 2026 (journal lines committed after each step, `ae629c4` to `f921b41`), listed below. The N4 report and the updates of README.md, docs/REPRODUCIBILITY.md, experiments/README.md and EXECUTION_MODEL.md are in the publication commit that follows `f921b41`.
 
-Checks: pytest 602 passed, none skipped, on `bbf7640` in an isolated copy (`git archive`) with the approved vintage; this includes both real-vintage tests (N3 regression of 45 benchmark file hashes; independent recomputation of the H1/H2 target weights at 168 decisions). At `d6a1b2f` these tests found 45 of 45 N3 file hashes equal and no selection difference in the recomputation (maximum absolute weight difference 2.2e-16). Earlier: 556 passed on `d5d6b3a` (historical). A review of the whole branch before the registered runs found no critical or important defect. These tests evaluate target weights and benchmark files only; no H1/H2 account was computed.
+Registered runs on the approved vintage, window 2008-12-31 to 2022-12-30, main scenario, run from the root of the branch's working copy with `../../.venv/Scripts/python`; all `completed` without quality warnings:
 
-Next action: the registered runs of D023 item 8 on the source tree of `bbf7640`, then the repeats and the N4 report.
+| | First run | Repeat (parent: first run) |
+|---|---|---|
+| H1_252_3 | `20261008T174218-4053e6ea58` (git `353196a`, journal `ae629c4`) | `20261008T174340-dfb6a1c558` (git `6498f44`, journal `6244b39`) |
+| H1_252_4 | `20261008T174253-cbb9ce2219` (git `ae629c4`, journal `23a157c`) | `20261008T174343-bda6d756d5` (git `6244b39`, journal `85cf34a`) |
+| H1_126_3 | `20261008T174300-8531bbf3ae` (git `23a157c`, journal `2d9f24a`) | `20261008T174347-8fc8ed2441` (git `85cf34a`, journal `3d17051`) |
+| H1_126_4 | `20261008T174303-337a7c2114` (git `2d9f24a`, journal `73501bc`) | `20261008T174355-8d6580f98d` (git `3d17051`, journal `52d5daf`) |
+| H2_4of6 | `20261008T174309-3f0ab95aeb` (git `73501bc`, journal `f857975`) | `20261008T174358-e5b5bd731e` (git `52d5daf`, journal `9504121`) |
+| H2_5of6 | `20261008T174315-44f030c165` (git `f857975`, journal `b938f40`) | `20261008T174405-a2006cbd61` (git `9504121`, journal `d0de40d`) |
+| Report | `20261008T174328-e5860d5cf2` (git `b938f40`, journal `6498f44`) | `20261008T174417-e6157ee9c6` (git `d0de40d`, journal `f921b41`) |
+
+Checks performed in this stage (8 October 2026):
+
+- Before the runs: pytest 602 passed, 0 skipped, on `bbf7640` in an isolated copy (`git archive`) with the approved vintage; this includes both real-vintage tests (N3 regression of 45 benchmark file hashes; independent recomputation of the H1/H2 target weights at 168 decisions). The `src` tree of `bbf7640` (`b2791448e4888b9a8cc3677458b3bd5a28afd9ae`) is the `src` tree of all 14 N4 records. A review of the whole branch before the runs found no critical or important defect.
+- All 14 records (six runs, report, six repeats, repeat report) are `completed` without quality warnings; the journal holds 28 N4 records, 94 in total. The first report accepted the six runs, and the seven financial invariants passed in every run.
+- The `files` dictionaries of the manifests are equal for all seven pairs (nine files for each configuration, two files for the reports).
+- Historical, earlier in this stage: pytest 556 passed on `d5d6b3a`; at `d6a1b2f` the real-vintage tests found 45 of 45 N3 file hashes equal and no selection difference in the recomputation (maximum absolute weight difference 2.2e-16).
+- These checks evaluate target weights, benchmark files, journal records and file hashes only. No H1/H2 return, risk or utility figure was computed, and no excluded quantity of D023 item 6 was shown.
+
+Limitations: the viewing restriction is procedural; the published aggregates combined with public prices permit approximate inference about exposures, and 2014-2022 is familiar history, not an independent test. The window excludes most of the 2008 crisis (protocol line 141). `require_warmup` counts rows, not XNYS sessions (D023 item 3); the approved vintage holds all 4869 sessions. The data limitations of D016-D020 apply. The status `computed_not_evaluated` states neither that a configuration is useful nor that it is rejected.
+
+Next action: final review of the branch, then merge into `main` on the user's approval (the `data/runs` and `data/reports` directories of the working copy are then moved to the project root, and the project-root form of the commands has not yet been executed); then N5, which computes the section 11 metrics of H1/H2 with its own frozen code.
+
+Verified commit: `f921b41`, the last journal commit of the runs (the source tree is that of `bbf7640`). The publication commit is added by the next update.
 
 ## Limitations and next milestone
 
 The data are not point-in-time; `available_at` is an assumption. Issuer records may be revised, and the seven corrections lack independent confirmation. GLD's evidence is weaker than an explicit assertion that distributions never occurred. DBC issuer coverage before 2007-12-17 is unproven. iShares expresses pre-split distributions in current units. Volume is unverified and unused; the universe is retrospective. D013's tolerance followed observation of rounding differences. Original Yahoo acquisition used uncommitted code, with its patch hash retained. Yahoo data rights are unestablished, and source snapshots are local rather than included in Git.
 
-The N2 and N3 runs do not remove the data limitations above: they remain disclosed in the N2 and N3 reports. N2 results concern accounting mechanics under the interpretations in D021, not strategy behavior. N3 results describe benchmark rules on a historical simulation with modeled costs (10 bps per side) and a modeled Open price. H1/H2 remain `registered_not_tested`, and the reserved period remains closed.
+The N2 and N3 runs do not remove the data limitations above: they remain disclosed in the N2 and N3 reports. N2 results concern accounting mechanics under the interpretations in D021, not strategy behavior. N3 results describe benchmark rules on a historical simulation with modeled costs (10 bps per side) and a modeled Open price. H1/H2 have the status `computed_not_evaluated` (N4 branch, not merged): no H1/H2 return, risk or utility result is computed or published, and the reserved period remains closed.
 
 Next step:
 
-1. N4: complete the registered H1/H2 runs, repeats and report (D023 item 8); then N5. New data or corrections require fresh reconciliation, QA and a new readiness decision.
+1. N4: final review of the branch and merge into `main` on the user's approval; then N5 (walk-forward selection and the section 11 metrics, computed by frozen code); N6 holds the section 12 scenarios. New data or corrections require fresh reconciliation, QA and a new readiness decision.
 
 Deferred:
 
