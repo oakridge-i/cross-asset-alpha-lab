@@ -106,6 +106,15 @@ def _sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def _decide(name, session, market):
+    """engine.provider_decision with the failure text limited to the exception type, the configuration and the
+    session: engine messages can carry cash, weight sums or variances (spec 6.4)."""
+    try:
+        return engine.provider_decision(engine.PROVIDERS[name].function, market, session)
+    except Exception as exc:
+        raise AssertionError(f'{type(exc).__name__} at {name} {session}') from None
+
+
 @real_vintage
 def test_n3_benchmark_files_unchanged(no_network):
     market = _market()
@@ -133,7 +142,7 @@ def test_hypothesis_providers_on_real_vintage(no_network):
     failures = []
     for name in names:
         for session in (START, LAST_DECISION):
-            weights, signals = engine.provider_decision(engine.PROVIDERS[name].function, market, session)
+            weights, signals = _decide(name, session, market)
             where = f'{name} {session}'
             if set(weights) != set(market.tickers):
                 failures.append(f'{where}: keys')
@@ -162,7 +171,7 @@ def _total_return_index(market):
     return index
 
 
-def _h1_target(index, columns, pos, lookback, k):
+def _h1_target(index, columns, pos, lookback, k, where):
     """Weights over RISKY + BIL and the selected set at the session in row `pos`, from rows 0..pos only."""
     t = index[:pos + 1]
     risky = [columns[i] for i in RISKY]
@@ -196,15 +205,16 @@ def _h1_target(index, columns, pos, lookback, k):
     port = math.sqrt(max(variance, 0.0))
     scale = 1.0 if port == 0.0 else min(1.0, VOL_TARGET / port)
     weights = dict(zip(RISKY, scale * v))
-    weights[BIL] = _remainder(weights)
+    weights[BIL] = _remainder(weights, where)
     return weights, set(selected)
 
 
-def _remainder(weights):
+def _remainder(weights, where):
     """BIL takes 1 minus the risky weights; a remainder in [-1e-12, 0) is set to 0, as in the provider."""
     cash = 1.0 - math.fsum(weights.values())
     if cash < 0.0:
-        assert cash >= -TOLERANCE, 'risky weights exceed 100%'
+        if cash < -TOLERANCE:
+            raise AssertionError(f'risky weights exceed 100% at {where}')
         cash = 0.0
     return cash
 
@@ -249,15 +259,15 @@ def test_independent_recomputation_of_targets(no_network):
         pos = sessions.index(t)
         parents = {}
         for lookback, k in {(c[1], c[2]) for c in CONFIGS.values()}:
-            parents[(lookback, k)] = _h1_target(index, columns, pos, lookback, k)
+            parents[(lookback, k)] = _h1_target(index, columns, pos, lookback, k, f'H1_{lookback}_{k} {t}')
         positive = _positive_months(index, sessions, columns, pos)
         for name, spec in CONFIGS.items():
             expected, chosen = parents[(spec[1], spec[2])]
             if spec[0] == 'H2':
                 chosen = {i for i in chosen if positive[i] >= spec[3]}
                 expected = {i: (expected[i] if positive[i] >= spec[3] else 0.0) for i in RISKY}
-                expected[BIL] = _remainder({i: expected[i] for i in RISKY})
-            weights, signals = engine.provider_decision(engine.PROVIDERS[name].function, market, t)
+                expected[BIL] = _remainder({i: expected[i] for i in RISKY}, f'{name} {t}')
+            weights, signals = _decide(name, t, market)
             got = {r['ticker'] for r in signals if r['selected'] and (spec[0] == 'H1' or r['filter_pass'])}
             selection_mismatches += got != chosen
             if spec[0] == 'H2':

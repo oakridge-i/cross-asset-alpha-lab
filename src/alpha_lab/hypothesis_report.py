@@ -782,7 +782,7 @@ def render_markdown(document):
            'session, an order to the year of its execution session, a trade to the year of its session and a payout '
            'to the year of its ex-dividend session, with its status at the end of the run. The full period is '
            '2009-01-01 to 2022-12-31. n/a marks a zero denominator or a minimum or maximum without values. '
-           'max_etf covers the nine risky ETFs only. For H2 the selection columns are those of the parent H1_252_3.',
+           'max_etf covers the nine risky ETFs only. For H2 the selection and scale columns are those of the parent H1_252_3.',
            '',
            '## Integrity (whole run)', '',
            report.table(['configuration', 'passed', *INVARIANT_CHECKS, 'split_events', 'proxy_payouts'],

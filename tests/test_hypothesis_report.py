@@ -1439,7 +1439,7 @@ def test_markdown_note_explains_n_a_max_etf_and_h2_selection():
     note = text.split('\n\n')[1]
     assert 'n/a marks a zero denominator or a minimum or maximum without values' in note
     assert 'max_etf covers the nine risky ETFs only' in note
-    assert 'For H2 the selection columns are those of the parent H1_252_3' in note
+    assert 'For H2 the selection and scale columns are those of the parent H1_252_3' in note
 
 
 def report_files(target):
