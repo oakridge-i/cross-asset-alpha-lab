@@ -164,7 +164,9 @@ pairs = [('runs','20261008T174218-4053e6ea58','20261008T174340-dfb6a1c558','H1_2
 for kind, a, b, name in pairs:
     ma, mb = (verify(Path('data')/kind/x) for x in (a, b))
     print(name, 'equal' if ma['files'] == mb['files'] else 'differs', len(ma['files']), 'files')
-``` The report files `hypotheses.json` and `hypotheses.md` in `data/reports/<run_id>/` contain no run id.
+```
+
+The report files `hypotheses.json` and `hypotheses.md` in `data/reports/<run_id>/` contain no run id.
 
 A run that exits with code 3 has frozen its result and journaled `invariants_failed`; a failed run or report stays in the journal. Changes to `src` after the first registered run are bug fixes only. Each requires a rerun of all six configurations on the new tree, each with `--parent` set to its previous run, and a new report, because the report requires one `src` tree for all runs; a fix that changes the output of a provider increments its version (D023, item 8). A failed hypothesis run prints an error whose message is withheld (`RuntimeError: ... message withheld under the N4 viewing restriction`); the cause is diagnosed by reproduction on synthetic data. No run or report failed and no change to `src` was made after the first registered run, so the failure and rerun rule was not applied. The conditions of D023, item 9 are met and the status of the six configurations is `computed_not_evaluated`. After the branch is merged, the directories `data/runs` and `data/reports` of the branch's working copy are moved to `data/` of the project root.
 
