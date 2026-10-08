@@ -186,7 +186,7 @@ Limitations: the viewing restriction is procedural; the published aggregates com
 
 Next action: final review of the branch, then merge into `main` on the user's approval (the `data/runs` and `data/reports` directories of the working copy are then moved to the project root, and the project-root form of the commands has not yet been executed); then N5, which computes the section 11 metrics of H1/H2 with its own frozen code.
 
-Verified commit: `f921b41`, the last journal commit of the runs (the source tree is that of `bbf7640`). The publication commit is added by the next update.
+Verified commit: `f921b41`, the last journal commit of the runs (the source tree is that of `bbf7640`). Publication commits: `81f7772` (N4 report and document updates), `48ae9ad` (one accounting line per repeat; the executed comparison script in docs/REPRODUCIBILITY.md), `5e574ca` (code block fix); they change documents only. The final review of the whole branch before merge has not been performed yet.
 
 ## Limitations and next milestone
 
