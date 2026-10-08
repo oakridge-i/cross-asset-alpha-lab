@@ -143,18 +143,24 @@ N2 deferred items closed by N3: (a) events and payments outside the common calen
 
 ## N4: hypotheses H1/H2 (in progress)
 
-Branch `claude/n4-hypotheses`, created from `main` at `a1d734e`; not merged. The design is in [the N4 specification](docs/superpowers/specs/2026-10-08-n4-hypotheses-design.md). No H1/H2 run has been registered, the journal is unchanged since `a1d734e`, and H1/H2 remain `registered_not_tested`.
+Branch `claude/n4-hypotheses`, created from `main` at `a1d734e`; not merged. The design is in [the N4 specification](docs/superpowers/specs/2026-10-08-n4-hypotheses-design.md); the interpretations are recorded in D023. No H1/H2 run has been registered, the journal is unchanged since `a1d734e`, and H1/H2 remain `registered_not_tested`.
 
 Completed, with commits:
 
 - Specification: `ce45e89` to `4616b06`.
-- Turnover denominator check and N3 report corrections (proxy payment lag in calendar days; turnover divided by NAV at the decision close): `3256697`. `docs/n4/turnover_denominator.py` reproduces the published B3 `turnover_annual` for `full` (2.92743488022618 from the CSV files against 2.927434880273802 in `metrics.json`) and gives 2.9257729824764995 with NAV at the execution Open; B3 run manifest SHA-256 `d1f9ee7d1e9b0de0f744b30693966ce77d6fa3da4bf8f19aee573b85c2536db4`. D023, which records this, is not yet written.
-- Momentum and month-end features: `68dd450`.
+- Turnover denominator check and N3 report corrections: `3256697` (values in D023 item 1).
+- Momentum and month-end features: `68dd450`; cached XNYS month-end lookup: `199d3b5`.
 - `common_risk` split into `capped` and `risk_detail` with bit-identical results: `8b224b4`.
+- H1 and H2 providers with signal records: `1ae1eaf`.
+- Engine integration (hypothesis kind, `parameters`, `signals.csv`, no `metrics.json`, withheld failure messages, engine-level causality tests): `fc2fe0e`, `4dc77a7`.
+- Real-vintage checks: N3 regression of 45 benchmark file hashes and an independent recomputation of the target weights of six configurations at 168 decisions: `d6a1b2f`.
+- Shared report checks parameterized with N3 report bytes unchanged: `d6eb037`.
+- N4 report verification (spec section 7): `dd2c3e3`; diagnostics document, Markdown and the `hypothesis-report` command: `d5d6b3a`.
+- D023, EXECUTION_MODEL.md, experiments/README.md and the N4 procedure in docs/REPRODUCIBILITY.md: `54100ac`.
 
-Checks: pytest 398 passed on `8b224b4`. Approved vintage manifest SHA-256 and environment manifest SHA-256 verified in the worktree on 8 October 2026.
+Checks: pytest 556 passed on `d5d6b3a` in an isolated copy with the approved vintage, none skipped; `54100ac` changed documents only. The real-vintage tests found 45 of 45 N3 file hashes equal and no selection difference in the recomputation (maximum absolute weight difference 2.2e-16). These tests evaluate target weights and benchmark files only; no H1/H2 account was computed.
 
-Next action: H1/H2 providers (`src/alpha_lab/hypotheses.py`), then engine integration, real-vintage checks, the N4 report command, D023, review of the branch, and the registered runs.
+Next action: review of the whole branch before the registered runs, one round of fixes for its findings and the open minor items (source changes must precede the first registered run), then the registered runs of D023 item 8.
 
 ## Limitations and next milestone
 
