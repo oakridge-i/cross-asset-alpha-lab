@@ -217,6 +217,40 @@ def test_decisions_causal_at_engine_level(tmp_path, no_network, name):
     assert base['payouts.csv'] and moved['payouts.csv'] != base['payouts.csv']
 
 
+def with_split(frames, session, ratio):
+    """Every ticker splits `ratio`-for-1 on `session`: raw prices and per-share dividends from then on are divided by
+    the ratio, so total returns are unchanged and only quantities move."""
+    for frame in frames.values():
+        frame.loc[session, 'split_ratio'] = ratio
+        after = frame.index >= session
+        frame.loc[after, ['open', 'close', 'dividend']] = frame.loc[after, ['open', 'close', 'dividend']] / ratio
+    return frames
+
+
+@pytest.mark.parametrize('name', ['H1_252_3', 'H2_4of6'])
+def test_decisions_unchanged_by_a_later_split_at_engine_level(tmp_path, no_network, name):
+    """Prices are raw and the adjusted history is built from the sessions up to t only, so a split dated after t
+    cannot reach a decision at or before t; with total returns unchanged by construction the later decisions do not
+    change either, so the control is the executed split and the changed quantities."""
+    t = '2009-01-30'
+    split_session = '2009-02-12'
+    results = {}
+    for label, frames in (('base', benchmark_frames()), ('split', with_split(benchmark_frames(), split_session, 2.0))):
+        derived, digest = frames_vintage(tmp_path / label, frames)
+        run_dir = run_simulation(tmp_path / label, derived, name, RunConfig(START, END), expected_sha256=digest)
+        results[label] = {file: (run_dir / file).read_text(encoding='utf-8')
+                          for file in ('weights.csv', 'signals.csv', 'daily.csv', 'invariants.json')}
+    base, split = results['base'], results['split']
+    rows = {label: {file: list(csv.DictReader(r[file].splitlines())) for file in ('weights.csv', 'signals.csv')}
+            for label, r in results.items()}
+    assert len(through(rows['base']['weights.csv'], t)) >= 2
+    for file in ('weights.csv', 'signals.csv'):
+        assert through(rows['split'][file], t) == through(rows['base'][file], t)
+    assert json.loads(base['invariants.json'])['split_events'] == []
+    assert json.loads(split['invariants.json'])['split_events'], 'the split must reach the executed account'
+    assert split['daily.csv'] != base['daily.csv']
+
+
 def test_registry_describes_every_provider():
     assert {n: (p.version, p.schedule, p.kind, p.parameters) for n, p in PROVIDERS.items()} == {
         'invariant_rotation': ('1', 'monthly', 'test', {}),
