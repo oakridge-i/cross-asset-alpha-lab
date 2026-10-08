@@ -1,6 +1,6 @@
 # Reproducibility
 
-The repository implements N1 data preparation, the N2 account and execution engine and the N3 benchmark providers, metrics and report. Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. Benchmark reproduction is available: the registered N3 runs of B0-B3 and REF_SPY and their report are listed below and in the [N3 report](n3/N3_REPORT.md). Reproduction of H1/H2 is not available, because no strategy has been run: the N2 run uses a test weight provider and publishes no returns.
+The repository implements N1 data preparation, the N2 account and execution engine, the N3 benchmark providers, metrics and report, and the N4 providers and report for the six H1/H2 configurations. Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. Benchmark reproduction is available: the registered N3 runs of B0-B3 and REF_SPY and their report are listed below and in the [N3 report](n3/N3_REPORT.md). Reproduction of H1/H2 is not available yet, because no H1/H2 run has been executed: the procedure is registered in the N4 section below, and the N2 run uses a test weight provider and publishes no returns.
 
 The [English documentation edition](DOCUMENTATION_EDITION.md) registers current document hashes separately. N0 receipts and the original experiment records are historical evidence; they do not certify the bytes of the rewritten documentation. See [HISTORY_REWRITE.md](HISTORY_REWRITE.md) for old-to-published commit mappings.
 
@@ -101,6 +101,43 @@ The registered N3 runs of 7 October 2026 (results, invariants and counts are in 
 | report | 20261007T200805-c75aa41980 | 20261007T200847-cf60a2b2d9 |
 
 For all five benchmark pairs the `files` dictionaries of the manifests are identical, and so are those of the two reports. The result directories `data/runs` and `data/reports` are not in Git.
+
+## N4 hypothesis runs (registered procedure, not yet executed)
+
+The commands in this section are the registered procedure of D023, item 8. No H1/H2 run, report or repeat has been executed, so none of these commands has been verified by a run, and the section lists no run id. When the runs are executed, their ids and the journal commits are added here. The `simulate` and `hypothesis-report` commands are exercised by tests on synthetic vintages. The real-vintage tests were also executed in the N4 worktree: the independent recomputation of the H1/H2 target weights evaluates the providers only and computes no account or return, and the N3 regression reruns the benchmarks in memory. Neither is journaled or an attempt (D023, item 10).
+
+Conditions, as for N3: the approved vintage `data/derived/20261006T172442-80ef993493` passes `provenance.verify` and has manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2`; the environment manifest SHA-256 is `5226dc9b0f21363873eb9a8420891733bbad1bc6c536262a3341eead520ce773`, the value journaled by the N3 runs; the full test suite passes; and the working tree is clean before each step. The window is 2008-12-31 to 2022-12-30 in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000), the defaults of the command. The parameters of the six configurations are fixed in the registry (D023, item 5). The results of the runs are stored in `data/runs/<run_id>`, which is read only by code (D023, item 6), and the commands print only that path.
+
+```bash
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2008-12-31 --end 2022-12-30 --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: H1_252_3 hypothesis run"
+```
+
+The same pair of commands (with its own provider name and commit message) is repeated for `H1_252_4`, `H1_126_3`, `H1_126_4`, `H2_4of6` and `H2_5of6`. Then:
+
+```bash
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab hypothesis-report --runs data/runs/<H1_252_3 dir> data/runs/<H1_252_4 dir> data/runs/<H1_126_3 dir> data/runs/<H1_126_4 dir> data/runs/<H2_4of6 dir> data/runs/<H2_5of6 dir> --root .
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "journal: hypothesis report"
+```
+
+Repeats. Each of the six runs is repeated with `--parent <run id of its first run>`, with the journal lines committed after each run, and the report is repeated over the six repeat directories with `--parent <run id of the first report>`:
+
+```bash
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2008-12-31 --end 2022-12-30 --root . --parent <first run id of H1_252_3>
+PYTHONPATH=src .venv/Scripts/python -m alpha_lab hypothesis-report --runs data/runs/<repeat dirs, six> --root . --parent <first report run id>
+```
+
+Comparison. Each repeat is compared with its first run, and the repeated report with the first report, by the `files` dictionaries of their `manifest.json` (per-file SHA-256), not by manifest bytes, which contain run identifiers. All seven pairs must be equal. The check prints one boolean and opens no result file:
+
+```bash
+python -c "import json,sys; a,b=(json.load(open(p+'/manifest.json'))['files'] for p in sys.argv[1:3]); print(a==b)" data/runs/<first dir> data/runs/<repeat dir>
+```
+
+The comparison command was run once on the first and repeated B0 runs of N3, with the result `True`; it has not been run on H1/H2 directories. The report files `hypotheses.json` and `hypotheses.md` in `data/reports/<run_id>/` contain no run id.
+
+A run that exits with code 3 has frozen its result and journaled `invariants_failed`; a failed run or report stays in the journal. Changes to `src` after the first registered run are bug fixes only. Each requires a rerun of all six configurations on the new tree, each with `--parent` set to its previous run, and a new report, because the report requires one `src` tree for all runs; a fix that changes the output of a provider increments its version (D023, item 8). A failed hypothesis run prints an error whose message is withheld (`RuntimeError: ... message withheld under the N4 viewing restriction`); the cause is diagnosed by reproduction on synthetic data. Until the conditions of D023, item 9 are met, the status of the six configurations is `registered_not_tested`. After the branch is merged, the directories `data/runs` and `data/reports` of the worktree are moved to `data/` of the main checkout.
 
 ## Historical blocker-resolution sequence
 
