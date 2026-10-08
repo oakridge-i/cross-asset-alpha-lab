@@ -196,8 +196,17 @@ def _h1_target(index, columns, pos, lookback, k):
     port = math.sqrt(max(variance, 0.0))
     scale = 1.0 if port == 0.0 else min(1.0, VOL_TARGET / port)
     weights = dict(zip(RISKY, scale * v))
-    weights[BIL] = 1.0 - sum(weights.values())
+    weights[BIL] = _remainder(weights)
     return weights, set(selected)
+
+
+def _remainder(weights):
+    """BIL takes 1 minus the risky weights; a remainder in [-1e-12, 0) is set to 0, as in the provider."""
+    cash = 1.0 - math.fsum(weights.values())
+    if cash < 0.0:
+        assert cash >= -TOLERANCE, 'risky weights exceed 100%'
+        cash = 0.0
+    return cash
 
 
 def _positive_months(index, sessions, columns, pos):
@@ -235,7 +244,7 @@ def test_independent_recomputation_of_targets(no_network):
     columns = {t: i for i, t in enumerate(market.close.columns)}
     index = _total_return_index(market)
     max_diff = 0.0
-    compared = selection_mismatches = 0
+    compared = selection_mismatches = filter_mismatches = filter_rows = 0
     for t in decisions:
         pos = sessions.index(t)
         parents = {}
@@ -247,14 +256,22 @@ def test_independent_recomputation_of_targets(no_network):
             if spec[0] == 'H2':
                 chosen = {i for i in chosen if positive[i] >= spec[3]}
                 expected = {i: (expected[i] if positive[i] >= spec[3] else 0.0) for i in RISKY}
-                expected[BIL] = 1.0 - sum(expected.values())
+                expected[BIL] = _remainder({i: expected[i] for i in RISKY})
             weights, signals = engine.provider_decision(engine.PROVIDERS[name].function, market, t)
             got = {r['ticker'] for r in signals if r['selected'] and (spec[0] == 'H1' or r['filter_pass'])}
             selection_mismatches += got != chosen
+            if spec[0] == 'H2':
+                assert [r['ticker'] for r in signals] == sorted(RISKY)
+                filter_rows += len(signals)
+                filter_mismatches += sum(r['filter_pass'] is not bool(positive[r['ticker']] >= spec[3])
+                                         for r in signals)
             max_diff = max(max_diff, max(abs(weights[i] - expected[i]) for i in (*RISKY, BIL)))
             compared += 1
     print(f'decisions {len(decisions)}, configurations {len(CONFIGS)}, compared {compared}, '
-          f'selection mismatches {selection_mismatches}, max abs weight difference {max_diff:.3e}')
+          f'selection mismatches {selection_mismatches}, filter_pass rows {filter_rows}, '
+          f'filter_pass mismatches {filter_mismatches}, max abs weight difference {max_diff:.3e}')
     assert compared == N_DECISIONS * len(CONFIGS)
     assert selection_mismatches == 0, f'{selection_mismatches} selection mismatches'
+    assert filter_rows == 9 * N_DECISIONS * sum(spec[0] == 'H2' for spec in CONFIGS.values())
+    assert filter_mismatches == 0, f'{filter_mismatches} filter_pass mismatches'
     assert max_diff <= TOLERANCE, f'max abs weight difference {max_diff:.3e}'
