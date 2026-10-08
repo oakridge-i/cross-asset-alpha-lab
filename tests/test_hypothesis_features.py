@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from alpha_lab import features
 from alpha_lab.features import (CASH, MOMENTUM_SKIP, MONTH_LEVELS, RISKY, daily_returns, momentum, month_end_levels,
                                 monthly_excess, sigma, total_return_index)
 from alpha_lab.market import market_from_frames
@@ -160,7 +161,7 @@ def test_month_end_levels_rejects_missing_month(no_network):
 
 def test_month_end_levels_rejects_fewer_than_count_months(no_network):
     # 2007-12 ... 2008-05: six months.
-    with pytest.raises(ValueError, match='7'):
+    with pytest.raises(ValueError, match='need 7 calendar months'):
         history_levels(benchmark_frames(), '2008-05-30')
     assert len(history_levels(benchmark_frames(), '2008-05-30', count=6)) == 6
 
@@ -182,3 +183,43 @@ def test_month_end_levels_reuses_the_exchange_calendar(monkeypatch, no_network):
     for t, first in (('2009-02-27', 2), ('2009-01-30', 1), ('2008-12-31', 0)):
         assert tuple(history_levels(frames, t).index) == ends[first:first + 7]
     assert calls == []
+
+
+def test_month_end_levels_december_and_year_boundary(no_network):
+    # t is the last XNYS session of December: the latest seven months are 2008-06 ... 2008-12.
+    december = ('2008-06-30', '2008-07-31', *MONTH_ENDS[:5])
+    assert december[-1] == '2008-12-31'
+    assert tuple(history_levels(benchmark_frames(), '2008-12-31').index) == december
+    # One month later the window runs from 2008-07 across the year boundary to 2009-01.
+    assert tuple(history_levels(benchmark_frames(), '2009-01-30').index) == december[1:] + ('2009-01-30',)
+
+
+def test_monthly_excess_requires_exactly_the_seven_month_end_levels(no_network):
+    levels = history_levels(benchmark_frames(), '2009-02-27')
+    assert len(monthly_excess(levels)) == MONTH_LEVELS - 1
+    for rows in (levels.iloc[1:], levels.iloc[2:], levels.iloc[-2:]):
+        with pytest.raises(ValueError, match=f'got {len(rows)}'):
+            monthly_excess(rows)
+    extended = pd.concat([history_levels(benchmark_frames(), '2009-01-30', count=8).iloc[:1], levels])
+    assert len(extended) == 8
+    with pytest.raises(ValueError, match='got 8'):
+        monthly_excess(extended)
+
+
+def test_monthly_excess_requires_consecutive_months(no_network):
+    levels = history_levels(benchmark_frames(), '2009-02-27')
+    gapped = levels.drop(index=levels.index[3])
+    gapped.loc['2009-03-31'] = levels.iloc[-1]                               # still seven rows, one month missing
+    assert len(gapped) == MONTH_LEVELS
+    with pytest.raises(ValueError, match='consecutive'):
+        monthly_excess(gapped)
+
+
+def test_xnys_month_ends_is_read_only():
+    ends = features._xnys_month_ends(2008)
+    assert ends['2008-12'] == '2008-12-31' and ends['2008-11'] == '2008-11-28'
+    with pytest.raises(TypeError):
+        ends['2008-12'] = '2008-12-30'
+    with pytest.raises(TypeError):
+        del ends['2008-12']
+    assert features._xnys_month_ends(2008)['2008-12'] == '2008-12-31'

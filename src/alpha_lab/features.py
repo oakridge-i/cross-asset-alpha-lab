@@ -1,6 +1,7 @@
 """Causal features: theoretical total-return index, sigma, excess-return covariance, momentum and month-end levels
 (protocol lines 40, 52-60, 93-107)."""
 from functools import lru_cache
+from types import MappingProxyType
 import numpy as np
 from alpha_lab.normalize import calendar
 
@@ -95,11 +96,12 @@ def _month_number(month):
 
 @lru_cache(maxsize=None)
 def _xnys_month_ends(year):
-    """Last XNYS session of each calendar month of `year`, keyed 'YYYY-MM' (one calendar build per year)."""
+    """Read-only map of the last XNYS session of each calendar month of `year`, keyed 'YYYY-MM' (one calendar build
+    per year)."""
     ends = {}
     for day in calendar(f'{year}-01-01', f'{year}-12-31').sessions:
         ends[day.date().isoformat()[:7]] = day.date().isoformat()
-    return ends
+    return MappingProxyType(ends)
 
 
 def xnys_month_end(month):
@@ -133,7 +135,10 @@ def month_end_levels(market, index, count=MONTH_LEVELS):
 def monthly_excess(levels):
     """E_i,j = (T_i,end(j) / T_i,end(j-1)) / (T_BIL,end(j) / T_BIL,end(j-1)) - 1 for consecutive month-end rows,
     oldest first, indexed by end(j), columns RISKY."""
-    if len(levels) < 2:
-        raise ValueError(f'monthly excess needs at least 2 month-end levels, got {len(levels)}')
+    if len(levels) != MONTH_LEVELS:
+        raise ValueError(f'monthly excess needs exactly {MONTH_LEVELS} month-end levels, got {len(levels)}')
+    numbers = [_month_number(str(session)[:7]) for session in levels.index]
+    if any(b - a != 1 for a, b in zip(numbers, numbers[1:])):
+        raise ValueError(f'month-end levels are not consecutive months: {levels.index[0]} to {levels.index[-1]}')
     growth = (levels / levels.shift(1)).iloc[1:]
     return growth[list(RISKY)].div(growth[CASH], axis=0) - 1
