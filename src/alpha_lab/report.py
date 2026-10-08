@@ -63,16 +63,16 @@ def run_path(root, path):
     return resolved
 
 
-def verify_run_dir(root, path, files):
+def verify_run_dir(root, path, files, label='benchmark'):
     """Resolve a run directory inside data/runs, verify its manifest, require exactly the given file set and read
     config.json; returns (manifest, config)."""
     path = run_path(root, path)
     manifest = verify(path)
-    require(set(manifest['files']) == set(files), f'{path.name}: not a benchmark run')
+    require(set(manifest['files']) == set(files), f'{path.name}: not a {label} run')
     return manifest, read_json(path / 'config.json')
 
 
-def check_journal(root, run_dir, rows, config, base, purpose):
+def check_journal(root, run_dir, rows, config, base, purpose, label='benchmark'):
     """Check 3: one started and one completed record, clean tree, outputs, data hash, config and environment
     agreement; returns the started record."""
     mine = [r for r in rows if r.get('run_id') == run_dir.name]
@@ -94,7 +94,7 @@ def check_journal(root, run_dir, rows, config, base, purpose):
         require(started['config'].get(key) == config.get(key), f'{run_dir.name}: journaled {key} differs from config.json')
     name = config['provider']['name']
     require(started['purpose'] == purpose and started['candidate_ids'] == [name],
-            f'{run_dir.name}: journaled purpose or candidate_ids is not that of a {name} benchmark run')
+            f'{run_dir.name}: journaled purpose or candidate_ids is not that of a {name} {label} run')
     require(started['environment_manifest_sha256'] == base['environment_manifest_sha256'],
             f'{run_dir.name}: environment differs from the report environment')
     return started
