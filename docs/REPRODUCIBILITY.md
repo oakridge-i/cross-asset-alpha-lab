@@ -149,7 +149,22 @@ Comparison. Each repeat is compared with its first run, and the repeated report 
 python -c "import json,sys; a,b=(json.load(open(p+'/manifest.json'))['files'] for p in sys.argv[1:3]); print(a==b)" data/runs/<first dir> data/runs/<repeat dir>
 ```
 
-The comparison command was run once on the first and repeated B0 runs of N3, with the result `True`. The seven N4 pairs were compared on the `files` dictionaries of their manifests, with the result that all seven are equal; the text of that comparison command was not recorded, so the command above is the registered form and is not recorded as executed on the H1/H2 directories. The report files `hypotheses.json` and `hypotheses.md` in `data/reports/<run_id>/` contain no run id.
+The comparison command was run once on the first and repeated B0 runs of N3, with the result `True`. The seven N4 pairs were compared with the following script, executed from the root of the branch's working copy as `PYTHONPATH=src ../../.venv/Scripts/python - <<'EOF' ... EOF`. It differs from the registered one-boolean form above in that it verifies both manifests with `provenance.verify` and prints the number of files. It printed `equal` for all seven names, with 9 files for each pair of runs and 2 files for the pair of reports:
+
+```python
+from pathlib import Path
+from alpha_lab.provenance import verify
+pairs = [('runs','20261008T174218-4053e6ea58','20261008T174340-dfb6a1c558','H1_252_3'),
+         ('runs','20261008T174253-cbb9ce2219','20261008T174343-bda6d756d5','H1_252_4'),
+         ('runs','20261008T174300-8531bbf3ae','20261008T174347-8fc8ed2441','H1_126_3'),
+         ('runs','20261008T174303-337a7c2114','20261008T174355-8d6580f98d','H1_126_4'),
+         ('runs','20261008T174309-3f0ab95aeb','20261008T174358-e5b5bd731e','H2_4of6'),
+         ('runs','20261008T174315-44f030c165','20261008T174405-a2006cbd61','H2_5of6'),
+         ('reports','20261008T174328-e5860d5cf2','20261008T174417-e6157ee9c6','report')]
+for kind, a, b, name in pairs:
+    ma, mb = (verify(Path('data')/kind/x) for x in (a, b))
+    print(name, 'equal' if ma['files'] == mb['files'] else 'differs', len(ma['files']), 'files')
+``` The report files `hypotheses.json` and `hypotheses.md` in `data/reports/<run_id>/` contain no run id.
 
 A run that exits with code 3 has frozen its result and journaled `invariants_failed`; a failed run or report stays in the journal. Changes to `src` after the first registered run are bug fixes only. Each requires a rerun of all six configurations on the new tree, each with `--parent` set to its previous run, and a new report, because the report requires one `src` tree for all runs; a fix that changes the output of a provider increments its version (D023, item 8). A failed hypothesis run prints an error whose message is withheld (`RuntimeError: ... message withheld under the N4 viewing restriction`); the cause is diagnosed by reproduction on synthetic data. No run or report failed and no change to `src` was made after the first registered run, so the failure and rerun rule was not applied. The conditions of D023, item 9 are met and the status of the six configurations is `computed_not_evaluated`. After the branch is merged, the directories `data/runs` and `data/reports` of the branch's working copy are moved to `data/` of the project root.
 

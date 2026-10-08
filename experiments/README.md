@@ -40,7 +40,13 @@ Attempt accounting before N5 (spec section 12; D023, item 9). The accounting con
 
 - Registered configurations: six, one registered run each (the first-run ids above): H1_252_3, H1_252_4, H1_126_3, H1_126_4, H2_4of6 and H2_5of6.
 - Reruns after bug fixes: zero. No change to `src` was made after the first registered run; every run and report started from the same `src` tree.
-- Repeats made with `--parent`: six, one for each configuration (the repeat ids above, each with its first run as parent). Each is counted as a repeat, not as a new candidate and not as an independent experiment.
+- Repeat of H1_252_3: run `20261008T174340-dfb6a1c558`, parent `20261008T174218-4053e6ea58`; a repeat with `--parent`, not a new candidate and not an independent experiment.
+- Repeat of H1_252_4: run `20261008T174343-bda6d756d5`, parent `20261008T174253-cbb9ce2219`; a repeat with `--parent`, not a new candidate and not an independent experiment.
+- Repeat of H1_126_3: run `20261008T174347-8fc8ed2441`, parent `20261008T174300-8531bbf3ae`; a repeat with `--parent`, not a new candidate and not an independent experiment.
+- Repeat of H1_126_4: run `20261008T174355-8d6580f98d`, parent `20261008T174303-337a7c2114`; a repeat with `--parent`, not a new candidate and not an independent experiment.
+- Repeat of H2_4of6: run `20261008T174358-e5b5bd731e`, parent `20261008T174309-3f0ab95aeb`; a repeat with `--parent`, not a new candidate and not an independent experiment.
+- Repeat of H2_5of6: run `20261008T174405-a2006cbd61`, parent `20261008T174315-44f030c165`; a repeat with `--parent`, not a new candidate and not an independent experiment.
+- Repeat of the N4 report: run `20261008T174417-e6157ee9c6`, parent `20261008T174328-e5860d5cf2`; a repeat with `--parent`, not a new candidate and not an independent experiment.
 - Report runs: two, the first report (`20261008T174328-e5860d5cf2`) and its repeat (`20261008T174417-e6157ee9c6`, parent: the first report). Neither is a strategy attempt.
 - Strategy attempts outside the journal in this project: none. The journal of the earlier AAPL project is excluded.
 - Not attempts and not journaled: the independent recomputation of N4 evaluates the target weights of the providers at all 168 decisions and computes no H1/H2 account or return; the N3 regression reruns the B0-B3 and REF_SPY accounts in memory and compares the 45 benchmark file hashes, including `metrics.json`. Both print only counts and maximum differences. The real-vintage tests of the test suite are therefore not attempts.
