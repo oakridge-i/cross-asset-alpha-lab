@@ -126,6 +126,43 @@ def test_failure_message_withheld(tmp_path, no_network, monkeypatch):
     assert '12.5' not in rendered
 
 
+@pytest.mark.parametrize('target, exception, number', [
+    ('result_files', ValueError('cash 12345.67'), '12345.67'), ('freeze', OSError('nav 9876.5'), '9876.5')])
+def test_serialization_and_freeze_failures_withheld(tmp_path, no_network, monkeypatch, capsys, target, exception,
+                                                    number):
+    def raising(*args, **kwargs):
+        raise exception
+    monkeypatch.setattr(engine, target, raising)
+    derived, digest = benchmark_vintage(tmp_path)
+    with pytest.raises(RuntimeError) as excinfo:
+        run_simulation(tmp_path, derived, 'H1_252_3', RunConfig(START, END), expected_sha256=digest)
+    expected = WITHHELD.format(type(exception).__name__, 'H1_252_3')
+    assert str(excinfo.value) == expected.removeprefix('RuntimeError: ')
+    assert excinfo.value.__cause__ is None and excinfo.value.__suppress_context__
+    failed = failed_records(tmp_path)
+    assert len(failed) == 1 and failed[0]['status'] == 'failed' and failed[0]['error'] == expected
+    assert number not in json.dumps(journal(tmp_path)[1:])
+    assert number not in ''.join(traceback.format_exception(excinfo.value))
+    captured = capsys.readouterr()
+    assert number not in captured.out + captured.err
+
+
+@pytest.mark.parametrize('target, exception', [('result_files', ValueError('cash 12345.67')),
+                                               ('freeze', OSError('nav 9876.5'))])
+@pytest.mark.parametrize('name', ['B0', 'invariant_rotation'])
+def test_non_hypothesis_serialization_failures_propagate_unchanged(tmp_path, no_network, monkeypatch, target,
+                                                                   exception, name):
+    def raising(*args, **kwargs):
+        raise exception
+    monkeypatch.setattr(engine, target, raising)
+    derived, digest = benchmark_vintage(tmp_path)
+    with pytest.raises(type(exception)) as excinfo:
+        run_simulation(tmp_path, derived, name, RunConfig(START, END), expected_sha256=digest)
+    assert excinfo.value is exception
+    failed = failed_records(tmp_path)
+    assert len(failed) == 1 and failed[0]['error'] == f'{type(exception).__name__}: {exception}'
+
+
 def test_non_hypothesis_failures_keep_their_messages(tmp_path, no_network):
     derived, digest = benchmark_vintage(tmp_path)
     with pytest.raises(ValueError, match='after the last open session'):

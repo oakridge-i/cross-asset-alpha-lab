@@ -346,15 +346,15 @@ def run_simulation(root, derived, provider_name, config, parent=None, expected_s
             market = load_market(root, derived, expected_sha256)
             run.base['universe'] = list(market.tickers)
             result = simulate(market, entry.function, config)
+            target = root / 'data/runs' / run.run_id
+            freeze(target, result_files(result, config, provider_name, market),
+                   {'derived_snapshot': cfg['derived_snapshot'], 'derived_manifest_sha256': market.manifest_sha256,
+                    'environment': run.env, 'run_id': run.run_id})
         except Exception as exc:
             if entry.kind != 'hypothesis':
                 raise
             raise RuntimeError(f'{type(exc).__name__} in {provider_name} run; '
                                'message withheld under the N4 viewing restriction') from None
-        target = root / 'data/runs' / run.run_id
-        freeze(target, result_files(result, config, provider_name, market),
-               {'derived_snapshot': cfg['derived_snapshot'], 'derived_manifest_sha256': market.manifest_sha256,
-                'environment': run.env, 'run_id': run.run_id})
         failed = [name for name, c in result.invariants.items() if isinstance(c, dict) and not c['passed']]
         run.finish('completed' if result.invariants['passed'] else 'invariants_failed', [project_path(root, target)],
                    sha256((target / 'manifest.json').read_bytes()), failed)
