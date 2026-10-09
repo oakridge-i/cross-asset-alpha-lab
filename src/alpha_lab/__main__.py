@@ -1,7 +1,7 @@
 """Usage: python -m alpha_lab {acquire,evidence,audit,replay,reconcile,corrections} [snapshot] [evidence]
 --root PROJECT; python -m alpha_lab simulate DERIVED --provider NAME --start DATE --end DATE
 [--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH --stage 5] --root PROJECT [--parent ATTEMPT];
-python -m alpha_lab {report,hypothesis-report} --runs DIR [DIR ...] --root PROJECT [--parent ATTEMPT]
+python -m alpha_lab {report,hypothesis-report,evaluate} --runs DIR [DIR ...] --root PROJECT [--parent ATTEMPT]
 [--expected-sha256 HASH].
 Exit codes: 0 completed; 3 simulate finished with failed invariants or audit with failed QA; 1 exception; 2 usage."""
 import argparse
@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from .corrections import corrections_run
 from .engine import PROVIDERS, RunConfig, Scenario, run_simulation
+from .evaluation import build_evaluation
 from .evidence import fetch_evidence
 from .hypothesis_report import build_hypothesis_report
 from .market import VINTAGE_MANIFEST_SHA256
@@ -26,7 +27,7 @@ def main(argv=None):
         sys.stdout.reconfigure(errors='backslashreplace')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['acquire', 'evidence', 'audit', 'replay', 'reconcile', 'corrections',
-                                            'simulate', 'report', 'hypothesis-report'])
+                                            'simulate', 'report', 'hypothesis-report', 'evaluate'])
     parser.add_argument('snapshot', nargs='?')
     parser.add_argument('evidence', nargs='?')
     parser.add_argument('--runs', nargs='+')
@@ -64,6 +65,11 @@ def main(argv=None):
             parser.error('--runs required for hypothesis-report')
         print(project_path(root, build_hypothesis_report(root, [Path(r) for r in args.runs], args.parent,
                                                          args.expected_sha256)))
+    elif args.command == 'evaluate':
+        if not args.runs:
+            parser.error('--runs required for evaluate')
+        print(project_path(root, build_evaluation(root, [Path(r) for r in args.runs], args.parent,
+                                                  args.expected_sha256)))
     elif args.command == 'simulate':
         if not (args.snapshot and args.provider and args.start and args.end):
             parser.error('derived snapshot, --provider, --start and --end required for simulate')

@@ -1,5 +1,7 @@
-"""N5 evaluation, part 1: verification of the thirteen N5 runs (spec 7.1 items 1-5, D025 items 12, 16 and 17) on a
-miniature synthetic campaign, with one rejection per rule and value-free messages."""
+"""N5 evaluation on a miniature synthetic campaign: verification of the thirteen N5 runs (spec 7.1 items 1-5, D025 items
+12, 16 and 17) with one rejection per rule and value-free messages; the selection-log checks (item 6), the comparisons,
+annual differences and regressions against independent NumPy computations, the document whitelist, the journal, the
+withheld computation errors and the command (spec 7.2-7.4, 8.3)."""
 from collections import namedtuple
 import csv
 import io
@@ -7,12 +9,17 @@ import json
 import math
 import re
 import shutil
+import socket
+import traceback
+import numpy as np
 import pytest
 from n3_fixtures import benchmark_vintage
-from alpha_lab import engine, evaluation, provenance, report
+from alpha_lab import engine, evaluation, inference, provenance, report
+from alpha_lab.adaptive import CANDIDATES, validation_segment
 from alpha_lab.engine import RunConfig, run_simulation
 from alpha_lab.market import load_market
 from alpha_lab.metrics import PERIODS, WF_PERIODS
+from alpha_lab.portfolio import GROUPS
 from test_engine_run import journal
 from test_report import CLEAN, SRC_TREE, edit_run, refreeze, rewrite_journal
 
@@ -419,3 +426,467 @@ def test_recomputation_matches_an_independent_reference(shared):
 def daily_rows(c, label):
     with (c.runs[label] / 'daily.csv').open(newline='', encoding='utf-8') as stream:
         return [(r['session'], float(r['nav'])) for r in csv.DictReader(stream)]
+
+
+# === Part 2: selection-log checks (spec 7.1 item 6), comparisons, regressions, document and command =================
+
+PRIMARY = (('H1_252_3', 'B3'), ('H1_252_4', 'B3'), ('H1_126_3', 'B3'), ('H1_126_4', 'B3'), ('H2_4of6', 'H1_252_3'),
+           ('H2_5of6', 'H1_252_3'))
+SUPPLEMENTARY = (('H2_4of6', 'B3'), ('H2_5of6', 'B3'), ('H2_4of6', 'B2'), ('H2_5of6', 'B2'))
+DOCUMENT_KEYS = ('window', 'scenario', 'initial_cash', 'manifest_sha256', 'provider_versions', 'metrics', 'comparisons',
+                 'annual_differences', 'regressions', 'selection', 'disclosures')
+MINI_YEARS = (2014,)
+TIMESTAMP = re.compile(r'[0-9]{8}T[0-9]{6}')
+WITHHELD = 'ValueError in the evaluation; message withheld under the N5 viewing procedure'
+
+
+def test_part2_constants():
+    assert evaluation.PRIMARY == PRIMARY
+    assert evaluation.SUPPLEMENTARY == SUPPLEMENTARY
+    assert evaluation.POLICY_COMPARISON == ('P_A1', 'H1_252_3_WF')
+    assert evaluation.REPLICATES == 10000 and evaluation.SEED == 20261006
+    assert evaluation.LENGTHS == (21, 63, 126) and evaluation.PRIMARY_LENGTH == 63
+    assert evaluation.MINIMUM_EFFECT == 0.01
+    assert evaluation.SELECTION_YEARS == tuple(range(2014, 2023))
+    assert evaluation.WALK_FORWARD == ('2014-01-01', '2022-12-31')
+    assert evaluation.DOCUMENT_KEYS == DOCUMENT_KEYS
+    assert evaluation.REPORT_PURPOSE == 'N5 evaluation report'
+    assert evaluation.REGRESSION_COMPARATOR == {'H1_252_3': 'B3', 'H1_252_4': 'B3', 'H1_126_3': 'B3', 'H1_126_4': 'B3',
+                                                'H2_4of6': 'H1_252_3', 'H2_5of6': 'H1_252_3', 'P_A1': 'H1_252_3_WF'}
+    assert len(evaluation.DISCLOSURES) == 9 and all(isinstance(s, str) and s for s in evaluation.DISCLOSURES)
+
+
+# --- item 6: the selection log ------------------------------------------------------------------------------------
+
+def policy_log(c):
+    return json.loads((c.runs['P_A1'] / 'selection.json').read_bytes())
+
+
+def reject_log(c, runs, log, where, values=()):
+    with pytest.raises(ValueError) as info:
+        evaluation.check_selection_log(log, runs)
+    message = str(info.value)
+    assert message.startswith('item 6'), message
+    assert where in message, message
+    value_free(c, message, values)
+    for name in CANDIDATES:
+        # The message never names a configuration, which would disclose a selection.
+        assert name not in message, message
+    assert info.value.__cause__ is None and (info.value.__context__ is None or info.value.__suppress_context__), message
+    return message
+
+
+def test_selection_log_accepts_the_campaign_log_and_a_fallback_with_a_warning(shared, monkeypatch):
+    monkeypatch.setattr(evaluation, 'SELECTION_YEARS', MINI_YEARS)
+    runs = verify_all(shared)
+    log = policy_log(shared)
+    assert [e['year'] for e in log] == [2014]
+    assert evaluation.check_selection_log(log, runs) is None
+    # A fallback entry (a utility is not finite) with its warning is accepted when the chosen is H1_252_3.
+    assert log[0]['chosen'] == 'H1_252_3', 'the miniature selection is expected to be H1_252_3'
+    entry = {**log[0], 'utility': {**log[0]['utility'], 'H1_126_4': None}, 'best_utility': None, 'close_set': [],
+             'fallback': True, 'warning': 'non-finite utility for H1_126_4; fallback to H1_252_3'}
+    assert evaluation.check_selection_log([entry], runs) is None
+
+
+def test_selection_log_requires_the_nine_walk_forward_years(shared):
+    runs = verify_all(shared)
+    reject_log(shared, runs, policy_log(shared), 'P_A1')
+
+
+def test_selection_log_rejections(shared, monkeypatch):
+    monkeypatch.setattr(evaluation, 'SELECTION_YEARS', MINI_YEARS)
+    runs = verify_all(shared)
+    log = policy_log(shared)
+    entry = log[0]
+    u = entry['utility']
+    start, end = validation_segment(2014)
+    assert (entry['segment_start'], entry['segment_end'], entry['selection_date']) == (start, end, end)
+    where = 'P_A1 selection year 2014'
+    # Wrong segment date.
+    reject_log(shared, runs, [{**entry, 'segment_start': '2011-12-29'}], where)
+    reject_log(shared, runs, [{**entry, 'selection_date': '2013-12-30'}], where)
+    # best_utility is not the maximum of the logged utilities.
+    lowered = entry['best_utility'] - 0.5
+    reject_log(shared, runs, [{**entry, 'best_utility': lowered}], where, values=(repr(lowered),))
+    # A missing close-set member: a candidate outside the close set is moved inside the tolerance.
+    outside = [c for c in CANDIDATES if c not in entry['close_set']]
+    assert outside, 'the miniature log has a full close set'
+    near = {**u, outside[-1]: entry['best_utility'] - 0.0005}
+    reject_log(shared, runs, [{**entry, 'utility': near}], where)
+    reject_log(shared, runs, [{**entry, 'close_set': entry['close_set'][:-1]}], where)
+    # A chosen configuration that is not the first member of the close set in the preference order.
+    other = next(c for c in CANDIDATES if c != entry['chosen'])
+    message = reject_log(shared, runs, [{**entry, 'chosen': other}], where)
+    assert 'first member' in message
+    # A fallback without a warning.
+    fallback = {**entry, 'utility': {**u, 'H1_126_4': None}, 'best_utility': None, 'close_set': [],
+                'chosen': 'H1_252_3', 'fallback': True, 'warning': None}
+    message = reject_log(shared, runs, [fallback], where)
+    assert 'warning' in message
+    reject_log(shared, runs, [{**fallback, 'warning': ''}], where)
+    # A fallback whose chosen is not H1_252_3, and a non-finite utility without the fallback flag.
+    reject_log(shared, runs, [{**fallback, 'warning': 'w', 'chosen': 'H1_126_3'}], where)
+    reject_log(shared, runs, [{**entry, 'utility': {**u, 'H1_252_4': None}}], where)
+    # Utility keys that are not the four candidates, a malformed entry, a wrong year and a repeated year.
+    reject_log(shared, runs, [{**entry, 'utility': {k: v for k, v in u.items() if k != 'H1_126_4'}}], where)
+    reject_log(shared, runs, [{k: v for k, v in entry.items() if k != 'warning'}], where)
+    reject_log(shared, runs, [{**entry, 'year': 2015}], 'P_A1')
+    reject_log(shared, runs, [entry, entry], 'P_A1')
+
+
+def edit_csv(c, label, name, edit):
+    text = (c.runs[label] / name).read_text(encoding='utf-8')
+    rows = list(csv.reader(io.StringIO(text)))
+    edit(rows)
+    out = io.StringIO()
+    csv.writer(out, lineterminator='\n').writerows(rows)
+    refreeze(c, label, {name: out.getvalue().encode()})
+
+
+def test_selection_log_rejects_a_year_mapping_or_weights_that_do_not_match(campaign, monkeypatch):
+    monkeypatch.setattr(evaluation, 'SELECTION_YEARS', MINI_YEARS)
+    log = policy_log(campaign)
+
+    # A selection year in the signal rows that differs from the year of the decision's execution session.
+    def year(rows):
+        at = rows[0].index('selection_year')
+        for row in rows[1:]:
+            if row[0] == '2014-01-31':
+                row[at] = '2015'
+    edit_csv(campaign, 'P_A1', 'signals.csv', year)
+    message = reject_log(campaign, verify_all(campaign), log, 'P_A1 decision 2014-01-31')
+    assert 'selection_year' in message
+
+    def restore(rows):
+        at = rows[0].index('selection_year')
+        for row in rows[1:]:
+            row[at] = '2014'
+    edit_csv(campaign, 'P_A1', 'signals.csv', restore)
+    assert evaluation.check_selection_log(log, verify_all(campaign)) is None
+
+    # Weights of a decision that do not match the chosen configuration's weights at that decision.
+    def weights(rows):
+        rows[1][1] = '0.123' if rows[1][1] != '0.123' else '0.124'
+    edit_csv(campaign, 'P_A1', 'weights.csv', weights)
+    message = reject_log(campaign, verify_all(campaign), log, 'P_A1 decision 2013-12-31', values=('0.123', '0.124'))
+    assert 'weights.csv' in message
+
+
+def test_selection_log_rejects_signal_rows_that_differ_from_the_chosen_configuration(campaign, monkeypatch):
+    monkeypatch.setattr(evaluation, 'SELECTION_YEARS', MINI_YEARS)
+    log = policy_log(campaign)
+
+    def score(rows):
+        rows[2][rows[0].index('score')] = '9.87654321'
+    edit_csv(campaign, 'P_A1', 'signals.csv', score)
+    message = reject_log(campaign, verify_all(campaign), log, 'P_A1 decision 2013-12-31', values=('9.87654321',))
+    assert 'signal rows' in message
+
+
+# --- the report ----------------------------------------------------------------------------------------------------
+
+Built = namedtuple('Built', 'c target document markdown second')
+
+
+def refuse_network(*args, **kwargs):
+    raise AssertionError('test tried network access')
+
+
+def patch_report(mp, c):
+    """The miniature windows, references and selection years, a clean tree and one src tree."""
+    mp.setattr(evaluation, 'FULL_WINDOW', FULL)
+    mp.setattr(evaluation, 'WF_WINDOW', WF)
+    mp.setattr(evaluation, 'REFERENCES', c.refs)
+    mp.setattr(evaluation, 'SELECTION_YEARS', MINI_YEARS)
+    mp.setattr(provenance, 'git_state', lambda r: CLEAN)
+    mp.setattr(report, 'src_tree', lambda r, sha: SRC_TREE)
+
+
+@pytest.fixture(scope='module')
+def built(template, tmp_path_factory):
+    """Two evaluation reports on one private copy of the campaign."""
+    dest = tmp_path_factory.mktemp('built') / 'c'
+    shutil.copytree(template.root, dest)
+    c = Campaign(dest, dest / template.derived.relative_to(template.root), template.digest,
+                 {k: dest / 'data/runs' / d.name for k, d in template.runs.items()}, template.refs)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(socket.socket, 'connect', refuse_network)
+        mp.setattr(socket, 'create_connection', refuse_network)
+        patch_report(mp, c)
+        first = evaluation.build_evaluation(c.root, dirs(c), expected_sha256=c.digest)
+        second = evaluation.build_evaluation(c.root, dirs(c), expected_sha256=c.digest)
+    document = json.loads((first / 'evaluation.json').read_bytes())
+    return Built(c, first, document, (first / 'evaluation.md').read_text(encoding='utf-8'), second)
+
+
+def independent_series(c, label):
+    """(sessions, r, r_BIL) of the walk-forward period, from daily.csv and the vintage closes with NumPy."""
+    market = load_market(c.root, c.derived, c.digest)
+    rows = daily_rows(c, label)
+    sessions = [s for s, _ in rows]
+    nav = np.array([v for _, v in rows])
+    r = nav[1:] / nav[:-1] - 1
+    position = np.array([market.sessions.index(s) for s in sessions[1:]])
+    close = market.close['BIL'].to_numpy()
+    dividend = market.dividend['BIL'].to_numpy()
+    ratio = market.split_ratio['BIL'].to_numpy()
+    bil = ratio[position] * (close[position] + dividend[position]) / close[position - 1] - 1
+    keep = np.array(['2014-01-01' <= s <= '2022-12-31' for s in sessions[1:]])
+    return [s for s, k in zip(sessions[1:], keep) if k], r[keep], bil[keep]
+
+
+def u_of(e):
+    return 252 * np.mean(e) - 1.5 * 252 * np.var(e, ddof=1)
+
+
+def entries(document, group):
+    return {(e['candidate'], e['comparator']): e for e in document['comparisons'][group]}
+
+
+def same_interval(have, expected):
+    return (math.isclose(have['ci_low'], expected['ci_low'], rel_tol=0, abs_tol=1e-12)
+            and math.isclose(have['ci_high'], expected['ci_high'], rel_tol=0, abs_tol=1e-12))
+
+
+def test_comparison_values_against_an_independent_computation(built):
+    c, document = built.c, built.document
+    primary = entries(document, 'primary')
+    supplementary = entries(document, 'supplementary')
+    assert list(primary) == list(PRIMARY) and list(supplementary) == list(SUPPLEMENTARY)
+    for candidate, comparator in (('H1_126_3', 'B3'), ('H2_5of6', 'H1_252_3'), ('H2_4of6', 'B2')):
+        sc, rc, bil = independent_series(c, candidate)
+        sk, rk, bil_k = independent_series(c, comparator)
+        assert sc == sk and np.array_equal(bil, bil_k) and sc[0] == '2014-01-02' and sc[-1] == WF[1]
+        delta = u_of(rc - bil) - u_of(rk - bil)
+        mean_diff = 252 * (np.mean(rc - bil) - np.mean(rk - bil))
+        entry = {**primary, **supplementary}[(candidate, comparator)]
+        assert math.isclose(entry['delta_u'], delta, rel_tol=0, abs_tol=1e-12)
+        assert math.isclose(entry['mean_excess_difference'], mean_diff, rel_tol=0, abs_tol=1e-12)
+        assert entry['meets_minimum_effect'] == {'delta_u_at_least_minimum': bool(delta >= 0.01),
+                                                 'mean_excess_difference_positive': bool(mean_diff > 0)}
+        for length in (21, 63, 126):
+            expected = inference.paired_bootstrap(rc, rk, bil, length, replicates=10000, seed=20261006)
+            assert same_interval(entry['intervals'][str(length)], expected)
+            assert entry['p_values'][str(length)] == expected['p']
+    holm = inference.holm({f'{a} vs {b}': primary[(a, b)]['p_values']['63'] for a, b in PRIMARY})
+    assert [primary[p]['holm_p'] for p in PRIMARY] == [holm[f'{a} vs {b}'] for a, b in PRIMARY]
+    assert all('holm_p' not in e for e in supplementary.values())
+    assert document['comparisons']['method'] == {'replicates': 10000, 'seed': 20261006, 'lengths': [21, 63, 126],
+                                                 'primary_length': 63, 'holm_family_length': 63}
+
+
+def test_policy_comparison_has_intervals_and_no_p_values(built):
+    c, document = built.c, built.document
+    [entry] = document['comparisons']['policy']
+    assert (entry['candidate'], entry['comparator']) == ('P_A1', 'H1_252_3_WF')
+    assert 'p_values' not in entry and 'holm_p' not in entry
+    assert 'conditional on the realized selections' in entry['note']
+    assert set(entry['intervals']) == {'21', '63', '126'}
+    sc, rc, bil = independent_series(c, 'P_A1')
+    sk, rk, _ = independent_series(c, 'H1_252_3_WF')
+    # Both series start at 2014-01-02, based on the start session 2013-12-31.
+    assert sc == sk and sc[0] == '2014-01-02'
+    assert math.isclose(entry['delta_u'], u_of(rc - bil) - u_of(rk - bil), rel_tol=0, abs_tol=1e-12)
+    assert same_interval(entry['intervals']['63'], inference.paired_bootstrap(rc, rk, bil, 63))
+
+
+def test_annual_differences(built):
+    c, document = built.c, built.document
+    groups = document['annual_differences']
+    assert [(e['candidate'], e['comparator']) for e in groups['primary']] == list(PRIMARY)
+    assert [(e['candidate'], e['comparator']) for e in groups['supplementary']] == list(SUPPLEMENTARY)
+    assert [(e['candidate'], e['comparator']) for e in groups['policy']] == [('P_A1', 'H1_252_3_WF')]
+    for group, (candidate, comparator) in (('primary', ('H1_252_4', 'B3')), ('policy', ('P_A1', 'H1_252_3_WF'))):
+        _, rc, _ = independent_series(c, candidate)
+        _, rk, _ = independent_series(c, comparator)
+        total = float(np.sum(rc - rk))
+        entry = next(e for e in groups[group] if (e['candidate'], e['comparator']) == (candidate, comparator))
+        assert list(entry['years']) == ['2014']
+        assert math.isclose(entry['years']['2014'], total, rel_tol=0, abs_tol=1e-15)
+        assert entry['positive_years'] == int(total > 0)
+        assert entry['largest_positive_share'] == (1.0 if total > 0 else None)
+    # Several years: sums 0.03, -0.01 and 0.01 give two positive years and a largest share of 0.75.
+    sessions = ['2014-01-02', '2014-06-02', '2015-01-02', '2016-01-04', '2016-02-01']
+    out = evaluation.annual_differences(sessions, np.array([0.02, 0.01, 0.0, 0.004, 0.006]),
+                                        np.array([0.0, 0.0, 0.01, 0.0, 0.0]))
+    assert list(out['years']) == ['2014', '2015', '2016'] and out['positive_years'] == 2
+    assert [round(v, 12) for v in out['years'].values()] == [0.03, -0.01, 0.01]
+    assert math.isclose(out['largest_positive_share'], 0.75, rel_tol=1e-12)
+    none = evaluation.annual_differences(sessions[:1], np.array([0.0]), np.array([0.01]))
+    assert none['positive_years'] == 0 and none['largest_positive_share'] is None
+
+
+def test_regression_section_gates_short_samples(built):
+    regressions = built.document['regressions']['candidates']
+    assert list(regressions) == sorted(['H1_252_3', 'H1_252_4', 'H1_126_3', 'H1_126_4', 'H2_4of6', 'H2_5of6', 'P_A1'])
+    for label, block in regressions.items():
+        assert block['comparator'] == evaluation.REGRESSION_COMPARATOR[label]
+        for model, k in (('model_a', 2), ('model_b', 5)):
+            fit = block[model]
+            # Two complete months (January and February 2014) in the miniature window: fewer than 36.
+            assert fit['months'] == 2 and fit['k'] == k and fit['reason'] == 'months'
+            assert fit['coefficients'] is None and fit['standard_errors'] is None
+            assert fit['alpha'] is None and fit['se'] is None and fit['ci_low'] is None and fit['ci_high'] is None
+        assert block['model_a']['regressors'] == ['intercept', block['comparator']]
+        assert block['model_b']['regressors'] == ['intercept', *GROUPS]
+
+
+def nw_reference(Z, u, lag):
+    """Newey-West covariance by explicit loops, Bartlett weights and the factor n / (n - k)."""
+    n, k = Z.shape
+    meat = np.zeros((k, k))
+    for t in range(n):
+        meat += u[t] ** 2 * np.outer(Z[t], Z[t])
+    for ell in range(1, lag + 1):
+        w = 1 - ell / (lag + 1)
+        for t in range(ell, n):
+            g = u[t] * u[t - ell] * np.outer(Z[t], Z[t - ell])
+            meat += w * (g + g.T)
+    bread = np.linalg.inv(Z.T @ Z)
+    return bread @ meat @ bread * n / (n - k)
+
+
+def test_regression_block_against_an_independent_fit():
+    rng = np.random.default_rng(5)
+    X = rng.normal(0, 0.03, size=(48, 2))
+    y = 0.002 + X @ np.array([0.5, -0.2]) + rng.normal(0, 0.01, 48)
+    block = evaluation.regression_block(['a', 'b'], y, X)
+    Z = np.column_stack([np.ones(48), X])
+    coef = np.linalg.lstsq(Z, y, rcond=None)[0]
+    se = np.sqrt(np.diag(nw_reference(Z, y - Z @ coef, 3)))
+    assert block['regressors'] == ['intercept', 'a', 'b'] and block['months'] == 48 and block['k'] == 3
+    assert block['rank'] == 3 and block['reason'] is None and math.isfinite(block['cond'])
+    assert np.allclose(block['coefficients'], coef, rtol=0, atol=1e-12)
+    assert np.allclose(block['standard_errors'], se, rtol=1e-9, atol=0)
+    assert math.isclose(block['alpha'], 12 * coef[0], rel_tol=1e-12)
+    assert math.isclose(block['se'], 12 * se[0], rel_tol=1e-9)
+    assert math.isclose(block['ci_low'], 12 * coef[0] - 1.96 * 12 * se[0], rel_tol=1e-9)
+    assert math.isclose(block['ci_high'], 12 * coef[0] + 1.96 * 12 * se[0], rel_tol=1e-9)
+    # A duplicated regressor makes the design rank deficient: no alpha, the reason is reported.
+    deficient = evaluation.regression_block(['a', 'a2'], y, np.column_stack([X[:, 0], X[:, 0]]))
+    assert deficient['reason'] == 'rank' and deficient['alpha'] is None and deficient['coefficients'] is None
+    assert deficient['cond'] is None or deficient['cond'] > 1e8
+
+
+def test_document_has_only_whitelisted_keys_and_no_identifiers(built):
+    c, document = built.c, built.document
+    assert list(json.loads((built.target / 'evaluation.json').read_bytes())) == sorted(DOCUMENT_KEYS)
+    assert set(provenance.verify(built.target)['files']) == {'evaluation.json', 'evaluation.md'}
+    assert sorted(document['metrics']) == sorted(KEYS)
+    for label in KEYS:
+        assert document['metrics'][label] == json.loads((c.runs[label] / 'metrics.json').read_bytes())
+    assert document['selection'] == policy_log(c)
+    assert document['disclosures'] == list(evaluation.DISCLOSURES)
+    assert document['provider_versions'] == {k: engine.PROVIDERS[PROVIDER[k]].version for k in KEYS}
+    assert document['scenario'] == evaluation.SCENARIO and document['initial_cash'] == 100000.0
+    assert document['manifest_sha256'] == c.digest
+    texts = [(built.target / 'evaluation.json').read_text(encoding='utf-8'), built.markdown]
+    ids = [*(d.name for d in c.runs.values()), *c.refs.values(), built.target.name, built.second.name]
+    for text in texts:
+        for value in ids:
+            assert value not in text
+        assert not TIMESTAMP.search(text)
+        assert str(c.root) not in text and c.root.as_posix() not in text
+        assert 'data/runs' not in text and 'data/reports' not in text and 'data\\' not in text
+    metadata = provenance.verify(built.target)['metadata']
+    assert [s['candidate'] for s in metadata['sources']] == list(KEYS)
+    assert [s['run_id'] for s in metadata['sources']] == [c.runs[k].name for k in KEYS]
+    assert all(s['manifest_sha256'] == provenance.sha256((c.runs[s['candidate']] / 'manifest.json').read_bytes())
+               for s in metadata['sources'])
+    assert metadata['run_id'] == built.target.name
+
+
+def test_whitelist_is_enforced_before_freezing():
+    document = {k: None for k in DOCUMENT_KEYS}
+    assert evaluation.enforce_whitelist(document, b'{}', b'', ['abc']) is None
+    with pytest.raises(ValueError, match='whitelist'):
+        evaluation.enforce_whitelist({**document, 'run_id': 'x'}, b'{}', b'', ['abc'])
+    with pytest.raises(ValueError, match='run id or a path'):
+        evaluation.enforce_whitelist(document, b'{"a":"abc"}', b'', ['abc'])
+    with pytest.raises(ValueError, match='run id or a path'):
+        evaluation.enforce_whitelist(document, b'{}', b'| abc |', ['abc'])
+
+
+def test_report_is_deterministic_and_journaled(built):
+    c = built.c
+    assert provenance.verify(built.target)['files'] == provenance.verify(built.second)['files']
+    assert built.markdown == evaluation.render_markdown(built.document)
+    for heading in ('T1', 'T2', 'T3', 'T4', 'T5', 'T6'):
+        assert f'## {heading}' in built.markdown
+    rows = [r for r in journal(c.root) if r['purpose'] == 'N5 evaluation report']
+    for target in (built.target, built.second):
+        mine = [r for r in rows if r['run_id'] == target.name]
+        assert [r['event'] for r in mine] == ['started', 'completed']
+        assert all(r['candidate_ids'] == list(KEYS) for r in mine)
+        assert mine[1]['output_paths'] == [f'data/reports/{target.name}']
+        assert mine[1]['data_sha256'] == provenance.sha256((target / 'manifest.json').read_bytes())
+
+
+def test_render_markdown_shows_gated_values_and_the_disclosures(built):
+    text = evaluation.render_markdown(built.document)
+    assert 'n/a' in text and 'months' in text
+    for sentence in evaluation.DISCLOSURES:
+        assert sentence in text
+
+
+@pytest.fixture
+def reportable(campaign, monkeypatch):
+    patch_report(monkeypatch, campaign)
+    return campaign
+
+
+def evaluate_argv(c):
+    return ['evaluate', '--runs', *(f'data/runs/{c.runs[k].name}' for k in KEYS), '--root', str(c.root),
+            '--expected-sha256', c.digest]
+
+
+def test_evaluation_errors_are_value_free(reportable, monkeypatch, capsys):
+    from alpha_lab.__main__ import main
+    c = reportable
+
+    def boom(*args, **kwargs):
+        raise ValueError('nav 12345.67')
+    monkeypatch.setattr(inference, 'paired_bootstrap', boom)
+    with pytest.raises(RuntimeError) as info:
+        main(evaluate_argv(c))
+    assert str(info.value) == WITHHELD
+    assert info.value.__cause__ is None and info.value.__suppress_context__
+    assert '12345.67' not in ''.join(traceback.format_exception(info.value))
+    captured = capsys.readouterr()
+    assert '12345.67' not in captured.out + captured.err
+    last = journal(c.root)[-1]
+    assert last['event'] == 'failed' and last['purpose'] == 'N5 evaluation report'
+    assert last['error'] == f'RuntimeError: {WITHHELD}' and '12345.67' not in json.dumps(last)
+    reports = c.root / 'data/reports'
+    assert not reports.exists() or not any(reports.iterdir())
+
+
+def test_verification_errors_keep_their_rule_and_run(reportable):
+    c = reportable
+    with pytest.raises(ValueError) as info:
+        evaluation.build_evaluation(c.root, [c.runs[k] for k in KEYS if k != 'B1'], expected_sha256=c.digest)
+    assert str(info.value).startswith('item 1, B1')
+    assert journal(c.root)[-1]['event'] == 'failed'
+    # The default selection years require nine log entries: item 6 rejects the miniature log.
+    monkeypatch_years = pytest.MonkeyPatch()
+    monkeypatch_years.setattr(evaluation, 'SELECTION_YEARS', tuple(range(2014, 2023)))
+    try:
+        with pytest.raises(ValueError) as info:
+            evaluation.build_evaluation(c.root, dirs(c), expected_sha256=c.digest)
+    finally:
+        monkeypatch_years.undo()
+    assert str(info.value).startswith('item 6, P_A1')
+
+
+def test_cli_evaluate_prints_the_report_directory(reportable, capsys):
+    from alpha_lab.__main__ import main
+    c = reportable
+    main(evaluate_argv(c))
+    printed = capsys.readouterr().out.strip()
+    assert printed.startswith('data/reports/') and '\\' not in printed
+    assert set(provenance.verify(c.root / printed)['files']) == {'evaluation.json', 'evaluation.md'}
+    main([*evaluate_argv(c), '--parent', 'x'])
+    assert journal(c.root)[-1]['parent_attempt_id'] == 'x' and journal(c.root)[-1]['event'] == 'completed'
+    with pytest.raises(SystemExit):
+        main(['evaluate', '--root', str(c.root)])
