@@ -269,3 +269,73 @@ def test_provider_weights_unchanged_for_dict_providers(tmp_path, no_network):
     assert weights == PROVIDERS['B0'].function(START, market.history(START))
     hypothesis = provider_weights(PROVIDERS['H1_252_3'].function, market, START)
     assert set(hypothesis) == set(market.tickers)
+
+
+def staged(root, name, stage):
+    derived, digest = benchmark_vintage(root)
+    return run_simulation(root, derived, name, RunConfig(START, END), expected_sha256=digest, stage=stage)
+
+
+def file_hashes(run_dir):
+    return json.loads((run_dir / 'manifest.json').read_text())['files']
+
+
+@pytest.mark.parametrize('name', ['H1_252_3', 'H2_4of6'])
+def test_stage_five_hypothesis_run_has_ten_files_and_the_n5_purpose(tmp_path, no_network, name):
+    old = staged(tmp_path / 'old', name, None)
+    new = staged(tmp_path / 'new', name, 5)
+    started, completed = journal(tmp_path / 'new')
+    assert started['purpose'] == completed['purpose'] == 'N5 hypothesis run'
+    assert started['candidate_ids'] == completed['candidate_ids'] == [name]
+    assert completed['event'] == 'completed'
+    old_files, new_files = file_hashes(old), file_hashes(new)
+    assert set(new_files) == HYPOTHESIS_FILES | {'metrics.json'} and len(new_files) == 10
+    assert {k: v for k, v in new_files.items() if k != 'metrics.json'} == old_files
+    metrics = json.loads((new / 'metrics.json').read_text())
+    assert metrics['schema_version'] == 1 and 'full' in metrics['periods']
+    assert new_files['metrics.json'] == sha256((new / 'metrics.json').read_bytes())
+
+
+def test_stage_five_benchmark_files_are_identical_to_stage_none(tmp_path, no_network):
+    old = staged(tmp_path / 'old', 'B2', None)
+    new = staged(tmp_path / 'new', 'B2', 5)
+    assert file_hashes(new) == file_hashes(old)
+    assert len(file_hashes(new)) == 9
+    assert journal(tmp_path / 'old')[0]['purpose'] == 'N3 benchmark run'
+    assert [r['purpose'] for r in journal(tmp_path / 'new')] == ['N5 benchmark run'] * 2
+
+
+def test_stage_none_hypothesis_run_is_unchanged(tmp_path, no_network):
+    run_dir = staged(tmp_path, 'H1_126_4', None)
+    assert set(file_hashes(run_dir)) == HYPOTHESIS_FILES and len(file_hashes(run_dir)) == 9
+    assert not (run_dir / 'metrics.json').exists()
+    assert [r['purpose'] for r in journal(tmp_path)] == ['N4 hypothesis run'] * 2
+
+
+def test_stage_five_failure_messages_stay_withheld(tmp_path, no_network, monkeypatch):
+    def raising(t, history):
+        raise ValueError('cash -12.5')
+    monkeypatch.setitem(engine.PROVIDERS, 'H1_252_3',
+                        engine.Provider(raising, '1', 'monthly', 'hypothesis', PARAMETERS['H1_252_3']))
+    with pytest.raises(RuntimeError) as excinfo:
+        staged(tmp_path, 'H1_252_3', 5)
+    expected = WITHHELD.format('ValueError', 'H1_252_3').replace('N4 viewing restriction', 'N5 viewing procedure')
+    assert str(excinfo.value) == expected.removeprefix('RuntimeError: ')
+    assert excinfo.value.__cause__ is None and excinfo.value.__suppress_context__
+    failed = failed_records(tmp_path)
+    assert len(failed) == 1 and failed[0]['error'] == expected
+    assert '12.5' not in json.dumps(journal(tmp_path)[1:])
+    assert '12.5' not in ''.join(traceback.format_exception(excinfo.value))
+
+
+@pytest.mark.parametrize('stage', [4, 0, '5'])
+def test_unknown_stage_raises_before_any_journal_record(tmp_path, no_network, stage):
+    with pytest.raises(ValueError, match='stage'):
+        staged(tmp_path, 'H1_252_3', stage)
+    assert not (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').exists()
+
+
+def test_stage_five_test_provider_raises_before_any_journal_record(tmp_path, no_network):
+    with pytest.raises(ValueError, match='stage'):
+        staged(tmp_path, 'invariant_rotation', 5)
+    assert not (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').exists()

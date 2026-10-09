@@ -13,7 +13,7 @@ from alpha_lab.ledger import (CASH_TOLERANCE, Account, Order, Receivable, Trade,
                               credit_payouts, execute_orders, nav, receivables_total, size_orders)
 from alpha_lab.market import (LAST_OPEN_SESSION, PROXY_BASIS, VINTAGE_MANIFEST_SHA256, load_market,
                               check_pay_sessions, proxy_pay_session)
-from alpha_lab.metrics import compute_metrics
+from alpha_lab.metrics import compute_metrics, periods_for
 from alpha_lab.normalize import calendar, finite_number
 from alpha_lab.pipeline import project_path, require_inside
 from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256
@@ -268,6 +268,8 @@ PROVIDERS = {'invariant_rotation': Provider(invariant_rotation, '1', 'monthly', 
                                  {'h': 4, 'parent': 'H1_252_3'}),
              'H2_5of6': Provider(functools.partial(h2, h=5), '1', 'monthly', 'hypothesis',
                                  {'h': 5, 'parent': 'H1_252_3'})}
+STAGE_PURPOSES = {5: {'benchmark': 'N5 benchmark run', 'hypothesis': 'N5 hypothesis run',
+                      'policy': 'N5 policy run'}}
 DECISION_COLUMNS = ['decision_session', 'execution_session', 'nav', 'buy_fill', 'turnover', 'costs_usd']
 ORDER_COLUMNS = ['decision_session', 'execution_session', 'ticker', 'weight', 'close', 'target_qty', 'held_qty',
                  'order_qty', 'filled_qty', 'status', 'cancel_reason']
@@ -302,9 +304,10 @@ def weight_rows(result, tickers):
              'usd': 1 - math.fsum(w[t] for t in tickers)} for w in result.weights]
 
 
-def result_files(result, config, provider_name, market):
+def result_files(result, config, provider_name, market, stage=None):
     """The seven frozen files, plus weights.csv for a benchmark or hypothesis provider, metrics.json for a benchmark
-    and signals.csv for a hypothesis; none holds a run id, timestamp or path."""
+    (and, with stage 5, for a hypothesis) and signals.csv for a hypothesis; none holds a run id, timestamp or path.
+    With stage 5 the metrics cover the period list of the configuration."""
     tickers = market.tickers
     orders = [{**asdict(o), 'order_qty': o.qty} for o in result.orders]  # qty at execution, after split conversion
     payouts = [{**asdict(r), 'pay_basis': r.basis, 'amount': r.amount} for r in result.payouts]
@@ -322,23 +325,36 @@ def result_files(result, config, provider_name, market):
     if entry.kind in ('benchmark', 'hypothesis'):
         files['weights.csv'] = csv_bytes(weight_rows(result, tickers), weight_columns(tickers))
     if entry.kind == 'benchmark':
-        files['metrics.json'] = canonical_bytes(compute_metrics(market, result))
+        files['metrics.json'] = canonical_bytes(compute_metrics(market, result) if stage is None
+                                                else compute_metrics(market, result, periods_for(config)))
     if entry.kind == 'hypothesis':
+        if stage == 5:
+            files['metrics.json'] = canonical_bytes(compute_metrics(market, result, periods_for(config)))
         files['signals.csv'] = csv_bytes(result.signals, SIGNAL_COLUMNS_H2 if 'h' in entry.parameters
                                          else SIGNAL_COLUMNS_H1)
     return files
 
 
-def run_simulation(root, derived, provider_name, config, parent=None, expected_sha256=VINTAGE_MANIFEST_SHA256):
-    """Journaled N2/N3/N4 run on a verified vintage; data/runs/<run_id> is frozen only after simulate succeeds."""
+def run_simulation(root, derived, provider_name, config, parent=None, expected_sha256=VINTAGE_MANIFEST_SHA256,
+                   stage=None):
+    """Journaled N2/N3/N4 run (N5 purposes and hypothesis metrics with stage=5) on a verified vintage;
+    data/runs/<run_id> is frozen only after simulate succeeds."""
     root = Path(root).resolve()
     derived = (root / derived).resolve()
     entry = PROVIDERS[provider_name]
+    if stage is not None and stage not in STAGE_PURPOSES:
+        raise ValueError(f'stage must be None or one of {sorted(STAGE_PURPOSES)}: {stage!r}')
     if entry.schedule == 'first_only':
         config = replace(config, decision_sessions=(config.start_session,))
     cfg = {**config_record(config, provider_name), 'derived_snapshot': project_path(root, derived),
            'expected_sha256': expected_sha256}
-    purpose = {'benchmark': 'N3 benchmark run', 'hypothesis': 'N4 hypothesis run'}.get(entry.kind, 'N2 execution run')
+    if stage is None:
+        purpose = {'benchmark': 'N3 benchmark run', 'hypothesis': 'N4 hypothesis run'}.get(entry.kind, 'N2 execution run')
+    elif entry.kind in STAGE_PURPOSES[stage]:
+        purpose = STAGE_PURPOSES[stage][entry.kind]
+    else:
+        raise ValueError(f'stage {stage} has no purpose for a {entry.kind} provider: {provider_name}')
+    withheld = 'N4 viewing restriction' if stage is None else 'N5 viewing procedure'
     with Run(root, purpose, cfg, parent,
              candidate_ids=[provider_name] if entry.kind != 'test' else None) as run:
         try:
@@ -347,14 +363,14 @@ def run_simulation(root, derived, provider_name, config, parent=None, expected_s
             run.base['universe'] = list(market.tickers)
             result = simulate(market, entry.function, config)
             target = root / 'data/runs' / run.run_id
-            freeze(target, result_files(result, config, provider_name, market),
+            freeze(target, result_files(result, config, provider_name, market, stage),
                    {'derived_snapshot': cfg['derived_snapshot'], 'derived_manifest_sha256': market.manifest_sha256,
                     'environment': run.env, 'run_id': run.run_id})
         except Exception as exc:
             if entry.kind != 'hypothesis':
                 raise
             raise RuntimeError(f'{type(exc).__name__} in {provider_name} run; '
-                               'message withheld under the N4 viewing restriction') from None
+                               f'message withheld under the {withheld}') from None
         failed = [name for name, c in result.invariants.items() if isinstance(c, dict) and not c['passed']]
         run.finish('completed' if result.invariants['passed'] else 'invariants_failed', [project_path(root, target)],
                    sha256((target / 'manifest.json').read_bytes()), failed)

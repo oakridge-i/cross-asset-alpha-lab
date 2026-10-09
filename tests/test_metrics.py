@@ -4,9 +4,10 @@ import math
 import numpy as np
 import pandas as pd
 import pytest
-from alpha_lab.engine import Result
-from alpha_lab.market import market_from_frames
-from alpha_lab.metrics import PERIODS, compute_metrics
+from n3_fixtures import benchmark_vintage
+from alpha_lab.engine import PROVIDERS, Result, RunConfig, simulate
+from alpha_lab.market import load_market, market_from_frames
+from alpha_lab.metrics import PERIODS, WF_PERIODS, compute_metrics, excess_series, periods_for
 from alpha_lab.provenance import canonical_bytes
 
 TICKERS = ('SPY', 'TLT', 'GLD', 'BIL')
@@ -178,3 +179,30 @@ def test_session_after_last_open_is_rejected():
     r = result([row('2022-12-29', 100.0), row('2022-12-30', 101.0), row('2023-01-03', 102.0)])
     with pytest.raises(ValueError):
         compute_metrics(m, r)
+
+
+def test_excess_series_feeds_the_same_utility(tmp_path, no_network):
+    derived, digest = benchmark_vintage(tmp_path)
+    market = load_market(tmp_path, derived, digest)
+    run = simulate(market, PROVIDERS['B2'].function, RunConfig('2008-12-31', '2009-03-31'))
+    excess = excess_series(market, run)
+    assert [s for s in excess] == [d['session'] for d in run.daily[1:]]
+    values = np.array(list(excess.values()))
+    expected = 252 * values.mean() - 1.5 * 252 * values.var(ddof=1)
+    full = compute_metrics(market, run)['periods']['full']
+    assert full['n_returns'] == len(values) > 1
+    assert full['utility'] == pytest.approx(expected, abs=1e-12)
+    assert full['mean_excess'] == pytest.approx(252 * values.mean(), abs=1e-12)
+
+
+def test_excess_series_of_a_run_without_rows_is_empty():
+    assert excess_series(market(S), result([])) == {}
+
+
+def test_walk_forward_periods_for_late_start():
+    late = periods_for(RunConfig('2013-12-31', '2022-12-30'))
+    assert late is WF_PERIODS and 'full' not in [p[0] for p in late]
+    assert [p[0] for p in late] == ['walk_forward', '2014-2016', '2017-2019', '2020-2022',
+                                    *(str(y) for y in range(2014, 2023))]
+    assert late[0] == ('walk_forward', '2014-01-01', '2022-12-31')
+    assert periods_for(RunConfig('2008-12-31', '2022-12-30')) is PERIODS

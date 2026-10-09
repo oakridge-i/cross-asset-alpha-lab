@@ -1,6 +1,6 @@
 """Usage: python -m alpha_lab {acquire,evidence,audit,replay,reconcile,corrections} [snapshot] [evidence]
 --root PROJECT; python -m alpha_lab simulate DERIVED --provider NAME --start DATE --end DATE
-[--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH] --root PROJECT [--parent ATTEMPT];
+[--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH --stage 5] --root PROJECT [--parent ATTEMPT];
 python -m alpha_lab {report,hypothesis-report} --runs DIR [DIR ...] --root PROJECT [--parent ATTEMPT]
 [--expected-sha256 HASH].
 Exit codes: 0 completed; 3 simulate finished with failed invariants or audit with failed QA; 1 exception; 2 usage."""
@@ -43,6 +43,7 @@ def main(argv=None):
     parser.add_argument('--reserve', type=float, default=base.reserve)
     parser.add_argument('--proxy-days', type=int, default=base.proxy_pay_days)
     parser.add_argument('--expected-sha256', default=VINTAGE_MANIFEST_SHA256)
+    parser.add_argument('--stage', type=int, choices=[5], default=None)
     args = parser.parse_args(argv)
     root = args.root.resolve()
     if args.command == 'acquire':
@@ -68,7 +69,8 @@ def main(argv=None):
             parser.error('derived snapshot, --provider, --start and --end required for simulate')
         scenario = Scenario(cost=args.cost, lag=args.lag, reserve=args.reserve, proxy_pay_days=args.proxy_days)
         config = RunConfig(args.start, args.end, scenario=scenario)
-        run_dir = run_simulation(root, root / args.snapshot, args.provider, config, args.parent, args.expected_sha256)
+        run_dir = run_simulation(root, root / args.snapshot, args.provider, config, args.parent, args.expected_sha256,
+                                args.stage)
         print(project_path(root, run_dir))
         if not json.loads((run_dir / 'invariants.json').read_bytes())['passed']:
             raise SystemExit(EXIT_CHECKS_FAILED)
