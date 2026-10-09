@@ -1,8 +1,14 @@
-"""Pure inference helpers: utility, paired circular block bootstrap and Holm adjustment (N5 spec 6.2-6.4, P8)."""
+"""Pure inference helpers: utility, paired circular block bootstrap, Holm adjustment, monthly returns, class proxies
+and Newey-West regressions (N5 spec 6.2-6.5, P8-P10)."""
 import math
 import numpy as np
+import pandas as pd
 from alpha_lab.features import ANNUAL
 from alpha_lab.metrics import UTILITY_PENALTY
+
+MIN_MONTHS = 36
+MAX_CONDITION = 1e8
+NORMAL_95 = 1.96
 
 
 def utility(e):
@@ -50,3 +56,76 @@ def holm(p_values):
         running = max(running, min(1.0, (m - j) * p_values[key]))
         out[key] = running
     return out
+
+
+def monthly_returns(values):
+    """Month-end ratio minus one on the series' own sessions, labeled YYYY-MM (P10).
+
+    The base of a month is the last session of the previous month present in the series; a month without a
+    base (the first one in the series) is not emitted.
+    """
+    series = pd.Series(values)
+    month = pd.Index([str(label)[:7] for label in series.index])
+    ends = series.groupby(month, sort=True).last()
+    out = ends / ends.shift(1) - 1.0
+    return out.iloc[1:]
+
+
+def class_proxies(monthly_excess, groups):
+    """Unweighted mean of the members' monthly excess returns for each group (P10)."""
+    return pd.DataFrame({name: monthly_excess[list(members)].mean(axis=1) for name, members in groups.items()})
+
+
+def newey_west(X, residuals, lag=3):
+    """Newey-West covariance of OLS coefficients with Bartlett weights 1 - l / (lag + 1) and the factor n / (n - k).
+
+    X is the full design matrix including the intercept column; k is its number of columns. lag = 0 is HC1.
+    """
+    X = np.asarray(X, dtype=float)
+    u = np.asarray(residuals, dtype=float)
+    n, k = X.shape
+    scores = X * u[:, None]
+    meat = scores.T @ scores
+    for ell in range(1, lag + 1):
+        cross = scores[ell:].T @ scores[:-ell]
+        meat = meat + (1.0 - ell / (lag + 1)) * (cross + cross.T)
+    bread = np.linalg.pinv(X.T @ X)
+    factor = n / (n - k) if n > k else float('nan')
+    return bread @ meat @ bread * factor
+
+
+def regress(y, X, lag=3):
+    """OLS of y on an intercept plus the columns of X; regress adds the intercept, so coef[0] is the intercept.
+
+    Returns the coefficients, Newey-West standard errors, n, k (columns including the intercept), the design
+    matrix rank and its condition number. Rank-deficient designs are fitted by least squares and reported through
+    rank and cond; annual_alpha gates on them.
+    """
+    y = np.asarray(y, dtype=float)
+    X = np.asarray(X, dtype=float)
+    if X.ndim == 1:
+        X = X[:, None]
+    Z = np.column_stack([np.ones(len(y)), X])
+    coef = np.linalg.lstsq(Z, y, rcond=None)[0]
+    cov = newey_west(Z, y - Z @ coef, lag)
+    return {'coef': coef, 'se': np.sqrt(np.diag(cov)), 'n': int(Z.shape[0]), 'k': int(Z.shape[1]),
+            'cond': float(np.linalg.cond(Z)), 'rank': int(np.linalg.matrix_rank(Z))}
+
+
+def annual_alpha(fit):
+    """Annual alpha = 12 x the monthly intercept; its standard error and interval (+/- 1.96 se) are scaled by 12.
+
+    Gates in order: months (n < 36), rank (rank < k), condition (cond > 1e8). A gated fit returns None for all
+    four numbers and the reason; otherwise the reason is None.
+    """
+    if fit['n'] < MIN_MONTHS:
+        reason = 'months'
+    elif fit['rank'] < fit['k']:
+        reason = 'rank'
+    elif not fit['cond'] <= MAX_CONDITION:
+        reason = 'condition'
+    else:
+        alpha, se = 12.0 * float(fit['coef'][0]), 12.0 * float(fit['se'][0])
+        return {'alpha': alpha, 'se': se, 'ci_low': alpha - NORMAL_95 * se, 'ci_high': alpha + NORMAL_95 * se,
+                'reason': None}
+    return {'alpha': None, 'se': None, 'ci_low': None, 'ci_high': None, 'reason': reason}
