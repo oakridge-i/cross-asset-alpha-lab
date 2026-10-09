@@ -411,11 +411,18 @@ def check_selection_log(log, runs):
                        'decisions.csv, weights.csv and signals.csv hold different decision sessions')
         report.require(signal_header[-2:] == EXTRA_SIGNAL_COLUMNS,
                        'signals.csv does not end with selection_year and selected_config')
+        start = runs[POLICY].config['start_session']
     configurations = {}
     with rule(6, 'H1 full-window run files'):
         for name in CANDIDATES:
             configurations[name] = (_by_decision(runs[name].path / 'weights.csv', unique=True),
                                     _by_decision(runs[name].path / 'signals.csv'))
+    with rule(6, f'{POLICY} run files'):
+        # The policy decides on the schedule of the configuration runs from its start session on.
+        for name in sorted(set(chosen.values()), key=CANDIDATES.index):
+            schedule = [s for s in configurations[name][0][1] if s >= start]
+            report.require(list(execution) == schedule, 'decision sessions differ from those of the chosen '
+                           'configuration runs from the policy start session on')
     for session, executed in execution.items():
         with rule(6, f'{POLICY} decision {session}'):
             rows = signals[session]
@@ -574,23 +581,31 @@ def regression_block(names, y, X):
             'reason': alpha['reason']}
 
 
+def regression_inputs(label, rows, comparator, comparator_rows, tri):
+    """(y, Model A regressor, class proxies) on the complete months of the walk-forward period: y = R - R_BIL, the
+    comparator's R - R_BIL and the four class proxies of the member ETF excess returns over BIL, from the daily
+    (session, nav) rows and the total-return frame `tri` (spec 6.5, P10)."""
+    ends = month_ends(rows)
+    _rule(month_ends(comparator_rows) == ends, f'regression {label}: months differ from those of {comparator}')
+    _rule(all(s in tri.index for s in ends), f'regression {label}: month-ends missing from the BIL index')
+    r_bil = inference.monthly_returns(tri.loc[ends, CASH])
+    nav, nav_comparator = dict(rows), dict(comparator_rows)
+    y = inference.monthly_returns({s: nav[s] for s in ends}) - r_bil
+    x_a = inference.monthly_returns({s: nav_comparator[s] for s in ends}) - r_bil
+    members = [t for group in GROUPS.values() for t in group]
+    excess = pd.DataFrame({t: inference.monthly_returns(tri.loc[ends, t]) - r_bil for t in members})
+    proxies = inference.class_proxies(excess, GROUPS)[list(GROUPS)]
+    _rule(list(y.index) == list(x_a.index) == list(proxies.index), f'regression {label}: month labels differ')
+    return y, x_a, proxies
+
+
 def regressions(daily, index):
     """Models A and B for the six configurations and P_A1 on the complete months of the walk-forward period:
     y = R - R_BIL; Model A on the comparator's excess return, Model B on the four class proxies (spec 6.5, P10)."""
     out = {}
     for label, comparator in REGRESSION_COMPARATOR.items():
-        ends = month_ends(daily[label])
-        _rule(month_ends(daily[comparator]) == ends, f'regression {label}: months differ from those of {comparator}')
-        tri = index[daily[label][-1][0]]
-        _rule(all(s in tri.index for s in ends), f'regression {label}: month-ends missing from the BIL index')
-        r_bil = inference.monthly_returns(tri.loc[ends, CASH])
-        nav = {label: dict(daily[label]), comparator: dict(daily[comparator])}
-        y = inference.monthly_returns({s: nav[label][s] for s in ends}) - r_bil
-        x_a = inference.monthly_returns({s: nav[comparator][s] for s in ends}) - r_bil
-        members = [t for group in GROUPS.values() for t in group]
-        excess = pd.DataFrame({t: inference.monthly_returns(tri.loc[ends, t]) - r_bil for t in members})
-        proxies = inference.class_proxies(excess, GROUPS)[list(GROUPS)]
-        _rule(list(y.index) == list(x_a.index) == list(proxies.index), f'regression {label}: month labels differ')
+        y, x_a, proxies = regression_inputs(label, daily[label], comparator, daily[comparator],
+                                            index[daily[label][-1][0]])
         out[label] = {'comparator': comparator,
                       'model_a': regression_block([comparator], y.to_numpy(), x_a.to_numpy()),
                       'model_b': regression_block(list(GROUPS), y.to_numpy(), proxies.to_numpy())}
@@ -639,7 +654,7 @@ def evaluation_document(root, runs, log, expected_sha256):
                                'policy': annual([POLICY_COMPARISON])},
         'regressions': {'method': {'covariance': 'Newey-West, Bartlett kernel', 'lag': NW_LAG,
                                    'finite_sample_factor': 'n/(n-k), k counting the intercept',
-                                   'interval': 'normal, estimate +/- 1.96 standard errors',
+                                   'interval': 'asymptotic normal, estimate +/- 1.96 standard errors',
                                    'annual_alpha': '12 x monthly intercept',
                                    'gates': 'months < 36, rank deficiency, condition number > 1e8'},
                         'candidates': regressions(daily, index)},
@@ -653,7 +668,9 @@ def enforce_whitelist(document, body, markdown, forbidden):
     _rule(isinstance(document, dict) and list(document) == list(DOCUMENT_KEYS),
           'evaluation document keys are not the whitelist')
     texts = (body.decode('utf-8'), markdown.decode('utf-8'))
-    _rule(not any(f and f in text for f in forbidden for text in texts),
+    # Each forbidden string also in its JSON-escaped forms (a Windows path has its backslashes doubled in JSON).
+    forms = {g for f in forbidden if f for g in (f, json.dumps(f, ensure_ascii=False)[1:-1], json.dumps(f)[1:-1])}
+    _rule(not any(f in text for f in forms for text in texts),
           'evaluation document holds a run id or a path')
 
 

@@ -12,11 +12,13 @@ import shutil
 import socket
 import traceback
 import numpy as np
+import pandas as pd
 import pytest
 from n3_fixtures import benchmark_vintage
 from alpha_lab import engine, evaluation, inference, provenance, report
 from alpha_lab.adaptive import CANDIDATES, validation_segment
 from alpha_lab.engine import RunConfig, run_simulation
+from alpha_lab.features import xnys_month_end
 from alpha_lab.market import load_market
 from alpha_lab.metrics import PERIODS, WF_PERIODS
 from alpha_lab.portfolio import GROUPS
@@ -890,3 +892,157 @@ def test_cli_evaluate_prints_the_report_directory(reportable, capsys):
     assert journal(c.root)[-1]['parent_attempt_id'] == 'x' and journal(c.root)[-1]['event'] == 'completed'
     with pytest.raises(SystemExit):
         main(['evaluate', '--root', str(c.root)])
+
+
+# --- fix round 1 ---------------------------------------------------------------------------------------------------
+
+def test_regression_interval_is_labeled_asymptotic(built):
+    method = built.document['regressions']['method']
+    assert method['interval'] == 'asymptotic normal, estimate +/- 1.96 standard errors'
+    assert 'asymptotic normal, estimate +/- 1.96 standard errors' in built.markdown
+
+
+def synthetic_month_ends(first='2013-12', months=48):
+    year, month = int(first[:4]), int(first[5:])
+    out = []
+    for _ in range(months + 1):
+        out.append(xnys_month_end(f'{year}-{month:02d}'))
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return out
+
+
+def test_regression_inputs_and_an_ungated_fit_against_independent_values():
+    """48 complete months from the December 2013 base: y, the Model A regressor and the four class proxies equal
+    hand-computed month-end ratios, and the ungated fits equal an independent OLS."""
+    rng = np.random.default_rng(11)
+    ends = synthetic_month_ends()
+    # Daily rows: each month-end plus one session in the middle of each month after the base (not a month-end).
+    sessions = sorted([*ends, *(e[:8] + '15' for e in ends[1:])])
+    tickers = ['BIL', *(t for members in GROUPS.values() for t in members)]
+    tri = pd.DataFrame(np.cumprod(1 + rng.normal(0.003, 0.02, size=(len(sessions), len(tickers))), axis=0),
+                       index=sessions, columns=tickers)
+    navs = {label: np.cumprod(1 + rng.normal(0.004, 0.03, len(sessions))) * 100000 for label in KEYS}
+    daily = {label: list(zip(sessions, map(float, navs[label]))) for label in KEYS}
+    y, x_a, proxies = evaluation.regression_inputs('H1_252_4', daily['H1_252_4'], 'B3', daily['B3'], tri)
+    at = [sessions.index(e) for e in ends]
+    bil = tri['BIL'].to_numpy()[at]
+    r_bil = bil[1:] / bil[:-1] - 1
+    nav_c, nav_k = navs['H1_252_4'][at], navs['B3'][at]
+    want_y = nav_c[1:] / nav_c[:-1] - 1 - r_bil
+    want_x = nav_k[1:] / nav_k[:-1] - 1 - r_bil
+    want_proxies = []
+    for group, members in GROUPS.items():
+        values = tri[list(members)].to_numpy()[at]
+        want_proxies.append(np.mean(values[1:] / values[:-1] - 1 - r_bil[:, None], axis=1))
+    assert list(y.index) == [e[:7] for e in ends[1:]] and y.index[0] == '2014-01' and len(y) == 48
+    # The first month is based on the December 2013 month-end, not on a mid-month row.
+    assert math.isclose(y.iloc[0], nav_c[1] / nav_c[0] - 1 - (bil[1] / bil[0] - 1), rel_tol=0, abs_tol=1e-15)
+    assert np.allclose(y.to_numpy(), want_y, rtol=0, atol=1e-15)
+    assert np.allclose(x_a.to_numpy(), want_x, rtol=0, atol=1e-15)
+    assert list(proxies.columns) == list(GROUPS)
+    for group, want in zip(GROUPS, want_proxies):
+        assert np.allclose(proxies[group].to_numpy(), want, rtol=0, atol=1e-15)
+    blocks = evaluation.regressions(daily, {sessions[-1]: tri})
+    for model, Z in (('model_a', np.column_stack([np.ones(48), want_x])),
+                     ('model_b', np.column_stack([np.ones(48), *want_proxies]))):
+        coef = np.linalg.lstsq(Z, want_y, rcond=None)[0]
+        block = blocks['H1_252_4'][model]
+        assert block['months'] == 48 and block['reason'] is None and block['k'] == Z.shape[1]
+        assert block['coefficients'] is not None and np.allclose(block['coefficients'], coef, rtol=0, atol=1e-12)
+        assert block['standard_errors'] is not None and all(math.isfinite(v) for v in block['standard_errors'])
+        assert math.isclose(block['alpha'], 12 * coef[0], rel_tol=1e-9)
+    # The policy uses its comparator run, H2 the parent.
+    assert blocks['P_A1']['model_a']['regressors'] == ['intercept', 'H1_252_3_WF']
+    assert blocks['H2_4of6']['model_a']['regressors'] == ['intercept', 'H1_252_3']
+
+
+def read_rows(c, label, name):
+    return list(csv.reader(io.StringIO((c.runs[label] / name).read_text(encoding='utf-8'))))
+
+
+def test_selection_log_uses_the_chosen_configuration_run(campaign, monkeypatch):
+    """A consistent log that chooses H1_126_3: the policy rows are compared with the H1_126_3 run, so the rows of
+    H1_252_3 are rejected and the rows of H1_126_3 are accepted."""
+    monkeypatch.setattr(evaluation, 'SELECTION_YEARS', MINI_YEARS)
+    entry = policy_log(campaign)[0]
+    u = {**entry['utility'], 'H1_252_3': entry['utility']['H1_126_3'] - 0.01}
+    best = max(u.values())
+    close = [c for c in CANDIDATES if u[c] >= best - 0.001]
+    assert close[0] == 'H1_126_3', 'the constructed log does not choose H1_126_3'
+    log = [{**entry, 'utility': u, 'best_utility': best, 'close_set': close, 'chosen': 'H1_126_3'}]
+
+    def relabel(rows):
+        at = rows[0].index('selected_config')
+        for row in rows[1:]:
+            row[at] = 'H1_126_3'
+    edit_csv(campaign, 'P_A1', 'signals.csv', relabel)
+    start = WF[0]
+    other = [r for r in read_rows(campaign, 'H1_126_3', 'signals.csv')[1:] if r[0] >= start]
+    assert [r[:-2] for r in read_rows(campaign, 'P_A1', 'signals.csv')[1:]] != other, 'the fixture rows coincide'
+    message = reject_log(campaign, verify_all(campaign), log, 'P_A1 decision')
+    assert 'weights.csv' in message or 'signal rows' in message
+
+    # The rows of H1_126_3 from the policy start on, with the two extra columns, are accepted.
+    weights = [r for r in read_rows(campaign, 'H1_126_3', 'weights.csv')[1:] if r[0] >= start]
+    edit_csv(campaign, 'P_A1', 'signals.csv', lambda rows: rows.__setitem__(
+        slice(1, None), [[*r, '2014', 'H1_126_3'] for r in other]))
+    edit_csv(campaign, 'P_A1', 'weights.csv', lambda rows: rows.__setitem__(slice(1, None), weights))
+    assert evaluation.check_selection_log(log, verify_all(campaign)) is None
+
+
+def test_selection_log_rejects_a_missing_policy_decision(campaign, monkeypatch):
+    monkeypatch.setattr(evaluation, 'SELECTION_YEARS', MINI_YEARS)
+    log = policy_log(campaign)
+
+    def drop(rows):
+        rows[1:] = [r for r in rows[1:] if r[0] != '2014-01-31']
+    for name in ('decisions.csv', 'weights.csv', 'signals.csv'):
+        edit_csv(campaign, 'P_A1', name, drop)
+    message = reject_log(campaign, verify_all(campaign), log, 'P_A1 run files')
+    assert 'decision sessions differ' in message
+
+
+def test_withheld_passes_a_rule_error_with_its_message():
+    with pytest.raises(evaluation.RuleError, match='^fixed text$'):
+        with evaluation.withheld():
+            raise evaluation.RuleError('fixed text')
+    with pytest.raises(RuntimeError, match='^KeyError in the evaluation; message withheld') as info:
+        with evaluation.withheld():
+            raise KeyError('12345.67')
+    assert '12345.67' not in ''.join(traceback.format_exception(info.value))
+
+
+def test_a_rule_error_of_the_computation_is_raised_and_journaled(reportable, monkeypatch):
+    c = reportable
+    original = evaluation.bil_returns
+
+    def short(market, last):
+        out = original(market, last)
+        out.pop(next(s for s in out if s >= '2014-01-01'))
+        return out
+    verify = evaluation.verified_n5_runs
+
+    def verified_then_short(*args, **kwargs):
+        # Verification (item 5) uses the full BIL series; the computation phase then sees one session less.
+        runs = verify(*args, **kwargs)
+        monkeypatch.setattr(evaluation, 'bil_returns', short)
+        return runs
+    monkeypatch.setattr(evaluation, 'verified_n5_runs', verified_then_short)
+    expected = 'comparison H1_252_3 vs B3: BIL sessions differ from the run sessions'
+    with pytest.raises(evaluation.RuleError) as info:
+        evaluation.build_evaluation(c.root, dirs(c), expected_sha256=c.digest)
+    assert str(info.value) == expected
+    last = journal(c.root)[-1]
+    assert last['event'] == 'failed' and last['error'] == f'RuleError: {expected}'
+
+
+def test_whitelist_catches_the_json_escaped_root_path():
+    document = {k: None for k in DOCUMENT_KEYS}
+    root = 'C:\\Users\\x\\project'
+    body = provenance.canonical_bytes({'a': root + '\\data'})
+    assert root not in body.decode('utf-8') and json.dumps(root)[1:-1] in body.decode('utf-8')
+    with pytest.raises(ValueError, match='run id or a path'):
+        evaluation.enforce_whitelist(document, body, b'', [root])
+    accented = 'C:\\Users\\\u0414\u043e\u043a'
+    with pytest.raises(ValueError, match='run id or a path'):
+        evaluation.enforce_whitelist(document, json.dumps({'a': accented}).encode(), b'', [accented])
