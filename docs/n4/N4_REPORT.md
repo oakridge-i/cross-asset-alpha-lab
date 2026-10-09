@@ -1,6 +1,6 @@
 # N4 report: hypotheses H1 and H2, registered runs and permitted diagnostics
 
-Date: 8 October 2026. Branch `claude/n4-hypotheses` (not merged into `main`).
+Date: 8 October 2026. Branch `claude/n4-hypotheses`, merged into `main` through PR #1 on 8 October 2026 (see the integration receipt at the end of this document). The sections between this header and the receipt describe the state before that merge and are retained as historical evidence.
 
 ## Purpose and boundaries
 

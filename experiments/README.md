@@ -41,7 +41,7 @@ Registered N4 records, all `completed` (the journal commit of each step is in th
 Attempt accounting before N5 (spec section 12; D023, item 9). The accounting consists of the following lines, which are not added together as independent experiments:
 
 - Registered configurations: six, one registered run each (the first-run ids above): H1_252_3, H1_252_4, H1_126_3, H1_126_4, H2_4of6 and H2_5of6.
-- Reruns after bug fixes: zero. No change to `src` was made after the first registered run; every run and report started from the same `src` tree.
+- Reruns after bug fixes: zero in the original campaign. No change to `src` was made between the first registered run and the repeat report of that campaign; every run and report in it started from the same `src` tree. The later D024 correction (`bd71fc0`) did change `src`, and the replacement campaign that followed is a bug-driven rerun of all six configurations; it is accounted for in the section "D024 replacement campaign and attempt accounting" below.
 - Repeat of H1_252_3: run `20261008T174340-dfb6a1c558`, parent `20261008T174218-4053e6ea58`; a repeat with `--parent`, not a new candidate and not an independent experiment.
 - Repeat of H1_252_4: run `20261008T174343-bda6d756d5`, parent `20261008T174253-cbb9ce2219`; a repeat with `--parent`, not a new candidate and not an independent experiment.
 - Repeat of H1_126_3: run `20261008T174347-8fc8ed2441`, parent `20261008T174300-8531bbf3ae`; a repeat with `--parent`, not a new candidate and not an independent experiment.
