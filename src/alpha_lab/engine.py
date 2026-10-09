@@ -17,11 +17,38 @@ from alpha_lab.metrics import compute_metrics, periods_for
 from alpha_lab.normalize import calendar, finite_number
 from alpha_lab.pipeline import project_path, require_inside
 from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256
-from alpha_lab.runconfig import GRID, RunConfig, Scenario  # re-exported: engine.RunConfig, engine.Scenario
 from alpha_lab.adaptive import CANDIDATES, Policy
 
+GRID = {'cost': (0, 0.001, 0.002, 0.005), 'lag': (1, 2), 'reserve': (0, 0.01, 0.02), 'proxy_pay_days': (0, 10, 30)}
 WEIGHT_SUM_TOLERANCE = 1e-12
 IDENTITY_TOLERANCE = 1e-6
+
+
+@dataclass(frozen=True)
+class Scenario:
+    cost: float = 0.001
+    lag: int = 1
+    reserve: float = 0.01
+    proxy_pay_days: int = 10
+
+    def __post_init__(self):
+        for name, allowed in GRID.items():
+            if getattr(self, name) not in allowed:
+                raise ValueError(f'{name} must be one of {allowed}: {getattr(self, name)!r}')
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    start_session: str
+    end_session: str
+    decision_sessions: tuple[str, ...] | None = None
+    scenario: Scenario = Scenario()
+    initial_cash: float = 100000.0
+
+    def __post_init__(self):
+        if not (finite_number(self.initial_cash) and self.initial_cash > 0):
+            raise ValueError(f'initial_cash must be a finite number > 0: {self.initial_cash!r}')
+        object.__setattr__(self, 'initial_cash', float(self.initial_cash))
 
 
 @dataclass
@@ -247,7 +274,8 @@ PROVIDERS = {'invariant_rotation': Provider(invariant_rotation, '1', 'monthly', 
 def p_a1():
     """Zero-argument factory of the P_A1 provider: run_simulation builds one fresh Policy per run, so a selection
     cached by the provider never outlives its simulation (N5 spec 5.2)."""
-    return Policy(simulate, {n: PROVIDERS[n].function for n in CANDIDATES})
+    return Policy(lambda market, provider, start, end: simulate(market, provider, RunConfig(start, end)),
+                  {n: PROVIDERS[n].function for n in CANDIDATES})
 
 
 PROVIDERS['P_A1'] = Provider(p_a1, '1', 'monthly', 'policy',
@@ -339,6 +367,8 @@ def run_simulation(root, derived, provider_name, config, parent=None, expected_s
         raise ValueError(f'stage must be None or one of {sorted(STAGE_PURPOSES)}: {stage!r}')
     if entry.kind == 'policy' and stage != 5:
         raise ValueError(f'a policy provider runs only with stage 5: {provider_name}')
+    if entry.kind == 'policy' and (config.scenario != Scenario() or config.initial_cash != 100000.0):
+        raise ValueError(f'a policy run uses the main scenario and the default initial cash: {provider_name}')
     if entry.schedule == 'first_only':
         config = replace(config, decision_sessions=(config.start_session,))
     cfg = {**config_record(config, provider_name), 'derived_snapshot': project_path(root, derived),

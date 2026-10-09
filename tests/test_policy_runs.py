@@ -8,7 +8,7 @@ import pytest
 from n3_fixtures import RISKY, benchmark_frames, benchmark_vintage
 from alpha_lab import adaptive, engine, inference
 from alpha_lab.adaptive import CANDIDATES, Policy
-from alpha_lab.engine import PROVIDERS, RunConfig, config_record, run_simulation
+from alpha_lab.engine import PROVIDERS, RunConfig, Scenario, config_record, run_simulation
 from alpha_lab.hypotheses import SIGNAL_COLUMNS_H1, SIGNAL_COLUMNS_POLICY
 from alpha_lab.market import market_from_frames
 from alpha_lab.metrics import WF_PERIODS
@@ -43,6 +43,16 @@ def failed_records(root):
 
 def real_providers(candidates=CANDIDATES):
     return {name: PROVIDERS[name].function for name in candidates}
+
+
+def engine_adapter(markets=None):
+    """The validation-run adapter of the registry factory: engine.simulate with RunConfig(start, end); the markets
+    it receives are appended to `markets`."""
+    def run(market, provider, start, end):
+        if markets is not None:
+            markets.append(market)
+        return engine.simulate(market, provider, RunConfig(start, end))
+    return run
 
 
 @pytest.fixture(scope='module')
@@ -109,7 +119,7 @@ def test_policy_run_files_and_journal(tmp_path, no_network):
 
 
 def test_single_candidate_policy_equals_the_fixed_configuration(tmp_path, no_network, monkeypatch):
-    single = engine.Provider(lambda: Policy(engine.simulate, real_providers(('H1_252_3',)), ('H1_252_3',)),
+    single = engine.Provider(lambda: Policy(engine_adapter(), real_providers(('H1_252_3',)), ('H1_252_3',)),
                              '1', 'monthly', 'policy', {**PARAMETERS, 'candidates': ['H1_252_3']})
     monkeypatch.setitem(engine.PROVIDERS, 'P_single', single)
     policy_dir = policy_run(tmp_path / 'policy', 'P_single')
@@ -142,6 +152,16 @@ def test_policy_run_requires_stage_five(tmp_path, no_network, stage):
 def test_policy_run_rejects_unknown_stages(tmp_path, no_network, stage):
     with pytest.raises(ValueError, match='stage'):
         policy_run(tmp_path, stage=stage)
+    assert not (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').exists()
+
+
+@pytest.mark.parametrize('config', [RunConfig(START, END, scenario=Scenario(cost=0.002)),
+                                    RunConfig(START, END, scenario=Scenario(lag=2)),
+                                    RunConfig(START, END, initial_cash=50000.0)])
+def test_policy_run_rejects_a_non_main_scenario(tmp_path, no_network, config):
+    derived, digest = vintage(tmp_path)
+    with pytest.raises(ValueError, match='main scenario'):
+        run_simulation(tmp_path, derived, 'P_A1', config, expected_sha256=digest, stage=5)
     assert not (tmp_path / 'experiments/EXPERIMENT_LOG.jsonl').exists()
 
 
@@ -218,8 +238,11 @@ def test_fallback_year_is_a_value_free_quality_warning(tmp_path, no_network, mon
 # Engine-level selection (spec 12): the real engine.simulate on synthetic markets.
 
 def selection(market, t='2014-01-31'):
-    policy = Policy(engine.simulate, real_providers())
+    markets = []
+    policy = Policy(engine_adapter(markets), real_providers())
     decision = policy(t, market.history(t))
+    # Every market handed to the engine ends at the selection date s_Y.
+    assert len(markets) == len(CANDIDATES) and all(m.sessions[-1] == SEGMENT[1] for m in markets)
     return policy.selection_log(), decision
 
 
@@ -229,6 +252,10 @@ def base_selection(base_frames):
 
 
 def test_selection_is_causal_at_engine_level(base_frames, base_selection):
+    # engine.simulate alone already ignores sessions after end_session, so this test cannot detect a missing
+    # truncation by itself; the truncation is pinned by
+    # test_adaptive.py::test_selection_uses_history_truncated_to_the_selection_date and by the recording assertion
+    # in selection() that every market handed to the engine ends at s_Y.
     base_log, base_decision = base_selection
     later = market_from_frames(ramp_after(copy_frames(base_frames), SEGMENT[1]))
     later_log, later_decision = selection(later)
@@ -249,13 +276,16 @@ def test_validation_accounts_have_24_decisions_inside_the_segment(base_frames, b
         result = real(m, provider, config)
         recorded.append((m, config, result))
         return result
-    policy = Policy(recording, real_providers())
+    monkeypatch.setattr(engine, 'simulate', recording)
+    policy = engine.p_a1()  # the registry factory path
     policy('2013-12-31', market.history('2013-12-31'))
     [entry] = policy.selection_log()
     assert len(recorded) == len(CANDIDATES)
     bil = market.close['BIL']
     for (m, config, result), name in zip(recorded, CANDIDATES):
         assert m.sessions[-1] == SEGMENT[1] and (config.start_session, config.end_session) == SEGMENT
+        assert config == RunConfig(*SEGMENT) and config.decision_sessions is None
+        assert config.scenario == Scenario() and config.initial_cash == 100000.0
         assert result.invariants['passed']
         assert len(result.decisions) == 24
         assert result.decisions[0]['decision_session'] == SEGMENT[0]

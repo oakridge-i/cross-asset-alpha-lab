@@ -8,7 +8,7 @@ from alpha_lab import inference
 from alpha_lab.features import xnys_month_end
 from alpha_lab.hypotheses import Decision
 from alpha_lab.metrics import UTILITY_PENALTY, excess_series
-from alpha_lab.runconfig import RunConfig
+from alpha_lab.normalize import calendar
 
 CANDIDATES = ('H1_252_3', 'H1_252_4', 'H1_126_3', 'H1_126_4')
 FALLBACK = 'H1_252_3'
@@ -16,6 +16,7 @@ TOLERANCE = 0.001
 PENALTY = 1.5
 FIRST_YEAR = 2014
 LAST_YEAR = 2022
+HISTORY_YEARS = 5  # validation years 2 + context years 3 (spec 5.2 item 1)
 
 assert PENALTY == UTILITY_PENALTY
 
@@ -91,8 +92,10 @@ def stability(excess, replicates=1000, length=63, seed=20261007, order=CANDIDATE
 class Policy:
     """The P_A1 provider (N5 spec 5.2, 5.5; D025 items 4-7 and 15).
 
-    `simulate(market, provider, config)` is the engine's simulation function and `providers` maps each candidate to
-    its provider function. A decision at t uses the selection of selection_year(t), computed once per instance on the
+    `simulate(market, provider, start, end)` runs one validation account of `provider` on `market` from the session
+    `start` to the session `end` in the main scenario and returns the engine Result (the registry injects an adapter
+    around engine.simulate with RunConfig(start, end)); `providers` maps each candidate to its provider function.
+    The history must hold the five full calendar years before the selection year. A decision at t uses the selection of selection_year(t), computed once per instance on the
     history truncated to the selection date s_Y; the weights are those of the chosen candidate at t on the history up
     to t, and its signal rows carry `selection_year` and `selected_config`."""
 
@@ -126,11 +129,14 @@ class Policy:
         key = (year, history.manifest_sha256, last)
         if key in self._selections:
             return self._selections[key]
+        required = calendar(f'{year - HISTORY_YEARS}-01-01', f'{year - HISTORY_YEARS}-01-31').sessions[0]
+        if history.sessions[0] > required.date().isoformat() or last not in history.sessions:
+            raise ValueError(f'selection year {year} needs the history from the first session of '
+                             f'{year - HISTORY_YEARS} through the selection date {last}')
         truncated = history.history(last)  # nothing after the selection date reaches the selection
-        config = RunConfig(first, last)
         excess, sessions, decisions = {}, None, None
         for name in self.candidates:
-            result = self._simulate(truncated, self._providers[name], config)
+            result = self._simulate(truncated, self._providers[name], first, last)
             if not result.invariants['passed']:
                 raise ValueError(f'a run invariant failed in the validation account of {name} '
                                  f'for selection year {year}')

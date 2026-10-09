@@ -3,12 +3,12 @@ import inspect
 from dataclasses import replace
 from types import SimpleNamespace
 import numpy as np
+import pandas as pd
 import pytest
 
 from n3_fixtures import benchmark_frames
 from alpha_lab import adaptive, inference, metrics
 from alpha_lab.adaptive import CANDIDATES, FALLBACK, choose, selection_year, stability, validation_segment
-from alpha_lab.engine import Scenario
 from alpha_lab.hypotheses import Decision
 from alpha_lab.market import market_from_frames
 from alpha_lab.provenance import canonical_bytes
@@ -186,7 +186,7 @@ def fake_navs(market, sessions, name, drift):
 
 
 class FakeSimulate:
-    """Records (market, candidate, config); the NAV of a candidate grows by the BIL close return plus its drift and a
+    """Records (market, candidate, (start, end)); the NAV of a candidate grows by the BIL close return plus its drift and a
     noise term that depends only on the candidate, so the result does not depend on the call order."""
 
     def __init__(self, drift=None, failed=(), raising=None, short=(), nan=()):
@@ -194,12 +194,12 @@ class FakeSimulate:
         self.drift = {**dict.fromkeys(CANDIDATES, 0.0), **(drift or {})}
         self.failed, self.raising, self.short, self.nan = failed, raising, short, nan
 
-    def __call__(self, market, provider, config):
+    def __call__(self, market, provider, start, end):
         name = provider.candidate
-        self.calls.append((market, name, config))
+        self.calls.append((market, name, (start, end)))
         if name == self.raising:
             raise RuntimeError('provider failed')
-        sessions = [s for s in market.sessions if config.start_session <= s <= config.end_session]
+        sessions = [s for s in market.sessions if start <= s <= end]
         if name in self.short:
             sessions = sessions[:-1]
         navs = fake_navs(market, sessions, name, self.drift[name])
@@ -229,13 +229,11 @@ def test_selection_uses_history_truncated_to_the_selection_date(market):
     policy = adaptive.Policy(fake, FAKE_PROVIDERS)
     policy('2014-06-30', market.history('2014-06-30'))
     assert [name for _, name, _ in fake.calls] == list(CANDIDATES)
-    for received, _, config in fake.calls:
+    for received, _, window in fake.calls:
         assert received.sessions[-1] == SEGMENT_2014[1]
         assert received.close.index[-1] == SEGMENT_2014[1]
         assert all(ex <= SEGMENT_2014[1] for _, ex in received.payable)
-        assert (config.start_session, config.end_session) == SEGMENT_2014
-        assert config.decision_sessions is None
-        assert config.scenario == Scenario() and config.initial_cash == 100000.0
+        assert window == SEGMENT_2014
 
 
 def test_selection_is_independent_of_the_first_caller(market):
@@ -388,3 +386,41 @@ def test_adaptive_does_not_import_the_engine():
     modules |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     assert not any('engine' in m for m in modules)
     assert not hasattr(adaptive, 'engine')
+
+
+def from_session(market, first):
+    """The market restricted to sessions >= first (frames sliced, so no event before `first` remains)."""
+    frames = {t: pd.DataFrame({'open': market.open[t], 'close': market.close[t], 'dividend': market.dividend[t],
+                               'split_ratio': market.split_ratio[t], 'payable_date': '', 'payable_basis': ''})
+              for t in market.tickers}
+    for (t, ex), (pay, basis) in market.payable.items():
+        frames[t].loc[ex, ['payable_date', 'payable_basis']] = [pay, basis]
+    return market_from_frames({t: f.loc[f.index >= first] for t, f in frames.items()})
+
+
+def test_selection_requires_five_full_years_of_history(market):
+    # Selection year 2014 needs 2009 to 2013; the first XNYS session of 2009 is 2009-01-02.
+    boundary = from_session(market, '2009-01-02')
+    assert boundary.sessions[0] == '2009-01-02'
+    fake = FakeSimulate()
+    adaptive.Policy(fake, FAKE_PROVIDERS)('2014-01-31', boundary.history('2014-01-31'))
+    assert len(fake.calls) == len(CANDIDATES)
+    for first in ('2009-01-05', '2009-06-01'):
+        late = from_session(market, first)
+        fake = FakeSimulate()
+        policy = adaptive.Policy(fake, FAKE_PROVIDERS)
+        with pytest.raises(ValueError, match='history'):
+            policy('2014-01-31', late.history('2014-01-31'))
+        assert fake.calls == [] and policy.selection_log() == []
+
+
+def test_selection_date_must_be_in_the_history(market):
+    frames_market = from_session(market, '2008-01-02')
+    sessions = [s for s in frames_market.sessions if s != SEGMENT_2014[1]]
+    gap = replace(frames_market, sessions=tuple(sessions),
+                  **{k: getattr(frames_market, k).loc[list(sessions)]
+                     for k in ('open', 'close', 'dividend', 'split_ratio')})
+    fake = FakeSimulate()
+    with pytest.raises(ValueError, match='history'):
+        adaptive.Policy(fake, FAKE_PROVIDERS)('2014-01-31', gap.history('2014-01-31'))
+    assert fake.calls == []
