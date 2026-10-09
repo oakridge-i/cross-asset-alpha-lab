@@ -1,9 +1,14 @@
 """Selection rules of the adaptive policy P_A1: year mapping, validation segment, close-set choice and selection
-stability (N5 spec 5.2-5.4, P4-P7). Pure functions; no simulation, files or journal."""
+stability (N5 spec 5.2-5.4, P4-P7), and the Policy provider that applies them. The rules are pure functions; the
+provider receives the simulation function and the candidate providers from the engine registry and writes no files."""
+import copy
+import math
 import numpy as np
 from alpha_lab import inference
 from alpha_lab.features import xnys_month_end
-from alpha_lab.metrics import UTILITY_PENALTY
+from alpha_lab.hypotheses import Decision
+from alpha_lab.metrics import UTILITY_PENALTY, excess_series
+from alpha_lab.runconfig import RunConfig
 
 CANDIDATES = ('H1_252_3', 'H1_252_4', 'H1_126_3', 'H1_126_4')
 FALLBACK = 'H1_252_3'
@@ -81,3 +86,70 @@ def stability(excess, replicates=1000, length=63, seed=20261007, order=CANDIDATE
         counts[result['chosen']] += 1
         fallback += result['fallback']
     return {'frequency': {k: counts[k] / replicates for k in names}, 'fallback_replicates': fallback}
+
+
+class Policy:
+    """The P_A1 provider (N5 spec 5.2, 5.5; D025 items 4-7 and 15).
+
+    `simulate(market, provider, config)` is the engine's simulation function and `providers` maps each candidate to
+    its provider function. A decision at t uses the selection of selection_year(t), computed once per instance on the
+    history truncated to the selection date s_Y; the weights are those of the chosen candidate at t on the history up
+    to t, and its signal rows carry `selection_year` and `selected_config`."""
+
+    def __init__(self, simulate, providers, candidates=CANDIDATES):
+        candidates = tuple(candidates)
+        if not candidates or len(set(candidates)) != len(candidates):
+            raise ValueError(f'candidates must be non-empty and distinct: {list(candidates)}')
+        if FALLBACK not in candidates:
+            raise ValueError(f'the fallback {FALLBACK} must be a candidate')
+        missing = [c for c in candidates if c not in providers]
+        if missing:
+            raise ValueError(f'no provider for candidates {missing}')
+        self.candidates = candidates
+        self._simulate = simulate
+        self._providers = {c: providers[c] for c in candidates}
+        self._selections = {}  # (year, manifest_sha256, s_Y) -> selection log entry; one instance per simulation
+
+    def __call__(self, t, history):
+        year = selection_year(t)
+        chosen = self._select(year, history)['chosen']
+        decision = self._providers[chosen](t, history)
+        weights, signals = (decision.weights, decision.signals) if hasattr(decision, 'signals') else (decision, [])
+        return Decision(weights, [{**row, 'selection_year': year, 'selected_config': chosen} for row in signals])
+
+    def selection_log(self):
+        """Copies of the computed selection entries, sorted by year."""
+        return [copy.deepcopy(e) for e in sorted(self._selections.values(), key=lambda e: e['year'])]
+
+    def _select(self, year, history):
+        first, last = validation_segment(year)
+        key = (year, history.manifest_sha256, last)
+        if key in self._selections:
+            return self._selections[key]
+        truncated = history.history(last)  # nothing after the selection date reaches the selection
+        config = RunConfig(first, last)
+        excess, sessions, decisions = {}, None, None
+        for name in self.candidates:
+            result = self._simulate(truncated, self._providers[name], config)
+            if not result.invariants['passed']:
+                raise ValueError(f'a run invariant failed in the validation account of {name} '
+                                 f'for selection year {year}')
+            series = excess_series(truncated, result)
+            ordered = sorted(series)
+            if sessions is None:
+                sessions, decisions = ordered, len(result.decisions)
+            elif ordered != sessions or len(result.decisions) != decisions:
+                raise ValueError(f'validation accounts differ in their sessions or decisions for selection year '
+                                 f'{year}: {name}')
+            excess[name] = np.array([series[s] for s in ordered], dtype=float)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            utilities = {name: float(inference.utility(excess[name])) for name in self.candidates}
+        choice = choose(utilities, order=self.candidates)
+        entry = {'year': year, 'selection_date': last, 'segment_start': first, 'segment_end': last,
+                 'decisions': decisions, 'returns': len(sessions),
+                 'utility': {k: u if math.isfinite(u) else None for k, u in utilities.items()},
+                 'best_utility': None if choice['best'] is None else float(choice['best']),
+                 'close_set': list(choice['close']), 'chosen': choice['chosen'], 'fallback': bool(choice['fallback']),
+                 'warning': choice['warning'], 'stability': stability(excess, order=self.candidates)}
+        self._selections[key] = entry
+        return entry

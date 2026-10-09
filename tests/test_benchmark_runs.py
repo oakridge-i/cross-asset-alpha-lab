@@ -27,7 +27,8 @@ def test_registry_describes_every_provider():
         'H1_126_3': ('1', 'monthly', 'hypothesis'),
         'H1_126_4': ('1', 'monthly', 'hypothesis'),
         'H2_4of6': ('1', 'monthly', 'hypothesis'),
-        'H2_5of6': ('1', 'monthly', 'hypothesis')}
+        'H2_5of6': ('1', 'monthly', 'hypothesis'),
+        'P_A1': ('1', 'monthly', 'policy')}
 
 
 def test_benchmark_run_is_journaled_with_candidate(tmp_path, no_network):

@@ -256,7 +256,10 @@ def test_registry_describes_every_provider():
         'invariant_rotation': ('1', 'monthly', 'test', {}),
         **{n: ('1', 'monthly', 'benchmark', {}) for n in ('B0', 'B1', 'B2', 'B3')},
         'REF_SPY': ('1', 'first_only', 'benchmark', {}),
-        **{n: ('1', 'monthly', 'hypothesis', p) for n, p in PARAMETERS.items()}}
+        **{n: ('1', 'monthly', 'hypothesis', p) for n, p in PARAMETERS.items()},
+        'P_A1': ('1', 'monthly', 'policy', {'candidates': ['H1_252_3', 'H1_252_4', 'H1_126_3', 'H1_126_4'],
+                                            'validation_years': 2, 'context_years': 3, 'tolerance': 0.001,
+                                            'penalty': 1.5})}
 
 
 def test_provider_weights_unchanged_for_dict_providers(tmp_path, no_network):
