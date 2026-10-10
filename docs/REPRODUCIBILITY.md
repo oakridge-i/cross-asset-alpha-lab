@@ -471,3 +471,13 @@ python -c "import json,sys; a,b=(json.load(open(p+'/manifest.json'))['files'] fo
 ```
 
 A change to `src` after the first registered N5 run is a bug fix only. Each fix requires rerunning all thirteen runs on the new tree, each with `--parent` set to its previous run, followed by a new report, and every attempt is disclosed (D025, item 16; D023, item 8). No such change was made in this campaign. A change of rule, candidate, window or period after the figures are shown is a new attempt with its own decision record.
+
+## Position-balance audit (D026): not yet executed
+
+The audit of frozen runs described in [EXECUTION_MODEL.md](../EXECUTION_MODEL.md), section 10 and recorded in D026 is a read-only command. It has not yet been executed on the real runs; this section states the command and is not a receipt. `<ROOT>` is the absolute path of the working copy and `<run dirs>` are the run directories under `data/runs`; the audit refuses a directory outside it.
+
+```bash
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab position-audit --runs <run dirs> --root <ROOT>
+```
+
+The command prints the path of the frozen report (`data/reports/<run_id>/position_audit.json`) and exits with 0 when every run passes and with 3 when any run fails. It appends a `started` and a terminal record to the experiment journal, so it is run from a clean tree and the new journal lines are committed afterwards, as for the other registered commands. Its unit tests use synthetic vintages in temporary directories and do not touch the real journal.
