@@ -696,8 +696,23 @@ def _pairs(names, values, spec='.6f'):
     return 'n/a' if values is None else '; '.join(f'{n} {_cell(v, spec)}' for n, v in zip(names, values))
 
 
+def _metric(key, value):
+    """A T1 cell: counts as integers, turnover as a multiple, other keys as in the N3 report (report.number)."""
+    if value is None:
+        return 'n/a'
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if key == 'turnover':
+        return f'{value:.2f}x'
+    return report.number(key, value)
+
+
 def render_markdown(document):
-    """Deterministic Markdown tables of the document sections T1-T6; a pure function of the document."""
+    """Deterministic Markdown tables of the document sections T1-T6; a pure function of the document.
+
+    T1 holds every metric of metrics.json for every run and period: the scalar metrics in one table per period
+    (report.SUMMARY first, then the other keys in sorted order) and one table per period for each of mean_group,
+    max_group, mean_weight and max_weight (groups in GROUPS order, tickers sorted)."""
     window, metrics = document['window'], document['metrics']
     wf = window['walk_forward']
     labels = [k for k in KEYS if k in metrics] + sorted(k for k in metrics if k not in KEYS)
@@ -709,19 +724,21 @@ def render_markdown(document):
            f"{json.dumps(document['scenario'], sort_keys=True)}, vintage manifest {document['manifest_sha256']}.", '',
            report.table(['run', 'provider version'], [[k, str(document['provider_versions'][k])] for k in labels]), '',
            '## T1 Metrics', '']
-    for period in [name for name, _, _ in PERIODS]:
+    names = [name for name, _, _ in PERIODS]
+    present = {p for k in labels for p in metrics[k]['periods']}
+    for period in [p for p in names if p in present] + sorted(present - set(names)):
         mine = [k for k in labels if period in metrics[k]['periods']]
-        if mine:
-            rows = [[k, *(report.number(key, metrics[k]['periods'][period].get(key)) for key in report.SUMMARY)]
-                    for k in mine]
-            out += [f'### {period}', '', report.table(['run', *report.SUMMARY], rows), '']
-            if period == 'walk_forward':
-                groups = list(GROUPS)
-                rows = [[k, *(report.number('x', metrics[k]['periods'][period]['mean_group'].get(g)) for g in groups),
-                         *(report.number('x', metrics[k]['periods'][period]['max_group'].get(g)) for g in groups)]
-                        for k in mine]
-                out += [f'### {period} groups', '',
-                        report.table(['run', *(f'mean {g}' for g in groups), *(f'max {g}' for g in groups)], rows), '']
+        values = {k: metrics[k]['periods'][period] for k in mine}
+        keys = {key for v in values.values() for key in v}
+        tables = sorted(key for key in keys if any(isinstance(v.get(key), dict) for v in values.values()))
+        scalars = [key for key in report.SUMMARY if key in keys] + sorted(keys - set(report.SUMMARY) - set(tables))
+        rows = [[k, *(_metric(key, values[k].get(key)) for key in scalars)] for k in mine]
+        out += [f'### {period}', '', report.table(['run', *scalars], rows), '']
+        for key in tables:
+            members = {m for v in values.values() for m in (v.get(key) or {})}
+            columns = [g for g in GROUPS if g in members] + sorted(members - set(GROUPS))
+            rows = [[k, *(_metric('x', (values[k].get(key) or {}).get(m)) for m in columns)] for k in mine]
+            out += [f'### {period} {key}', '', report.table(['run', *columns], rows), '']
     comparisons = document['comparisons']
     method = comparisons['method']
     lengths = [str(n) for n in method['lengths']]

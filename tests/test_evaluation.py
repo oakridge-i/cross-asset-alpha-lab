@@ -832,6 +832,41 @@ def test_report_is_deterministic_and_journaled(built):
                           for r in others)
 
 
+def t1_tables(markdown):
+    """{subsection heading: (header cells, {run label: row cells})} of the T1 section of the Markdown."""
+    section = markdown.split('## T1 Metrics', 1)[1].split('\n## ', 1)[0]
+    tables = {}
+    for block in section.split('### ')[1:]:
+        heading, *lines = block.strip().splitlines()
+        rows = [[cell.strip() for cell in line.strip().strip('|').split('|')] for line in lines if line.startswith('|')]
+        tables[heading.strip()] = (rows[0], {row[0]: row for row in rows[2:]})
+    return tables
+
+
+def test_t1_renders_every_metric_of_every_run_and_period(built):
+    tables = t1_tables(built.markdown)
+    checked = 0
+    for label, metrics in built.document['metrics'].items():
+        for period, values in metrics['periods'].items():
+            header, rows = tables[period]
+            assert label in rows and len(rows[label]) == len(header)
+            for key, value in values.items():
+                if isinstance(value, dict):
+                    sub_header, sub_rows = tables[f'{period} {key}']
+                    assert label in sub_rows and len(sub_rows[label]) == len(sub_header)
+                    for name, v in value.items():
+                        cell = sub_rows[label][sub_header.index(name)]
+                        assert (cell == 'n/a') is (v is None), (label, period, key, name)
+                        checked += 1
+                else:
+                    cell = rows[label][header.index(key)]
+                    assert (cell == 'n/a') is (value is None), (label, period, key)
+                    checked += 1
+    assert checked > 0
+    for key in ('mean_cash_usd', 'mean_bil', 'mean_receivables', 'turnover', 'n_returns'):
+        assert key in tables['walk_forward'][0]
+
+
 def test_render_markdown_shows_gated_values_and_the_disclosures(built):
     text = evaluation.render_markdown(built.document)
     assert 'n/a' in text and 'months' in text
