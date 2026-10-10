@@ -297,3 +297,11 @@ Checks performed in this checkout on 10 October 2026:
 Limitations: the audit is not tamper protection (a run altered together with all its records would pass), does not check the audited runs' journal records, and tests the reconciliation of positions, trades and orders only. Valuation (positions value against quantity times close), the held quantities of orders and the sign of positions are not part of this audit.
 
 Next action: owner review of the N5 branch and of this branch; any merge or push requires authorization. N6 follows.
+
+## Documentation and license: 10 October 2026
+
+- [docs/MATHEMATICS.md](docs/MATHEMATICS.md) adds an English review of the project's mathematics (data and corporate actions, features and portfolio construction, accounting and execution, metrics and inference), written for source version `7a8ba1d`, before the N5 implementation. Its statements about the repository describe that version. The English text was checked against the original review section by section; the display formulas are identical to the original apart from translated text inside three of them, and the document contains no local paths.
+- From 10 October 2026 the code and documentation are licensed under the Business Source License 1.1 (Licensor oakridge-i, no Additional Use Grant, Change Date 2030-10-10, Change License Apache License 2.0). Versions published before that date remain under the MIT License.
+
+These are documentation changes; no source, test, run or journal record was changed by them.
+
