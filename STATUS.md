@@ -256,9 +256,11 @@ Next action (historical, as recorded at the freeze; completed on 10 October 2026
 
 Stage: N5 is complete on the branch `claude/n5-evaluation` (code freeze, registered campaign, publication); the branch is not merged into `main`. The registered campaign of D025, item 17 ran on the frozen `src` tree `058c72a492f78aa30f8defecbfab397eee37be96`, starting from the freeze record commit `db43fb4`: thirteen runs (B0, B1, B2, B3, REF_SPY, the six configurations, P_A1 and the P_A1 comparator), the evaluation report `20261010T091002-0c84d411ed`, thirteen repeats with `--parent` and the repeat report `20261010T091133-9f91bb3c9c`. Each step ran on a clean tree with an absolute `--root`, and its journal lines were committed before the next step (journal commits `508a467` to `7f6dac8`). The run ids, git SHAs, journal commits and manifest hashes are in the [N5 report](docs/n5/N5_REPORT.md); the commands and the comparison script are in [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
 
-Checks performed in this checkout on 10 October 2026, after the campaign:
+Observed during execution on 10 October 2026: every one of the 28 attempts exited with code 0, and each step added its two journal lines (the journal grew from 124 to 180 rows).
 
-- All 28 attempts exited with code 0 and wrote 56 journal records (the journal grew from 124 to 180 rows), all `completed`, with `dirty_tree` false, one environment manifest (`5226dc9b0f21363873eb9a8420891733bbad1bc6c536262a3341eead520ce773`), no quality warning, and no other record with an N5 purpose. Seeds: 20261007 for the two P_A1 runs, 20261006 for the two reports, null with the existing reason for the other runs.
+Rechecked in this checkout on 10 October 2026, after the campaign:
+
+- The journal holds 56 N5 records: 28 attempts, each with a `started` and a `completed` record; all terminal statuses are `completed`, no record has `dirty_tree` true, and there is one environment manifest (`5226dc9b0f21363873eb9a8420891733bbad1bc6c536262a3341eead520ce773`), no quality warning, and no other record with an N5 purpose. Seeds: 20261007 for the two P_A1 runs, 20261006 for the two reports, null with the existing reason for the other runs.
 - Comparison of step 4 (script in docs/REPRODUCIBILITY.md): all fourteen manifest `files` pairs equal (9 files for each benchmark, 10 for each configuration and the comparator, 11 for P_A1, 2 for the reports); 99 of 99 shared files equal to the N3 and N4 references; all eleven reference manifests tied to their completed N3 or N4 journal records; each repeat names its first run as parent, and the repeat report names the first report.
 - The 28 distinct starting commits have the single `src` tree `058c72a492f78aa30f8defecbfab397eee37be96`, the tree of the freeze commit `a2453b8`. The SHA-256 of the first 124 journal rows is `2d0b5bf461088f48a6e63cd898a70d40a2e1dca406a26a5bbbdc92842e60995d`, the hash of the whole journal at the freeze.
 - The two report files are identical in the first report and the repeat report; docs/n5/N5_REPORT.md contains the first report's `evaluation.md` byte for byte (SHA-256 `e22ecf681edf6bbbe996d0c24ad9f11e705774a0f80c3fcb06a9fad5ff0b958c`, checked by comparing the bytes).
@@ -274,7 +276,7 @@ Limitations:
 - Each statistic is conditional on the models already selected; the P_A1 intervals are conditional on its realized selections and carry no p-value.
 - Only the main scenario has been run (costs of 10 basis points per side, lag 1). The cost and delay scenarios and the leave-one-class-out variants of protocol section 12 are not run.
 - The reserved period 2023-2025 and the recent segment of 2026 remain closed; the P_A1 selection for 2023 is not computed.
-- The data limitations above (D016 to D020) apply. The N5 `data/runs` and `data/reports` directories are in this worktree and not in Git; the N5 report holds the published copy of the evaluation report.
+- The data limitations above (D016 to D020) apply. The N5 `data/runs` and `data/reports` directories are in the working copy of the branch `claude/n5-evaluation`, not in Git; the N5 report holds the published copy of the evaluation report.
 
 Verified commit: the campaign evidence ends at the journal commit `7f6dac8`, which the checks above verified; this publication is the documentation commit that follows it.
 
