@@ -89,6 +89,7 @@ Execution remains a research model: settlement, auction fills, liquidity, and re
 - [N3 benchmark report](docs/n3/N3_REPORT.md) and [decision D022](DECISIONS.md)
 - [N4 hypothesis report](docs/n4/N4_REPORT.md) and [decision D023](DECISIONS.md)
 - [N5 evaluation report](docs/n5/N5_REPORT.md), [attempt accounting](docs/n5/ATTEMPT_ACCOUNTING.md) and [decision D025](DECISIONS.md)
+- [Mathematics of the project: formulas, proofs and implementation checks](docs/MATHEMATICS.md) (a review of source version `7a8ba1d`, before the N5 implementation)
 - [Environment, replay commands, and reproduction limits](docs/REPRODUCIBILITY.md)
 - [Experiment journal](experiments/EXPERIMENT_LOG.jsonl) and [recording rules](experiments/README.md)
 - [N0 source assessment](docs/n0/N0_REPORT.md) and [prior-project reuse audit](docs/n0/AAPL_REUSE_AUDIT.md)
