@@ -13,6 +13,7 @@ SIGNAL_COLUMNS_H1 = ['decision_session', 'ticker', 'momentum', 'sigma', 'score',
                      'v', 'scale', 'weight']
 SIGNAL_COLUMNS_H2 = SIGNAL_COLUMNS_H1 + ['parent_weight', 'excess_1', 'excess_2', 'excess_3', 'excess_4', 'excess_5',
                                          'excess_6', 'positive_months', 'filter_pass']
+SIGNAL_COLUMNS_POLICY = SIGNAL_COLUMNS_H1 + ['selection_year', 'selected_config']
 PARENT_LOOKBACK = 252
 PARENT_K = 3
 

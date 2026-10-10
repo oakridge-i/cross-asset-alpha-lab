@@ -1,6 +1,6 @@
 # Project status
 
-As of 8 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. The six H1/H2 configurations have the status `computed_not_evaluated` after the N4 runs on the branch `claude/n4-hypotheses` (not merged into `main`); reserved strategy performance has not been opened. The N2 account and execution engine is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n2-execution`, 7 October 2026); a registered run on the approved vintage passed all seven financial invariants. N3 (the benchmarks) is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n3-benchmarks`, 8 October 2026); the results of B0-B3 and REF_SPY for 2009-2022 are published in the [N3 report](docs/n3/N3_REPORT.md). N4 (the six H1/H2 configurations) is implemented, run, repeated and reported on the branch `claude/n4-hypotheses`, which has not been merged; its diagnostics are published in the [N4 report](docs/n4/N4_REPORT.md). No H1/H2 return, risk or utility result is computed or published, and the reserved period remains closed.
+As of 10 October 2026, N0 assessment and N1 data preparation are complete. D020 approves D019's corrected vintage for N2 under its stated conditions. D015's earlier rejection remains part of the record. The N2 account and execution engine is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n2-execution`, 7 October 2026); a registered run on the approved vintage passed all seven financial invariants. N3 (the benchmarks) is implemented, reviewed and merged into `main` (fast-forward from the branch `claude/n3-benchmarks`, 8 October 2026); the results of B0-B3 and REF_SPY for 2009-2022 are published in the [N3 report](docs/n3/N3_REPORT.md). N4 (the six H1/H2 configurations) is implemented, run, repeated and reported; branch `claude/n4-hypotheses` was merged through [PR #1](https://github.com/oakridge-i/cross-asset-alpha-lab/pull/1), preserving the registered source and journal commits; its diagnostics are published in the [N4 report](docs/n4/N4_REPORT.md). N5 (walk-forward evaluation, the adaptive policy P_A1 and statistics) is complete on the branch `claude/n5-evaluation`, not yet merged: code freeze, registered campaign and publication, all on 10 October 2026. The first H1/H2 and P_A1 return, risk, utility and comparison figures are published in the [N5 report](docs/n5/N5_REPORT.md); they are exploratory on familiar history. The six configurations and P_A1 have the status `evaluated_walk_forward` (D025, item 19), which records that walk-forward figures exist and decides no hypothesis. The reserved period remains closed; N6 is next.
 
 This is the [English editorial edition](docs/DOCUMENTATION_EDITION.md). Historical receipts and test results refer to their original versions. Commit identifiers retained below and in the journal may predate publication history rewriting; consult the [commit mapping](docs/HISTORY_REWRITE.md). Test counts below are historical records, not a new execution of the current suite.
 
@@ -141,9 +141,9 @@ Summary: all seven invariants passed in every run; 168 decisions for B0-B3 and o
 
 N2 deferred items closed by N3: (a) events and payments outside the common calendar, `9b8a721`; numeric weights and non-positive initial cash, `874beb2`; exit code 3 on failed checks, `74af51a` (D022, items 1-5).
 
-## N4: hypotheses H1/H2 (runs registered; branch not merged)
+## N4: hypotheses H1/H2 (verified and merged)
 
-Branch `claude/n4-hypotheses`, created from `main` at `a1d734e`; not merged. The design is in [the N4 specification](docs/superpowers/specs/2026-10-08-n4-hypotheses-design.md); the interpretations are recorded in D023; the registered runs, the permitted diagnostics and the disclosures are published in the [N4 report](docs/n4/N4_REPORT.md). The six configurations H1_252_3, H1_252_4, H1_126_3, H1_126_4, H2_4of6 and H2_5of6 have the status `computed_not_evaluated` (D023, item 9).
+Branch `claude/n4-hypotheses`, created from `main` at `a1d734e`, merged through PR #1 on 8 October 2026 as `e7f50f4`. The design is in [the N4 specification](docs/superpowers/specs/2026-10-08-n4-hypotheses-design.md); the interpretations are recorded in D023; the registered runs, the permitted diagnostics and the disclosures are published in the [N4 report](docs/n4/N4_REPORT.md). The six configurations H1_252_3, H1_252_4, H1_126_3, H1_126_4, H2_4of6 and H2_5of6 have the status `computed_not_evaluated` (D023, item 9).
 
 Completed, with commits:
 
@@ -184,7 +184,7 @@ Checks performed in this stage (8 October 2026):
 
 Limitations: the viewing restriction is procedural; the published aggregates combined with public prices permit approximate inference about exposures, and 2014-2022 is familiar history, not an independent test. The window excludes most of the 2008 crisis (protocol line 141). `require_warmup` counts rows, not XNYS sessions (D023 item 3); the approved vintage holds all 4869 sessions. The data limitations of D016-D020 apply. The status `computed_not_evaluated` states neither that a configuration is useful nor that it is rejected.
 
-Next action: after authorization to commit, record the corrected source on a clean tree and complete the replacement campaign required by D023, item 8, with parent-linked runs, reports, repeats and all seven pair comparisons. Review that evidence before any authorized merge, push or transfer of `data/runs` and `data/reports`; then N5 computes the section 11 metrics of H1/H2 with its own frozen code.
+Next action (historical, as recorded before the correction campaign; completed on 8 October 2026, see "Post-review correction and completed replacement campaign" below; the current next step is in "Limitations and next milestone" below): after authorization to commit, record the corrected source on a clean tree and complete the replacement campaign required by D023, item 8, with parent-linked runs, reports, repeats and all seven pair comparisons. Review that evidence before any authorized merge, push or transfer of `data/runs` and `data/reports`; then N5 computes the section 11 metrics of H1/H2 with its own frozen code.
 
 Verified commit: `f921b41`, the last journal commit of the runs (the source tree is that of `bbf7640`). Publication commits: `81f7772` (N4 report and document updates), `48ae9ad` (one accounting line per repeat; the executed comparison script in docs/REPRODUCIBILITY.md), `5e574ca` (code block fix); they change documents only. The final review at `92dd78f` found one important report-validation defect and one minor documentation contradiction; the working-copy correction is described below.
 
@@ -200,17 +200,17 @@ After the correction checkpoint above, the replacement campaign and repeats were
 
 Failed launch `20261008T192545-3e84621fc4` used a relative root that resolved to an unexpected nested directory and failed before loading the vintage. Its original two journal records were retained byte-for-byte in the canonical journal and committed as `ad9ec2f`; no data artifact was frozen. Successful retry `20261008T192727-e5e184b7db` uses an absolute root and links to that failure. The complete campaign receipt is in the [N4 report](docs/n4/N4_REPORT.md).
 
-The last verified campaign journal commit is `f927314`; the source/test files remain exactly those of the patch that passed 610 tests with zero skips. The six configurations retain `computed_not_evaluated`. The final scoped campaign and publication review found no open issue. The N4 branch is verified for publication without merging; the branch remains separate from `main`, data remain in its worktree, and no N5/N6 evaluation is performed.
+The last verified campaign journal commit is `f927314`; the source/test files remain exactly those of the patch that passed 610 tests with zero skips. The six configurations retain `computed_not_evaluated`. The final scoped campaign and publication review found no open issue. At the publication checkpoint the branch remained separate from `main`; the subsequent merge is recorded below. Data remain in the N4 worktree, and no N5/N6 evaluation is performed.
 
 ## Limitations and next milestone
 
 The data are not point-in-time; `available_at` is an assumption. Issuer records may be revised, and the seven corrections lack independent confirmation. GLD's evidence is weaker than an explicit assertion that distributions never occurred. DBC issuer coverage before 2007-12-17 is unproven. iShares expresses pre-split distributions in current units. Volume is unverified and unused; the universe is retrospective. D013's tolerance followed observation of rounding differences. Original Yahoo acquisition used uncommitted code, with its patch hash retained. Yahoo data rights are unestablished, and source snapshots are local rather than included in Git.
 
-The N2 and N3 runs do not remove the data limitations above: they remain disclosed in the N2 and N3 reports. N2 results concern accounting mechanics under the interpretations in D021, not strategy behavior. N3 results describe benchmark rules on a historical simulation with modeled costs (10 bps per side) and a modeled Open price. H1/H2 have the status `computed_not_evaluated` (N4 branch, not merged): no H1/H2 return, risk or utility result is computed or published, and the reserved period remains closed.
+The N2 and N3 runs do not remove the data limitations above: they remain disclosed in the N2 and N3 reports. N2 results concern accounting mechanics under the interpretations in D021, not strategy behavior. N3 results describe benchmark rules on a historical simulation with modeled costs (10 bps per side) and a modeled Open price. As of 8 October 2026 (historical), H1/H2 had the status `computed_not_evaluated` (N4 merged through PR #1), and no H1/H2 return, risk or utility result was computed or published. The N5 status and limitations are in the section "N5 campaign and publication: 10 October 2026" below; the reserved period remains closed.
 
 Next step:
 
-1. The N4 correction and registered replacement campaign are complete on the separate branch. Integration remains a separate decision; the next research stage is N5 (walk-forward selection and the section 11 metrics, computed by frozen code). N6 holds the section 12 scenarios. New data or corrections require fresh reconciliation, QA and a new readiness decision.
+1. (Historical, as of 8 October 2026; N5 has since been completed, and the current next step is N6, see the section "N5 campaign and publication: 10 October 2026" below.) N4 is verified and merged. Local N4 artifacts remain in the existing worktree; their access from the primary checkout must be arranged before new research runs. The next research stage is N5 (walk-forward selection and the section 11 metrics, computed by frozen code). N6 holds the section 12 scenarios. New data or corrections require fresh reconciliation, QA and a new readiness decision.
 
 Deferred:
 
@@ -219,3 +219,89 @@ Deferred:
 - (c) N0: four broken local `aapl-finalization` links in docs/n0/AAPL_REUSE_AUDIT.md, line 15. The English edition from `main` replaced them with GitHub links to the AAPL release; whether those external links resolve was not checked here.
 - (d) The cp1252 test prints an ASCII path and does not exercise the `backslashreplace` branch.
 - (e) Other minor findings of the final N2 review that are not yet fixed: the small items in the list above (style, additional tests, diagnostics for rejections before a Run exists). The exit code on `invariants_failed` was changed to 3 by D022 (item 1). Fixed in `c18e904`: references and wording in DECISIONS.md, EXECUTION_MODEL.md and N2_REPORT.md.
+
+## N4 integration receipt: 8 October 2026
+
+[PR #1](https://github.com/oakridge-i/cross-asset-alpha-lab/pull/1) merged head `a98a727` into `main` as `e7f50f40af1881595d202cd948a8ae8ddc1a84f2`, using a merge commit to preserve every registered source and journal commit. GitHub reported no conflicting changes; no GitHub status checks or Actions workflows were configured for this head. The merged `src` and `tests` trees are identical to the verified head (610 passed, zero skipped); no application changes or new research attempts were introduced by integration. The primary local `main` was fast-forwarded to the merge. Existing local artifacts and the N4 branch/worktree were retained. The documentation update that follows the merge records integration only; it changes no source, test, environment, experiment journal or frozen artifact. N5 remains unimplemented, and reserved performance remains closed.
+
+
+## N5 specification and documentation corrections: 9 October 2026
+
+A draft specification for N5 (walk-forward evaluation, the adaptive policy P_A1, bootstrap, Holm adjustment and regressions) is in [docs/superpowers/specs/2026-10-09-n5-evaluation-design.md](docs/superpowers/specs/2026-10-09-n5-evaluation-design.md). The project owner approved its first draft on 9 October 2026, including the fourteen interpretations (P1-P14); the owner's statement on prior exposure (familiar with the hypotheses, reviewed the work a small number of times, no count) is recorded in precondition G0. A same-day re-check made seven corrections (section 15 of the specification), and an independent review then found three errors, four risks and two documentation notes, all accepted and corrected (section 16); the owner acknowledged both sets of corrections on 9 October 2026, and the interpretations, the viewing and freeze procedure, the status and the attempt accounting are recorded as D025 in DECISIONS.md. No source, test, runtime configuration, experiment journal or frozen artifact was changed, and no research run was made.
+
+Three documentation inconsistencies were corrected without changing meaning: the header of docs/n4/N4_REPORT.md no longer says the branch is unmerged; the first accounting line of experiments/README.md now limits "zero reruns after bug fixes" to the original campaign and points to the D024 replacement campaign; the "Next action" paragraph of the N4 section above is labeled historical.
+
+Checks performed in the current checkout (9 October 2026): `git rev-parse` showed that the `src` and `tests` trees of `main` equal those of the verified head `a98a727` (`16ffaf71b09c540cdc094121d040deacdeb3dab9` and `33f8e143ea75005959e0f65914597e93ed12fc0f`); the experiment journal holds 124 rows, 58 of them N4 records, one `failed` (the retained launch) and none with `dirty_tree` true among completed N4 records. The test suite was not rerun; its figures above remain historical. The contents of the N4 run directories were not opened, in line with D023 item 6.
+
+Limitation: the N4 run and report directories exist only in the worktree `.worktrees/n4-hypotheses` and are not in Git; the specification's precondition G2 covers copying them to the primary checkout.
+
+Next action: an implementation plan for a separate session on a new branch from `main`; before the first registered N5 run, the preconditions G2-G4 of the specification (copy of the N4 artifacts to the primary checkout, branch, reference hashes) and the code freeze of D025 item 16 must be met.
+
+## N5 code freeze: 10 October 2026
+
+Branch `claude/n5-evaluation` (worktree `.worktrees/n5-evaluation`, created from `main` at `7a8ba1d`) implements the [N5 specification](docs/superpowers/specs/2026-10-09-n5-evaluation-design.md) under D025: the `stage` argument and N5 purposes, `metrics.json` for N5 hypothesis runs, the adaptive policy P_A1 (`src/alpha_lab/adaptive.py`, provider kind `policy`), the inference module (`src/alpha_lab/inference.py`) and the journaled evaluation report (`src/alpha_lab/evaluation.py`, command `evaluate`). EXECUTION_MODEL.md, experiments/README.md and docs/REPRODUCIBILITY.md describe them; the N5 commands are marked as not yet executed.
+
+Freeze (D025 item 16): code and tests at commit `a2453b8`, `src` tree `058c72a492f78aa30f8defecbfab397eee37be96`. Checks performed in this checkout on 10 October 2026:
+
+- Full test suite on a clean tree at `a2453b8`: 766 passed, 0 skipped, 518.58 seconds, exit code 0. This includes the approved-vintage tests: the N3 regression of 45 benchmark file hashes with the N5 code paths, the shared files of the six configurations against the N4 replacement runs, an independent recomputation of the P_A1 selection for the nine years 2014 to 2022, and the identity of `utility` and `total_return` with an independent computation. These tests print only counts, flags and maximum differences.
+- Whole-branch review of `7a8ba1d..97613aa`: no critical or important defect; every deferred minor finding was triaged as acceptable except one documentation sentence, added in `a2453b8`.
+- An independent review at `552c4e6` found four P2 and two P3 issues: the Newey-West covariance was formed from the pseudo-inverse of X'X and could understate standard errors for designs that pass the 1e8 condition gate; the real-vintage metrics comparison accepted a non-finite expected value; the P_A1 validation did not stop on a session missing from every series; the journal recorded no seed for the policy run and the evaluation report; the Markdown report omitted part of T1; the plan counted the campaign as 28 journal records instead of 28 attempts and 56 records. The code defects were corrected in `65901b9..8c6ba5f` with regression tests; no interpretation, parameter, threshold or economic rule changed. The final tests and documents (`7eec539`, `a2453b8`) cover `simulate --stage 5` and the N4 and N3 reports' rejection of N5 runs, with the N4 report bytes pinned to values reproduced on `7a8ba1d`.
+- The experiment journal is unchanged: 124 rows, no N5 record, SHA-256 `2d0b5bf461088f48a6e63cd898a70d40a2e1dca406a26a5bbbdc92842e60995d`. RESEARCH_PROTOCOL.md and the historical receipts are unchanged.
+
+Viewing (D023 item 6, D025 item 16): no H1/H2 or P_A1 return, risk, utility or selection figure has been computed for display or shown; the N4 run directories were read only by code (manifests and hashes).
+
+Next action (historical, as recorded at the freeze; completed on 10 October 2026, see the next section): the registered campaign of specification section 9 on this `src` tree (13 runs, the evaluation report, 13 repeats and the repeat report: 28 attempts, 56 journal records if all succeed), each step on a clean tree with its journal lines committed before the next, followed by the comparison of the fourteen manifest pairs and of the shared files with the N3 and N4 references.
+
+## N5 campaign and publication: 10 October 2026
+
+Stage: N5 is complete on the branch `claude/n5-evaluation` (code freeze, registered campaign, publication); the branch is not merged into `main`. The registered campaign of D025, item 17 ran on the frozen `src` tree `058c72a492f78aa30f8defecbfab397eee37be96`, starting from the freeze record commit `db43fb4`: thirteen runs (B0, B1, B2, B3, REF_SPY, the six configurations, P_A1 and the P_A1 comparator), the evaluation report `20261010T091002-0c84d411ed`, thirteen repeats with `--parent` and the repeat report `20261010T091133-9f91bb3c9c`. Each step ran on a clean tree with an absolute `--root`, and its journal lines were committed before the next step (journal commits `508a467` to `7f6dac8`). The run ids, git SHAs, journal commits and manifest hashes are in the [N5 report](docs/n5/N5_REPORT.md); the commands and the comparison script are in [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
+
+Observed during execution on 10 October 2026: every one of the 28 attempts exited with code 0, and each step added its two journal lines (the journal grew from 124 to 180 rows).
+
+Rechecked in this checkout on 10 October 2026, after the campaign:
+
+- The journal holds 56 N5 records: 28 attempts, each with a `started` and a `completed` record; all terminal statuses are `completed`, no record has `dirty_tree` true, and there is one environment manifest (`5226dc9b0f21363873eb9a8420891733bbad1bc6c536262a3341eead520ce773`), no quality warning, and no other record with an N5 purpose. Seeds: 20261007 for the two P_A1 runs, 20261006 for the two reports, null with the existing reason for the other runs.
+- Comparison of step 4 (script in docs/REPRODUCIBILITY.md): all fourteen manifest `files` pairs equal (9 files for each benchmark, 10 for each configuration and the comparator, 11 for P_A1, 2 for the reports); 99 of 99 shared files equal to the N3 and N4 references; all eleven reference manifests tied to their completed N3 or N4 journal records; each repeat names its first run as parent, and the repeat report names the first report.
+- The 28 distinct starting commits have the single `src` tree `058c72a492f78aa30f8defecbfab397eee37be96`, the tree of the freeze commit `a2453b8`. The SHA-256 of the first 124 journal rows is `2d0b5bf461088f48a6e63cd898a70d40a2e1dca406a26a5bbbdc92842e60995d`, the hash of the whole journal at the freeze.
+- The two report files are identical in the first report and the repeat report; docs/n5/N5_REPORT.md contains the first report's `evaluation.md` byte for byte (SHA-256 `e22ecf681edf6bbbe996d0c24ad9f11e705774a0f80c3fcb06a9fad5ff0b958c`, checked by comparing the bytes).
+- The test suite was not rerun for the publication, which changes documents only; the figure of 766 passed, 0 skipped at `a2453b8` in the previous section is historical.
+
+Viewing (D025, item 16): no H1/H2 or P_A1 figure was shown before the first evaluation report; the report files were first read after the repeat report and the comparison had completed. D023 item 6 is superseded for N5 outputs from the first report. No rule, candidate, parameter, window, period or selection procedure was changed after the figures were seen. There was no failed attempt and no rerun after a bug fix.
+
+Status (D025, item 19, recorded as a dated addition to D025): H1_252_3, H1_252_4, H1_126_3, H1_126_4, H2_4of6, H2_5of6 and P_A1 have the status `evaluated_walk_forward`, with the first runs `20261010T090737-2d652c2127`, `20261010T090745-899d5a7136`, `20261010T090752-9bd003f35b`, `20261010T090800-f78d0ee07b`, `20261010T090807-af398ad6af`, `20261010T090820-2da0674722` and `20261010T090831-aeca348964`. The status states that walk-forward figures exist, not that a configuration or the policy is useful or rejected.
+
+Limitations:
+
+- The walk-forward period 2014-2022 is familiar history: it was the research period, and the project owner's prior exposure to it is non-zero and unquantified (G0, [docs/n5/ATTEMPT_ACCOUNTING.md](docs/n5/ATTEMPT_ACCOUNTING.md)). All intervals, p-values and the Holm adjustment are exploratory; the adjustment does not restore independence, and DSR and PBO are not computed.
+- Each statistic is conditional on the models already selected; the P_A1 intervals are conditional on its realized selections and carry no p-value.
+- Only the main scenario has been run (costs of 10 basis points per side, lag 1). The cost and delay scenarios and the leave-one-class-out variants of protocol section 12 are not run.
+- The reserved period 2023-2025 and the recent segment of 2026 remain closed; the P_A1 selection for 2023 is not computed.
+- The data limitations above (D016 to D020) apply. The N5 `data/runs` and `data/reports` directories are in the working copy of the branch `claude/n5-evaluation`, not in Git; the N5 report holds the published copy of the evaluation report.
+
+Verified commit: the campaign evidence ends at the journal commit `7f6dac8`, which the checks above verified; this publication is the documentation commit that follows it.
+
+Next step: N6, on a separate branch after the N5 branch has been reviewed and its integration authorized: the cost and delay scenarios of protocol section 12, the opening of the reserved period under a frozen procedure, and the decisions of protocol section 13.
+
+## Position-balance audit (D026): 10 October 2026
+
+The seven run invariants do not reconcile recorded positions with split events and filled trades; a synthetic counterexample showed that an erroneous change of share quantities can pass all seven. D026 records an independent read-only audit over frozen run files instead of an eighth engine invariant, so the engine, all run outputs and the N3, N4 and N5 validators are unchanged and nothing was rerun. The audit is implemented on the branch `claude/position-audit` (from the N5 branch at `8989012`): `src/alpha_lab/position_audit.py`, the command `position-audit`, 25 synthetic tests (commits `c67b7de`, `57d4edd`), D026 and the documents (`68e1a8f`).
+
+Checks performed in this checkout on 10 October 2026:
+
+- Full test suite on a clean tree at `68e1a8f`: 791 passed, 0 skipped, 640.72 seconds.
+- The 25 run directories missing from this working copy were copied (not moved) from the primary checkout and the N4 worktree; all 62 completed runs of the journal were verified with `provenance.verify` and against the `data_sha256` of their terminal journal records.
+- Registered audit `20261010T110315-dc0148ac1c` over the 62 runs (N2: 2, N3: 10, N4: 24, N5: 26), journal commit `6f0cc02`, status `completed`: 62 of 62 runs passed; 2,143,200 position comparisons with zero per-session and zero cumulative failures (maximum absolute difference 0.0); 46,862 trades and orders checked with zero failures; zero structure failures.
+
+- After a review found that invalid order rows were read as unfilled orders and that a fill could exceed its order, order checks were added (commits `f71cdbc`, `3e06b23`; D026 addition). Full test suite on a clean tree at `3e06b23`: 845 passed, 0 skipped, 855.14 seconds. Second registered audit `20261010T135509-caa4c06730` (parent `20261010T110315-dc0148ac1c`), journal commit `2674d6d`, status `completed`: 62 of 62 runs passed, zero position, trade, order and structure failures.
+
+Limitations: the audit is not tamper protection (a run altered together with all its records would pass), does not check the audited runs' journal records, and tests the reconciliation of positions, trades and orders only. Valuation (positions value against quantity times close), the held quantities of orders and the sign of positions are not part of this audit.
+
+Next action: owner review of the N5 branch and of this branch; any merge or push requires authorization. N6 follows.
+
+## Documentation and license: 10 October 2026
+
+- [docs/MATHEMATICS.md](docs/MATHEMATICS.md) adds an English review of the project's mathematics (data and corporate actions, features and portfolio construction, accounting and execution, metrics and inference), written for source version `7a8ba1d`, before the N5 implementation. Its statements about the repository describe that version. The English text was checked against the original review section by section; the display formulas are identical to the original apart from translated text inside three of them, and the document contains no local paths.
+- From 10 October 2026 the code and documentation are licensed under the Business Source License 1.1 (Licensor oakridge-i, no Additional Use Grant, Change Date 2030-10-10, Change License Apache License 2.0). Versions published before that date remain under the MIT License.
+
+These are documentation changes; no source, test, run or journal record was changed by them.
+

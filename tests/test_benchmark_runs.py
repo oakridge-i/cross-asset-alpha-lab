@@ -27,7 +27,8 @@ def test_registry_describes_every_provider():
         'H1_126_3': ('1', 'monthly', 'hypothesis'),
         'H1_126_4': ('1', 'monthly', 'hypothesis'),
         'H2_4of6': ('1', 'monthly', 'hypothesis'),
-        'H2_5of6': ('1', 'monthly', 'hypothesis')}
+        'H2_5of6': ('1', 'monthly', 'hypothesis'),
+        'P_A1': ('1', 'monthly', 'policy')}
 
 
 def test_benchmark_run_is_journaled_with_candidate(tmp_path, no_network):
@@ -81,3 +82,13 @@ def test_benchmark_runs_are_deterministic(tmp_path, no_network):
     second = execute(tmp_path / 'b', 'B3')
     files = [json.loads((d / 'manifest.json').read_text())['files'] for d in (first, second)]
     assert files[0] == files[1]
+
+
+def test_stage_five_benchmark_purpose_and_unchanged_files(tmp_path, no_network):
+    derived, digest = benchmark_vintage(tmp_path)
+    old = run_simulation(tmp_path, derived, 'B0', RunConfig(START, END), expected_sha256=digest)
+    new = run_simulation(tmp_path, derived, 'B0', RunConfig(START, END), expected_sha256=digest, stage=5)
+    files = lambda d: json.loads((d / 'manifest.json').read_text())['files']
+    assert files(new) == files(old)
+    purposes = [r['purpose'] for r in journal(tmp_path)]
+    assert purposes == ['N3 benchmark run'] * 2 + ['N5 benchmark run'] * 2

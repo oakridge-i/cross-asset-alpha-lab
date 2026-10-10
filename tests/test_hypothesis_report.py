@@ -376,6 +376,26 @@ def test_report_rejects_benchmark_run_and_duplicate(project):
     reject(project, 'item 1, .*not a hypothesis run', runs=dirs(project, {'H1_126_3': b0}))
 
 
+def test_report_rejects_an_n5_hypothesis_run(project):
+    """A stage 5 run carries metrics.json, so it fails the item 1 file set with the rule message of any other run."""
+    n5 = run_simulation(project.root, project.derived, 'H1_126_3', RunConfig(START, END),
+                        expected_sha256=project.digest, stage=5)
+    assert 'metrics.json' in provenance.verify(n5)['files']
+    reject(project, 'item 1, .*not a hypothesis run', runs=dirs(project, {'H1_126_3': n5}))
+
+
+# Reference bytes of the report over the synthetic template project, computed with the code of commit 7a8ba1d (before
+# the N5 implementation) and the same fixtures: the N4 report must stay byte for byte the same.
+N4_BYTES = {'hypotheses.json': '925a6ddfe40a7dbb1f52390bbbc1dbbf1ca418ececf0566a476d209a257e994b',
+            'hypotheses.md': 'd86844a0d6a041f42e22e0c2cc13d9abf268ec595f41ec4b0213c304ba3e2609'}
+
+
+def test_n4_report_bytes_unchanged(project):
+    target = verify_runs(project)
+    _, files = report_files(target)
+    assert {n: provenance.sha256(b) for n, b in files.items()} == N4_BYTES
+
+
 def test_report_rejects_metrics_json(project):
     refreeze(project, 'H1_126_4', {'metrics.json': provenance.canonical_bytes({'schema_version': 1})})
     reject(project, 'item 1, .*not a hypothesis run')
@@ -465,7 +485,8 @@ def test_report_rejects_a_dirty_report_tree(project, monkeypatch):
 
 
 @pytest.mark.parametrize('event', ['started', 'completed'])
-@pytest.mark.parametrize('changes', [{'purpose': 'N3 benchmark run'}, {'candidate_ids': ['H1_252_3']}])
+@pytest.mark.parametrize('changes', [{'purpose': 'N3 benchmark run'}, {'purpose': 'N5 hypothesis run'},
+                                     {'candidate_ids': ['H1_252_3']}])
 def test_report_rejects_purpose_or_candidates_in_either_record(project, event, changes):
     edit_run(project, 'H1_126_3', event, **changes)
     reject(project, r'item 2-3, H1_126_3: .*purpose or candidate_ids')

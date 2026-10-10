@@ -1,6 +1,6 @@
 # N4 report: hypotheses H1 and H2, registered runs and permitted diagnostics
 
-Date: 8 October 2026. Branch `claude/n4-hypotheses` (not merged into `main`).
+Date: 8 October 2026. Branch `claude/n4-hypotheses`, merged into `main` through PR #1 on 8 October 2026 (see the integration receipt at the end of this document). The sections between this header and the receipt describe the state before that merge and are retained as historical evidence.
 
 ## Purpose and boundaries
 
@@ -617,3 +617,7 @@ Failed launch `20261008T192545-3e84621fc4` (source commit `bd71fc0`, parent `202
 Attempt accounting adds six successful bug-driven calculations, six repeats, two reports and one failed launch; none is a new candidate or an independent experiment. The original 94 journal events remain an unchanged byte prefix; 30 new events bring the total to 124 (58 N4 events). The last successful campaign journal commit is `f927314`. All original immutable artifacts remain retained.
 
 The six configurations retain `computed_not_evaluated`. N4 verification is complete on `claude/n4-hypotheses`, which remains unmerged. No H1/H2 return, risk, utility or USD-cost result was computed or disclosed; the reserved period remains closed. Data remain local in this worktree. N5 is the next research stage.
+
+## Integration receipt: 8 October 2026
+
+The pre-integration state above is retained as historical evidence. [PR #1](https://github.com/oakridge-i/cross-asset-alpha-lab/pull/1) merged the verified head `a98a727` into `main` as `e7f50f40af1881595d202cd948a8ae8ddc1a84f2`. The merge preserves the campaign source and journal commits; its source and tests are identical to the verified head. No new research attempt or performance evaluation was made. Immutable local data remain in the existing N4 worktree.

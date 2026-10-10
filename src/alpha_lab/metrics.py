@@ -10,6 +10,8 @@ BLOCKS = (('full', '2009-01-01', '2022-12-31'), ('development', '2009-01-01', '2
           ('walk_forward', '2014-01-01', '2022-12-31'), ('2014-2016', '2014-01-01', '2016-12-31'),
           ('2017-2019', '2017-01-01', '2019-12-31'), ('2020-2022', '2020-01-01', '2022-12-31'))
 PERIODS = BLOCKS + tuple((str(y), f'{y}-01-01', f'{y}-12-31') for y in range(2009, 2023))
+# Runs that start after 2009 (the N5 policy and its comparator) have no `full` or `development` period (spec 4.2, P3).
+WF_PERIODS = BLOCKS[2:] + tuple((str(y), f'{y}-01-01', f'{y}-12-31') for y in range(2014, 2023))
 UTILITY_PENALTY = 1.5
 
 
@@ -77,6 +79,25 @@ def period_metrics(first, last, daily, excess, held, decisions, targets):
     return out
 
 
+def periods_for(config):
+    """WF_PERIODS for a run that starts after 2009-01-01, else PERIODS."""
+    return WF_PERIODS if config.start_session > '2009-01-01' else PERIODS
+
+
+def excess_series(market, result):
+    """{session: daily return minus the theoretical BIL return} for every daily row after the first."""
+    daily = result.daily
+    if any(d['session'] > LAST_OPEN_SESSION for d in daily):
+        raise ValueError(f'session after {LAST_OPEN_SESSION}')
+    if not daily:
+        return {}
+    index = total_return_index(market.history(daily[-1]['session']))[CASH]
+    bil = (index / index.shift(1) - 1).to_dict()
+    navs = {d['session']: d['nav'] for d in daily}
+    return {s: navs[s] / navs[daily[i - 1]['session']] - 1 - bil[s] for i, s in
+            ((i, d['session']) for i, d in enumerate(daily) if i > 0)}
+
+
 def compute_metrics(market, result, periods=PERIODS):
     """{'schema_version', 'periods': {name: metrics}}; periods without a return are omitted."""
     daily = result.daily
@@ -84,11 +105,7 @@ def compute_metrics(market, result, periods=PERIODS):
         raise ValueError(f'session after {LAST_OPEN_SESSION}')
     if not daily:
         return {'schema_version': METRICS_SCHEMA, 'periods': {}}
-    index = total_return_index(market.history(daily[-1]['session']))[CASH]
-    bil = (index / index.shift(1) - 1).to_dict()
-    navs = {d['session']: d['nav'] for d in daily}
-    excess = {s: navs[s] / navs[daily[i - 1]['session']] - 1 - bil[s] for i, s in
-              ((i, d['session']) for i, d in enumerate(daily) if i > 0)}
+    excess = excess_series(market, result)
     targets = {w['decision_session']: math.fsum(w[t] for t in RISKY if t in w) for w in result.weights}
     held = shares(market, daily)
     out = {}
