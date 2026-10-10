@@ -80,18 +80,19 @@ def newey_west(X, residuals, lag=3):
     """Newey-West covariance of OLS coefficients with Bartlett weights 1 - l / (lag + 1) and the factor n / (n - k).
 
     X is the full design matrix including the intercept column; k is its number of columns. lag = 0 is HC1.
+    The sandwich (X'X)^+ X' Omega X (X'X)^+ is evaluated as P Omega P' with P = pinv(X) (an SVD of X itself), so
+    the bread does not square the condition number of X and keeps every direction that least squares keeps.
     """
     X = np.asarray(X, dtype=float)
     u = np.asarray(residuals, dtype=float)
     n, k = X.shape
-    scores = X * u[:, None]
-    meat = scores.T @ scores
+    scores = np.linalg.pinv(X).T * u[:, None]
+    cov = scores.T @ scores
     for ell in range(1, lag + 1):
         cross = scores[ell:].T @ scores[:-ell]
-        meat = meat + (1.0 - ell / (lag + 1)) * (cross + cross.T)
-    bread = np.linalg.pinv(X.T @ X)
+        cov = cov + (1.0 - ell / (lag + 1)) * (cross + cross.T)
     factor = n / (n - k) if n > k else float('nan')
-    return bread @ meat @ bread * factor
+    return cov * factor
 
 
 def regress(y, X, lag=3):

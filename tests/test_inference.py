@@ -268,3 +268,30 @@ def test_valid_alpha_scales_by_twelve():
     assert abs(out['ci_low'] - (out['alpha'] - 1.96 * out['se'])) < 1e-15
     assert abs(out['ci_high'] - (out['alpha'] + 1.96 * out['se'])) < 1e-15
     assert abs(out['ci_low'] - 12 * (fit['coef'][0] - 1.96 * fit['se'][0])) < 1e-14
+
+
+def _qr_covariance(Z, u, lag):
+    """Newey-West covariance from a QR factorization of Z and an explicit n x n Bartlett weight matrix."""
+    n, k = Z.shape
+    omega = np.zeros((n, n))
+    for t in range(n):
+        for s in range(n):
+            ell = abs(t - s)
+            if ell <= lag:
+                omega[t, s] = (1 - ell / (lag + 1)) * u[t] * u[s]
+    q, r = np.linalg.qr(Z)
+    r_inv = np.linalg.solve(r, np.eye(k))
+    return r_inv @ (q.T @ omega @ q) @ r_inv.T * n / (n - k)
+
+
+def test_newey_west_keeps_directions_of_an_ill_conditioned_design():
+    rng = np.random.default_rng(42)
+    x = 0.01 + 3e-8 * rng.normal(size=108)
+    y = 0.002 + rng.normal(0, 0.01, 108)
+    fit = regress(y, x)
+    assert fit['rank'] == 2 and 1e7 < fit['cond'] < 1e8
+    Z = np.column_stack([np.ones(108), x])
+    expected = np.sqrt(np.diag(_qr_covariance(Z, y - Z @ fit['coef'], 3)))
+    assert np.max(np.abs(fit['se'] / expected - 1.0)) < 1e-6
+    out = annual_alpha(fit)
+    assert out['reason'] is None and abs(out['se'] - 12 * expected[0]) < 1e-6 * 12 * expected[0]
