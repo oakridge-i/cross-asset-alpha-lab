@@ -224,7 +224,7 @@ It checks links, exact original copies, manifest restrictions, an empty N0 journ
 
 The corrected vintage passed the defined N1 readiness rule: both split bases confirmed, all ten ETFs confirmed or confirmed_no_distributions, technical QA passed, and replay equal. It does not certify all prices or contemporaneous availability. Actual payable dates exist only for issuer-matched events. D013-D019 disclose source precision, corrections, revised history, GLD documentary qualifications, and the DBC coverage gap.
 
-Raw data, local issuer captures, and environments are excluded from Git. The [MIT license](../LICENSE) covers code and documentation only. Library terms do not establish market-data rights; external distribution or paid-source procurement requires separate authorization.
+Raw data, local issuer captures, and environments are excluded from Git. The [license](../LICENSE) (Business Source License 1.1 from 10 October 2026; MIT for versions published before that date) covers code and documentation only. Library terms do not establish market-data rights; external distribution or paid-source procurement requires separate authorization.
 
 ## D024 corrected-source campaign: executed receipt
 

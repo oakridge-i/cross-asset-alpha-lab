@@ -95,4 +95,4 @@ Execution remains a research model: settlement, auction fills, liquidity, and re
 - [English documentation edition and historical receipts](docs/DOCUMENTATION_EDITION.md)
 - [Historical commit mapping](docs/HISTORY_REWRITE.md)
 
-Code and documentation are licensed under [MIT](LICENSE). That license does not cover market data or issuer materials.
+From 10 October 2026, code and documentation are licensed under the [Business Source License 1.1](LICENSE): Licensor oakridge-i, no Additional Use Grant (non-production use only), Change Date 2030-10-10 for this version, Change License Apache License 2.0. Under the license, each version converts to the Change License on its Change Date or on the fourth anniversary of its first public distribution, whichever comes first. Versions published before 10 October 2026 were released under the MIT License, and those grants remain in effect for those versions. The license does not cover market data or issuer materials.
