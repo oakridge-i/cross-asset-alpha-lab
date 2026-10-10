@@ -258,22 +258,75 @@ Status as of 10 October 2026: the registered N5 campaign of D025, item 17 and of
 
 Conditions, as met before the first run: the freeze of D025, item 16 (commit `a2453b8`, `src` tree `058c72a492f78aa30f8defecbfab397eee37be96`, full test suite 766 passed and 0 skipped on a clean tree, whole-branch review without a critical or important finding) was recorded in [STATUS.md](../STATUS.md) and D025 by commit `db43fb4`, the commit from which the first run started. The approved vintage `data/derived/20261006T172442-80ef993493` has manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2`; the environment manifest SHA-256 journaled by every N5 record is `5226dc9b0f21363873eb9a8420891733bbad1bc6c536262a3341eead520ce773`. The five first N3 benchmark runs and the six N4 replacement runs that the report compares with were present in `data/runs` of the working copy and pass `provenance.verify`; they were read by code only. Each step started on a clean tree. The window of the benchmark and configuration runs is 2008-12-31 to 2022-12-30 and the window of P_A1 and its comparator is 2013-12-31 to 2022-12-30, in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000), the defaults of the command; the journaled configuration of each run records its provider, window, vintage hash, scenario and initial cash.
 
-Each command used the absolute path of the working copy as `--root` (written `<ROOT>` below) and was run with `PYTHONPATH=src` and `PYTHONIOENCODING=utf-8`, because that path contains non-ASCII characters. Each command was followed by a journal-only commit with the subject `research: register N5 campaign step <n> of 28 (<label>)`, so that the next step started on a clean tree; the commands were not an unattended batch. The thirteen runs (steps 1 to 13):
+Commands as executed. Every attempt was run from the root of the working copy in the form `PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab <command> --root <ROOT>`, where `<ROOT>` stands for the absolute path of the working copy (`PYTHONIOENCODING=utf-8` because that path contains non-ASCII characters). Before each attempt the working tree was checked to be clean and the Git author e-mail was checked; after each attempt the new journal lines were committed with the subject `research: register N5 campaign step <k> of 28 (<label>)`, so that the next attempt started on a clean tree. The attempts were not an unattended batch. The 28 commands, in the order executed (the provider, window, parent and report inputs of each agree with the configuration journaled in its `started` record; the journal records the report inputs as `data/runs/<run id>`):
 
 ```bash
-PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider NAME --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 1 (B0)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B0 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 2 (B1)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B1 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 3 (B2)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B2 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 4 (B3)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B3 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 5 (REF_SPY)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider REF_SPY --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 6 (H1_252_3)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 7 (H1_252_4)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_4 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 8 (H1_126_3)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_126_3 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 9 (H1_126_4)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_126_4 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 10 (H2_4of6)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H2_4of6 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 11 (H2_5of6)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H2_5of6 --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 12 (P_A1)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider P_A1 --start 2013-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 13 (H1_252_3_WF)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2013-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+# step 14 (evaluation)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab evaluate --runs data/runs/20261010T090706-d2f7f13f1c data/runs/20261010T090711-a0a3b5a215 data/runs/20261010T090717-13ebf67877 data/runs/20261010T090724-a39e6c5baa data/runs/20261010T090732-dbf52ab9f8 data/runs/20261010T090737-2d652c2127 data/runs/20261010T090745-899d5a7136 data/runs/20261010T090752-9bd003f35b data/runs/20261010T090800-f78d0ee07b data/runs/20261010T090807-af398ad6af data/runs/20261010T090820-2da0674722 data/runs/20261010T090831-aeca348964 data/runs/20261010T090913-3da4aae83e --root <ROOT>
+# step 15 (B0 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B0 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090706-d2f7f13f1c --root <ROOT>
+# step 16 (B1 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B1 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090711-a0a3b5a215 --root <ROOT>
+# step 17 (B2 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B2 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090717-13ebf67877 --root <ROOT>
+# step 18 (B3 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider B3 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090724-a39e6c5baa --root <ROOT>
+# step 19 (REF_SPY repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider REF_SPY --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090732-dbf52ab9f8 --root <ROOT>
+# step 20 (H1_252_3 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090737-2d652c2127 --root <ROOT>
+# step 21 (H1_252_4 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_4 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090745-899d5a7136 --root <ROOT>
+# step 22 (H1_126_3 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_126_3 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090752-9bd003f35b --root <ROOT>
+# step 23 (H1_126_4 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_126_4 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090800-f78d0ee07b --root <ROOT>
+# step 24 (H2_4of6 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H2_4of6 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090807-af398ad6af --root <ROOT>
+# step 25 (H2_5of6 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H2_5of6 --start 2008-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090820-2da0674722 --root <ROOT>
+# step 26 (P_A1 repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider P_A1 --start 2013-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090831-aeca348964 --root <ROOT>
+# step 27 (H1_252_3_WF repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2013-12-31 --end 2022-12-30 --stage 5 --parent 20261010T090913-3da4aae83e --root <ROOT>
+# step 28 (evaluation repeat)
+PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab evaluate --runs data/runs/20261010T091043-854900b5a7 data/runs/20261010T091046-24f1f2afc7 data/runs/20261010T091048-b223f5975e data/runs/20261010T091051-e79c88c3a0 data/runs/20261010T091054-53e8829580 data/runs/20261010T091056-79e7a8ffe3 data/runs/20261010T091059-b17280952a data/runs/20261010T091102-c4fae89b36 data/runs/20261010T091105-5dbd95499e data/runs/20261010T091108-629ba2c4f0 data/runs/20261010T091112-378ce2d464 data/runs/20261010T091116-4835a4063a data/runs/20261010T091131-75eab3df7b --parent 20261010T091002-0c84d411ed --root <ROOT>
+```
+
+Each step was followed by:
+
+```bash
 git add experiments/EXPERIMENT_LOG.jsonl
-git commit -m "research: register N5 campaign step <n> of 28 (NAME)"
+git commit -m "research: register N5 campaign step <k> of 28 (<label>)"
 ```
 
-with NAME each of `B0`, `B1`, `B2`, `B3`, `REF_SPY`, `H1_252_3`, `H1_252_4`, `H1_126_3`, `H1_126_4`, `H2_4of6` and `H2_5of6`, then the policy and its comparator, which start in cash on 2013-12-31:
-
-```bash
-PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider P_A1 --start 2013-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
-PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2013-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
-```
-
-The `P_A1` run journals the seed 20261007 and computes the validation accounts of its nine selection years in memory; it recorded no fallback and no quality warning. The second command is the P_A1 comparator (labeled `H1_252_3_WF` in the report), a supplementary run and not a new candidate (D025, item 2).
+Steps 12 and 13 are the policy and its comparator, which start in cash on 2013-12-31. The `P_A1` run journals the seed 20261007 and computes the validation accounts of its nine selection years in memory; it recorded no fallback and no quality warning. Step 13 is the P_A1 comparator (labeled `H1_252_3_WF` in the report), a supplementary run of the provider H1_252_3 and not a new candidate (D025, item 2). Step 14 printed `data/reports/20261010T091002-0c84d411ed`, wrote `evaluation.json` and `evaluation.md` there and journaled the seed 20261006; it is the first moment at which an H1/H2 or P_A1 figure was shown (D025, item 16). Steps 15 to 27 repeat steps 1 to 13 with `--parent <run id of the first run>`, and step 28 repeats the report over the thirteen repeat directories with `--parent 20261010T091002-0c84d411ed`; it printed `data/reports/20261010T091133-9f91bb3c9c`. The last journal commit of the campaign is `7f6dac8`.
 
 Run and report ids:
 
@@ -293,25 +346,6 @@ Run and report ids:
 | P_A1 | 20261010T090831-aeca348964 | 20261010T091116-4835a4063a |
 | H1_252_3_WF (P_A1 comparator) | 20261010T090913-3da4aae83e | 20261010T091131-75eab3df7b |
 | evaluation report | 20261010T091002-0c84d411ed | 20261010T091133-9f91bb3c9c |
-
-The evaluation report (step 14) was run over the thirteen first-run directories, which its journaled configuration records as `data/runs/<run id>`:
-
-```bash
-PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab evaluate --runs data/runs/20261010T090706-d2f7f13f1c data/runs/20261010T090711-a0a3b5a215 data/runs/20261010T090717-13ebf67877 data/runs/20261010T090724-a39e6c5baa data/runs/20261010T090732-dbf52ab9f8 data/runs/20261010T090737-2d652c2127 data/runs/20261010T090745-899d5a7136 data/runs/20261010T090752-9bd003f35b data/runs/20261010T090800-f78d0ee07b data/runs/20261010T090807-af398ad6af data/runs/20261010T090820-2da0674722 data/runs/20261010T090831-aeca348964 data/runs/20261010T090913-3da4aae83e --root <ROOT>
-git add experiments/EXPERIMENT_LOG.jsonl
-git commit -m "research: register N5 campaign step 14 of 28 (evaluation)"
-```
-
-It printed `data/reports/20261010T091002-0c84d411ed`, wrote `evaluation.json` and `evaluation.md` there and journaled the seed 20261006. It is the first moment at which an H1/H2 or P_A1 figure was shown (D025, item 16).
-
-Repeats (steps 15 to 28). Each of the thirteen runs was repeated with the same command and `--parent <run id of its first run>`, with a journal commit after each, and the report was repeated over the thirteen repeat directories with `--parent 20261010T091002-0c84d411ed`; it printed `data/reports/20261010T091133-9f91bb3c9c`:
-
-```bash
-PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider NAME --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT> --parent <first run id of NAME>
-PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab evaluate --runs <thirteen repeat dirs> --root <ROOT> --parent 20261010T091002-0c84d411ed
-```
-
-(`P_A1` and the comparator used `--start 2013-12-31`.) The last journal commit of the campaign is `7f6dac8`.
 
 Comparison (step 4 of the campaign). After the repeat report, the following script was executed with the project's environment and the arguments `<ROOT> data/reports/20261010T091002-0c84d411ed data/reports/20261010T091133-9f91bb3c9c` (the report directories relative to `<ROOT>`). It verifies every directory with `provenance.verify`, compares the `files` dictionaries of the fourteen pairs, compares the shared files of the first N5 runs with the N3 and N4 reference runs named in `alpha_lab.evaluation.REFERENCES`, ties each reference manifest to its terminal journal record, and checks the N5 journal records. It prints only booleans and counts. The script as executed read the two run lists from a local file outside the repository; in the version below the lists are written inline, and nothing else differs:
 
