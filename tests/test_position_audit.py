@@ -9,7 +9,7 @@ import pytest
 from n2_fixtures import write_vintage
 from n3_fixtures import RISKY, benchmark_frames
 from alpha_lab.__main__ import main
-from alpha_lab.engine import RunConfig, run_simulation
+from alpha_lab.engine import RunConfig, Scenario, run_simulation
 from alpha_lab.market import load_market
 from alpha_lab.position_audit import audit_run, build_position_audit
 from alpha_lab.provenance import canonical_bytes, sha256, verify
@@ -24,6 +24,7 @@ RISKY_SPLIT = '2009-02-17'
 COST = 0.001
 KINDS = ('price', 'notional', 'cost', 'order_link', 'filled_qty', 'side', 'order_without_trade',
          'trade_without_fill', 'unknown')
+ORDER_KINDS = ('order_value', 'order_reference', 'order_timing', 'fill_bound', 'order_status')
 
 
 def split_frames():
@@ -140,6 +141,8 @@ def assert_clean(audit, market, run_dir):
     sessions = window(market, run_dir)
     assert audit['passed'] is True and audit['first_failure'] is None
     assert audit['position_failures'] == audit['cumulative_failures'] == audit['trade_failures'] == 0
+    assert audit['order_failures'] == 0
+    assert set(audit['order_failure_kinds']) == set(ORDER_KINDS) and not any(audit['order_failure_kinds'].values())
     assert audit['sessions'] == len(sessions)
     assert audit['positions_checked'] == len(sessions) * len(market.tickers)
     assert audit['trades'] == len(rows(run_dir, 'trades.csv')[1])
@@ -302,6 +305,221 @@ def test_daily_sessions_must_equal_the_vintage_window(rotation):
     audit = audit_run(run_dir, market)
     assert audit['passed'] is False and audit['structure_failures'] == 1
     assert audit['first_failure'] == {'session': None, 'ticker': None, 'check': 'sessions'}
+
+
+# Order validity: every row of orders.csv is checked before any linkage (D026, addition of 10 October 2026)
+
+
+def edit_orders(run_dir, edit):
+    header, records = rows(run_dir, 'orders.csv')
+    edit(records)
+    refreeze(run_dir, 'orders.csv', header, records)
+    return records
+
+
+def unfilled_order(**changes):
+    """An order for AAA on 2017-12-04 (no trade there in the rotation run) that is consistent unless changed."""
+    return {'decision_session': '2017-12-01', 'execution_session': '2017-12-04', 'ticker': 'AAA', 'weight': '0.5',
+            'close': '100', 'target_qty': '1', 'held_qty': '0', 'order_qty': '1', 'filled_qty': '0',
+            'status': 'cancelled', 'cancel_reason': 'insufficient_cash', **changes}
+
+
+def only_order_failure(audit, kind):
+    assert audit['passed'] is False
+    assert audit['order_failures'] == 1 and audit['order_failure_kinds'][kind] == 1
+    assert sum(audit['order_failure_kinds'].values()) == 1
+    assert audit['position_failures'] == audit['cumulative_failures'] == audit['trade_failures'] == 0
+
+
+def test_unfilled_order_row_that_is_consistent_passes(rotation):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records.append(unfilled_order()))
+    assert_clean(audit_run(run_dir, market), market, run_dir)
+
+
+@pytest.mark.parametrize('filled', ['nan', 'inf', '-1', '', 'x'])
+def test_unfilled_order_with_an_invalid_filled_qty_fails(rotation, filled):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records.append(unfilled_order(filled_qty=filled)))
+    audit = audit_run(run_dir, market)
+    only_order_failure(audit, 'order_value')
+    assert audit['first_failure'] == {'session': '2017-12-04', 'ticker': 'AAA', 'check': 'order_value'}
+
+
+@pytest.mark.parametrize('order_qty', ['nan', 'inf', '0', '', 'x'])
+def test_order_qty_must_be_finite_and_non_zero(rotation, order_qty):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records.append(unfilled_order(order_qty=order_qty)))
+    only_order_failure(audit_run(run_dir, market), 'order_value')
+
+
+@pytest.mark.parametrize('changes', [{'ticker': 'ZZZ'}, {'ticker': ''}, {'execution_session': '2099-01-02'},
+                                     {'execution_session': '2017-12-02'}, {'decision_session': '2099-01-01'},
+                                     {'decision_session': '2017-11-01'}, {'decision_session': ''}])
+def test_unfilled_order_with_an_unknown_ticker_or_session_fails(rotation, changes):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records.append(unfilled_order(**changes)))
+    audit = audit_run(run_dir, market)
+    assert audit['passed'] is False and audit['order_failure_kinds']['order_reference'] == 1
+    assert audit['order_failures'] == 1 and audit['trade_failures'] == 0
+
+
+def test_order_before_the_window_fails_even_when_the_session_is_a_vintage_session(rotation):
+    run_dir, market = rotation['run'], rotation['market']
+    config = json.loads((run_dir / 'config.json').read_bytes())
+    before = [s for s in market.sessions if s < config['start_session']]
+    assert before
+    edit_orders(run_dir, lambda records: records.append(unfilled_order(decision_session=before[-1])))
+    audit = audit_run(run_dir, market)
+    assert audit['passed'] is False and audit['order_failure_kinds']['order_reference'] == 1
+
+
+@pytest.mark.parametrize('decision', ['2017-11-30', '2017-12-04', '2017-12-05'])
+def test_execution_must_be_lag_sessions_after_the_decision(rotation, decision):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records.append(unfilled_order(decision_session=decision)))
+    audit = audit_run(run_dir, market)
+    only_order_failure(audit, 'order_timing')
+    assert audit['first_failure'] == {'session': '2017-12-04', 'ticker': 'AAA', 'check': 'order_timing'}
+
+
+def test_real_order_with_a_wrong_decision_session_fails_on_timing(rotation):
+    run_dir, market = rotation['run'], rotation['market']
+    second = rows(run_dir, 'orders.csv')[1][2]
+    assert second['decision_session'] == '2017-12-04' and second['execution_session'] == '2017-12-05'
+    edit_orders(run_dir, lambda r: r[2].__setitem__('decision_session', '2017-12-01'))
+    only_order_failure(audit_run(run_dir, market), 'order_timing')
+
+
+def test_lag_is_read_from_the_run_scenario(tmp_path, no_network):
+    root = tmp_path.resolve()
+    derived, digest = vintage(root, rich_frames())
+    config = RunConfig('2017-11-28', '2017-12-08', ('2017-11-28', '2017-12-04'), Scenario(lag=2))
+    run_dir = run_simulation(root, derived, 'invariant_rotation', config, expected_sha256=digest)
+    market = load_market(root, derived.relative_to(root), digest)
+    assert {r['execution_session'] for r in rows(run_dir, 'orders.csv')[1]} == {'2017-11-30', '2017-12-06'}
+    assert_clean(audit_run(run_dir, market), market, run_dir)
+    edit_orders(run_dir, lambda records: records[0].__setitem__('decision_session', '2017-11-29'))
+    only_order_failure(audit_run(run_dir, market), 'order_timing')
+
+
+def test_a_fill_larger_than_the_order_fails_when_trade_fill_and_positions_agree(rotation):
+    """Order 371 shares, fill and trade 742: the fill, the trade and the recorded positions are consistent with each
+    other, so only the bound of the fill by the order catches it."""
+    run_dir, market = rotation['run'], rotation['market']
+    first = rows(run_dir, 'orders.csv')[1][0]
+    assert (first['ticker'], first['order_qty'], first['filled_qty'], first['status']) == (
+        'AAA', '742', '742', 'filled')
+    assert rows(run_dir, 'trades.csv')[1][0]['qty'] == '742'
+    edit_orders(run_dir, lambda records: records[0].__setitem__('order_qty', '371'))
+    audit = audit_run(run_dir, market)
+    only_order_failure(audit, 'fill_bound')
+    assert audit['first_failure'] == {'session': '2017-11-29', 'ticker': 'AAA', 'check': 'fill_bound'}
+
+
+def test_a_sell_fill_larger_than_the_order_fails(rotation):
+    run_dir, market = rotation['run'], rotation['market']
+    records = rows(run_dir, 'orders.csv')[1]
+    sell = next(i for i, r in enumerate(records) if float(r['order_qty']) < 0)
+    edit_orders(run_dir, lambda r: r[sell].__setitem__('order_qty', repr(float(r[sell]['order_qty']) / 2)))
+    only_order_failure(audit_run(run_dir, market), 'fill_bound')
+
+
+def test_a_fill_within_the_ten_digit_rounding_of_the_order_is_not_a_bound_violation(rotation):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records[0].__setitem__('order_qty', repr(742 * (1 - 4e-10))))
+    assert audit_run(run_dir, market)['order_failures'] == 0
+
+
+@pytest.mark.parametrize('changes', [
+    {'status': 'filled'},                                    # filled with no fill
+    {'status': 'partial', 'filled_qty': '0'},                # partial with no fill
+    {'status': 'cancelled', 'filled_qty': '0', 'cancel_reason': ''},
+    {'status': 'cancelled', 'cancel_reason': 'exceeds_position'},   # the reason of a sell, on a buy
+    {'status': 'cancelled', 'cancel_reason': 'bogus'},
+    {'status': 'pending'},
+    {'status': ''},
+    {'status': 'filled', 'filled_qty': '0', 'cancel_reason': ''},
+    {'status': 'cancelled', 'order_qty': '-1', 'cancel_reason': 'insufficient_cash'},   # a buy reason, on a sell
+    {'status': 'cancelled', 'cancel_reason': 'no_valid_open'},  # the vintage has a valid open on that session
+])
+def test_status_inconsistent_with_the_fill_fails(rotation, changes):
+    run_dir, market = rotation['run'], rotation['market']
+    base = unfilled_order()
+    edit_orders(run_dir, lambda records: records.append({**base, **changes}))
+    audit = audit_run(run_dir, market)
+    only_order_failure(audit, 'order_status')
+    assert audit['first_failure'] == {'session': '2017-12-04', 'ticker': 'AAA', 'check': 'order_status'}
+
+
+def test_real_filled_order_marked_partial_or_with_a_reason_fails(rotation):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records[0].__setitem__('status', 'partial'))
+    only_order_failure(audit_run(run_dir, market), 'order_status')
+    edit_orders(run_dir, lambda records: records[0].update(status='filled', cancel_reason='insufficient_cash'))
+    only_order_failure(audit_run(run_dir, market), 'order_status')
+    edit_orders(run_dir, lambda records: records[0].update(status='cancelled', cancel_reason='insufficient_cash'))
+    only_order_failure(audit_run(run_dir, market), 'order_status')
+
+
+def test_partial_order_with_a_smaller_fill_than_the_order_passes_when_trade_and_positions_agree(rotation):
+    run_dir, market = rotation['run'], rotation['market']
+    edit_orders(run_dir, lambda records: records[0].update(status='partial', cancel_reason='insufficient_cash',
+                                                           order_qty='800'))
+    audit = audit_run(run_dir, market)
+    assert audit['order_failures'] == 0 and audit['passed'] is True
+
+
+@pytest.mark.parametrize('column, value', [('qty', 'inf'), ('qty', 'nan'), ('qty', '-5'), ('price', 'nan'),
+                                           ('price', 'inf'), ('price', '-100'), ('notional', 'nan'),
+                                           ('notional', 'inf'), ('notional', '-74200'), ('cost', 'nan'),
+                                           ('cost', 'inf'), ('cost', '-74.2')])
+def test_trade_with_a_non_finite_or_negative_number_fails(rotation, column, value):
+    run_dir, market = rotation['run'], rotation['market']
+    header, records = rows(run_dir, 'trades.csv')
+    records[0][column] = value
+    refreeze(run_dir, 'trades.csv', header, records)
+    audit = audit_run(run_dir, market)
+    assert audit['passed'] is False and audit['trade_failures'] >= 1
+
+
+@pytest.fixture
+def constrained(tmp_path, no_network):
+    """Clean run with a partial buy (the AAA open on 2017-11-29 is above the decision close, so cash does not cover
+    the orders) and a cancelled buy (BBB has no open on 2017-12-05)."""
+    root = tmp_path.resolve()
+    frames = rich_frames()
+    frames['AAA'].loc['2017-11-29', 'open'] = 110.0
+    frames['BBB'].loc['2017-12-05', 'open'] = float('nan')
+    derived, digest = vintage(root, frames)
+    run_dir = run_simulation(root, derived, 'invariant_rotation', RICH, expected_sha256=digest)
+    return {'root': root, 'digest': digest, 'market': load_market(root, derived.relative_to(root), digest),
+            'run': run_dir}
+
+
+def test_clean_run_with_partial_and_cancelled_orders_passes(constrained):
+    run_dir, market = constrained['run'], constrained['market']
+    statuses = {(r['status'], r['cancel_reason']) for r in rows(run_dir, 'orders.csv')[1]}
+    assert ('partial', 'insufficient_cash') in statuses and ('cancelled', 'no_valid_open') in statuses
+    assert_clean(audit_run(run_dir, market), market, run_dir)
+
+
+def test_cancelled_order_without_a_valid_open_needs_the_no_valid_open_reason(constrained):
+    run_dir, market = constrained['run'], constrained['market']
+    records = rows(run_dir, 'orders.csv')[1]
+    cancelled = next(i for i, r in enumerate(records) if r['status'] == 'cancelled')
+    edit_orders(run_dir, lambda r: r[cancelled].__setitem__('cancel_reason', 'insufficient_cash'))
+    only_order_failure(audit_run(run_dir, market), 'order_status')
+
+
+def test_partial_order_cannot_be_relabelled_filled_or_cancelled(constrained):
+    run_dir, market = constrained['run'], constrained['market']
+    records = rows(run_dir, 'orders.csv')[1]
+    partial = next(i for i, r in enumerate(records) if r['status'] == 'partial')
+    edit_orders(run_dir, lambda r: r[partial].update(status='filled', cancel_reason=''))
+    only_order_failure(audit_run(run_dir, market), 'order_status')
+    edit_orders(run_dir, lambda r: r[partial].update(status='cancelled', cancel_reason='insufficient_cash'))
+    only_order_failure(audit_run(run_dir, market), 'order_status')
 
 
 # Journaled audit and CLI

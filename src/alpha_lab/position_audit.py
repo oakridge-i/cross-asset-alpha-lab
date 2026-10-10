@@ -1,6 +1,7 @@
 """Independent position-balance audit of frozen runs (D026): reconciles every recorded position with the vintage
-split ratios and the filled trades, and every trade with the vintage open, the scenario cost and its order. Reads only
-config.json, daily.csv, trades.csv and orders.csv of a run and the vintage; never the engine's account object."""
+split ratios and the filled trades, every trade with the vintage open, the scenario cost and its order, and every
+order row with the vintage sessions, the scenario lag and the fill it records. Reads only config.json, daily.csv,
+trades.csv and orders.csv of a run and the vintage; never the engine's account object."""
 import csv
 import json
 import math
@@ -22,8 +23,18 @@ ABS_TOLERANCE = 1e-9
 REL_TOLERANCE = 1e-9
 TRADE_KINDS = ('price', 'notional', 'cost', 'order_link', 'filled_qty', 'side', 'order_without_trade',
                'trade_without_fill', 'unknown')
+# Order checks (D026, addition of 10 October 2026), counted once per orders.csv row and kind: order_value (order_qty
+# not finite or zero, filled_qty not finite or negative), order_reference (ticker not in the vintage, decision or
+# execution session outside the run window), order_timing (execution not `lag` vintage sessions after the decision),
+# fill_bound (filled_qty above abs(order_qty)) and order_status (status, cancel reason and fill disagree).
+ORDER_KINDS = ('order_value', 'order_reference', 'order_timing', 'fill_bound', 'order_status')
+# Settled orders in orders.csv are filled, partial or cancelled, and the cancel reasons go with them: a filled order
+# has no reason; a sell that is not filled in full is short of the position, a buy short of cash or of a whole share; an
+# order without a valid open in the vintage is cancelled with no_valid_open and in no other way.
+SHORTFALL_REASONS = {'buy': ('insufficient_cash', 'fractional_quantity'), 'sell': ('exceeds_position',)}
+NO_OPEN_REASON = 'no_valid_open'
 # Order of failure checks at the same session and ticker when naming the first failure.
-CHECK_ORDER = ('sessions', 'columns', 'position', 'cumulative', *TRADE_KINDS)
+CHECK_ORDER = ('sessions', 'columns', 'position', 'cumulative', *TRADE_KINDS, *ORDER_KINDS)
 
 
 def within(difference, magnitude):
@@ -43,11 +54,44 @@ def number(text):
         return math.nan
 
 
+def order_failures(order, market, window, at, lag):
+    """Kinds of the order checks that one orders.csv row fails, from the row, the vintage and the scenario lag."""
+    bad = set()
+    ticker, decision, execution = order['ticker'], order['decision_session'], order['execution_session']
+    known = ticker in market.tickers and decision in window and execution in window
+    if not known:
+        bad.add('order_reference')
+    elif at[execution] - at[decision] != lag:
+        bad.add('order_timing')
+    ordered, filled = number(order['order_qty']), number(order['filled_qty'])
+    if not (math.isfinite(ordered) and ordered != 0 and math.isfinite(filled) and filled >= 0):
+        return bad | {'order_value'}
+    size = abs(ordered)
+    # filled_qty and order_qty are rounded to 10 significant digits: equal within the audit tolerance is equal.
+    full = abs(filled - size) <= ABS_TOLERANCE + REL_TOLERANCE * (filled + size)
+    if not full and filled > size:
+        return bad | {'fill_bound'}
+    status, reason = order['status'], order['cancel_reason']
+    reasons = SHORTFALL_REASONS['buy' if ordered > 0 else 'sell']
+    opening = float(market.open.at[execution, ticker]) if known else None  # None: the row names no vintage open
+    if opening is not None and not (math.isfinite(opening) and opening > 0):
+        consistent = status == 'cancelled' and filled == 0 and reason == NO_OPEN_REASON
+    elif status == 'filled':
+        consistent = full and reason == ''
+    elif status == 'partial':
+        consistent = filled > 0 and reason in reasons
+    elif status == 'cancelled':
+        consistent = filled == 0 and reason in (reasons if opening is not None else (*reasons, NO_OPEN_REASON))
+    else:
+        consistent = False
+    return bad if consistent else bad | {'order_status'}
+
+
 def audit_run(run_dir, market):
     """Audit of one frozen run against `market` (its vintage); returns a JSON-ready dict of counts and flags."""
     run_dir = Path(run_dir)
     config = json.loads((run_dir / 'config.json').read_bytes())
-    cost = config['scenario']['cost']
+    cost, lag = config['scenario']['cost'], config['scenario']['lag']
     tickers = list(market.tickers)
     sessions = [s for s in market.sessions if config['start_session'] <= s <= config['end_session']]
     daily_header, daily = read_csv(run_dir / 'daily.csv')
@@ -55,9 +99,11 @@ def audit_run(run_dir, market):
     order_header, orders = read_csv(run_dir / 'orders.csv')
     failures = []  # (session, ticker, check)
     kinds = dict.fromkeys(TRADE_KINDS, 0)
+    order_kinds = dict.fromkeys(ORDER_KINDS, 0)
     out = {'sessions': len(daily), 'positions_checked': 0, 'position_failures': 0, 'cumulative_failures': 0,
            'max_position_difference': 0.0, 'trades': len(trades), 'trade_failures': 0,
-           'trade_failure_kinds': kinds, 'orders_checked': len(orders), 'structure_failures': 0}
+           'trade_failure_kinds': kinds, 'orders_checked': len(orders), 'order_failures': 0,
+           'order_failure_kinds': order_kinds, 'structure_failures': 0}
     structure = []
     if daily_header != [*DAILY_COLUMNS, *(f'qty_{t}' for t in tickers)] or trade_header != TRADE_COLUMNS \
             or order_header != ORDER_COLUMNS:
@@ -68,10 +114,21 @@ def audit_run(run_dir, market):
         out['structure_failures'] = len(structure)
         return finish(out, structure)
 
+    window = set(sessions)
+    at = {s: i for i, s in enumerate(market.sessions)}
+    invalid_values = set()  # indexes of order rows that fail order_value
+    for i, o in enumerate(orders):
+        bad = order_failures(o, market, window, at, lag)
+        if 'order_value' in bad:
+            invalid_values.add(i)
+        for kind in sorted(bad):
+            order_kinds[kind] += 1
+            failures.append((o['execution_session'], o['ticker'], kind))
+    out['order_failures'] = sum(order_kinds.values())
+
     bought = {}  # (session, ticker) -> filled buy quantity; sells below
     sold = {}
     trade_keys = {}
-    window = set(sessions)
     order_index = {}  # (execution_session, ticker) -> order rows
     for o in orders:
         order_index.setdefault((o['execution_session'], o['ticker']), []).append(o)
@@ -79,7 +136,7 @@ def audit_run(run_dir, market):
         key = (t['session'], t['ticker'])
         trade_keys[key] = trade_keys.get(key, 0) + 1
         qty, price, notional, paid = (number(t[c]) for c in ('qty', 'price', 'notional', 'cost'))
-        if t['session'] not in window or t['ticker'] not in tickers or not (qty > 0):
+        if t['session'] not in window or t['ticker'] not in tickers or not (math.isfinite(qty) and qty > 0):
             kinds['unknown'] += 1
             failures.append((*key, 'unknown'))
             continue
@@ -88,9 +145,11 @@ def audit_run(run_dir, market):
         elif t['side'] == 'sell':
             sold[key] = sold.get(key, 0.0) + qty
         opening = float(market.open.at[t['session'], t['ticker']])
-        checks = {'price': within(price - opening, abs(price) + abs(opening)),
-                  'notional': within(notional - qty * price, abs(notional) + abs(qty * price)),
-                  'cost': within(paid - cost * notional, abs(paid) + abs(cost * notional))}
+        checks = {'price': math.isfinite(price) and price > 0 and within(price - opening, abs(price) + abs(opening)),
+                  'notional': math.isfinite(notional) and notional >= 0
+                  and within(notional - qty * price, abs(notional) + abs(qty * price)),
+                  'cost': math.isfinite(paid) and paid >= 0
+                  and within(paid - cost * notional, abs(paid) + abs(cost * notional))}
         if t['side'] not in ('buy', 'sell'):
             checks['side'] = False
         linked = order_index.get(key, [])
@@ -106,7 +165,9 @@ def audit_run(run_dir, market):
             if not ok:
                 kinds[kind] += 1
                 failures.append((*key, kind))
-    for o in orders:
+    for i, o in enumerate(orders):
+        if i in invalid_values:  # an invalid fill is already counted; it is not read as "no fill"
+            continue
         key = (o['execution_session'], o['ticker'])
         filled, count = number(o['filled_qty']), trade_keys.get(key, 0)
         if filled > 0 and count != 1:
