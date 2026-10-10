@@ -1,6 +1,6 @@
 # Reproducibility
 
-The repository implements N1 data preparation, the N2 account and execution engine, the N3 benchmark providers, metrics and report, and the N4 providers and report for the six H1/H2 configurations. Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. Benchmark reproduction is available: the registered N3 runs of B0-B3 and REF_SPY and their report are listed below and in the [N3 report](n3/N3_REPORT.md). The six registered N4 runs of H1/H2, their repeats and their reports were executed on 8 October 2026 on the branch `claude/n4-hypotheses` and are listed in the N4 section below and in the [N4 report](n4/N4_REPORT.md). They publish no returns; the N2 run uses a test weight provider and publishes no returns either.
+The repository implements N1 data preparation, the N2 account and execution engine, the N3 benchmark providers, metrics and report, the N4 providers and report for the six H1/H2 configurations, and the N5 code (the adaptive policy P_A1, the metrics of hypothesis and policy runs, the inference functions and the evaluation report). Reproduction requires the locked Python environment and, for offline data replay and for the N2 run, the corresponding local source, evidence, correction, and derived snapshots. Those data are excluded from Git; cloning the repository alone does not provide them. Benchmark reproduction is available: the registered N3 runs of B0-B3 and REF_SPY and their report are listed below and in the [N3 report](n3/N3_REPORT.md). The six registered N4 runs of H1/H2, their repeats and their reports were executed on 8 October 2026 on the branch `claude/n4-hypotheses` and are listed in the N4 section below and in the [N4 report](n4/N4_REPORT.md). They publish no returns; the N2 run uses a test weight provider and publishes no returns either. The N5 runs, the evaluation report and their repeats have not been executed; the procedure is in the section "N5 evaluation runs: not yet executed" at the end of this document.
 
 The [English documentation edition](DOCUMENTATION_EDITION.md) registers current document hashes separately. N0 receipts and the original experiment records are historical evidence; they do not certify the bytes of the rewritten documentation. See [HISTORY_REWRITE.md](HISTORY_REWRITE.md) for old-to-published commit mappings.
 
@@ -251,3 +251,55 @@ $n4Root=(Get-Location).Path
 ```
 
 Verification used `alpha_lab.provenance.verify` for every new frozen directory, compared the seven replacement/repeat `files` dictionaries, and compared all seven replacement outputs to the original repeat set. All matched. The original 94-row journal byte prefix was preserved; the total is 124 rows after retaining one failed launch and fourteen successful attempts. The source and environment stayed fixed, all financial invariant flags passed, and no H1/H2 performance metric was opened. Repetition remains deterministic reproduction, not an independent experiment.
+
+## N5 evaluation runs: not yet executed
+
+Status as of 10 October 2026: the N5 commands below are the procedure of D025, item 17 and of the [N5 design](superpowers/specs/2026-10-09-n5-evaluation-design.md), section 9. They have not been executed on the real vintage. No N5 run, report, run id, journal record or figure exists, and the commands are not a record of results. `run_simulation(..., stage=5)` and the `evaluate` command are exercised by tests on synthetic vintages; the `--stage 5` option of the `simulate` command line has not been exercised by a test or on the real vintage. This section is revised with the run ids, journal commits and comparison results after the campaign has been executed and reviewed.
+
+Conditions. The registered campaign starts only after the freeze of D025, item 16: the full test suite passes on a clean tree, the whole branch has been reviewed without a critical or important finding, and the commit, its `src` tree hash and the test result are recorded in [STATUS.md](../STATUS.md). Until then the viewing restriction of D023, item 6 applies. The conditions of the N3 and N4 runs apply as well: the approved vintage `data/derived/20261006T172442-80ef993493` passes `provenance.verify` and has manifest SHA-256 `f89346107cf7da6ca052693d188b8a576a08d42024c86865b0a42a63b1d294f2`; the environment manifest SHA-256 is `5226dc9b0f21363873eb9a8420891733bbad1bc6c536262a3341eead520ce773`; the working tree is clean before each step. The run directories that the report compares with (the five first N3 benchmark runs listed in the N3 section above and the six N4 replacement runs of the D024 section) must be present in `data/runs` of the checkout and pass `provenance.verify`; they are read by code only. The window of the benchmark and configuration runs is 2008-12-31 to 2022-12-30 and the window of P_A1 and its comparator is 2013-12-31 to 2022-12-30, in the main scenario (cost 0.001, lag 1, reserve 0.01, proxy 10, initial cash 100000), the defaults of the command. Every command uses an absolute `--root` (the lesson of the failed launch of 8 October 2026); `<ROOT>` below stands for the absolute path of the working copy.
+
+Each command is followed by a journal-only commit, so that the next step starts on a clean tree; the commands are not an unattended batch. The thirteen runs:
+
+```bash
+PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider NAME --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "chore: log N5 NAME run <run id>"
+```
+
+with NAME each of `B0`, `B1`, `B2`, `B3`, `REF_SPY`, `H1_252_3`, `H1_252_4`, `H1_126_3`, `H1_126_4`, `H2_4of6` and `H2_5of6`. Then the policy and its comparator, which start in cash on 2013-12-31:
+
+```bash
+PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider P_A1 --start 2013-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider H1_252_3 --start 2013-12-31 --end 2022-12-30 --stage 5 --root <ROOT>
+```
+
+The `P_A1` command computes the validation accounts of its nine selection years in memory and takes longer than the other runs; it journals the seed 20261007. The second command is the P_A1 comparator: the provider H1_252_3 from 2013-12-31, a supplementary run and not a new candidate (D025, item 2). `P_A1` is accepted only in the main scenario with the default initial cash, and a decision whose selection year is outside 2014 to 2022 raises an error, so the policy cannot be run into the reserved period. An N5 run that exits with code 3 has frozen its result and journaled `invariants_failed`; it stays in the journal. A failed hypothesis or policy run prints an error whose message is withheld (`RuntimeError: ... message withheld under the N5 viewing procedure`).
+
+The evaluation report takes the thirteen run directories in any order; it identifies each run by its provider and window, and refuses a missing, duplicated or unexpected run:
+
+```bash
+PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab evaluate --runs "<ROOT>/data/runs/<run id of B0>" ... "<ROOT>/data/runs/<run id of the comparator>" --root <ROOT>
+git add experiments/EXPERIMENT_LOG.jsonl
+git commit -m "chore: log N5 evaluation report run <run id>"
+```
+
+The report prints `data/reports/<run_id>`, writes `evaluation.json` and `evaluation.md` there, and journals the seed 20261006. Its failures name a rule and a run and carry no value (D025, item 16). It is the first moment at which an H1/H2 figure is shown.
+
+Repeats. Each of the thirteen runs is repeated with the same command and `--parent <run id of its first run>`, with a journal commit after each, and the report is repeated over the thirteen repeat directories with `--parent <run id of the first report>`:
+
+```bash
+PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab simulate data/derived/20261006T172442-80ef993493 --provider NAME --start 2008-12-31 --end 2022-12-30 --stage 5 --root <ROOT> --parent <first run id of NAME>
+PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab evaluate --runs <thirteen repeat dirs, absolute> --root <ROOT> --parent <first report run id>
+```
+
+(`P_A1` and the comparator use `--start 2013-12-31`.) With every attempt successful, the campaign is 28 attempts and 56 journal events: thirteen runs, the report, thirteen repeats and the repeat report. A failed attempt is additional and stays in the journal.
+
+Comparison. Each repeat is compared with its first run, and the repeated report with the first report, by the `files` dictionaries of their `manifest.json` (per-file SHA-256), not by the manifest bytes, which contain run identifiers. All fourteen pairs must be equal. The pair check is the one-boolean form of the N4 section:
+
+```bash
+python -c "import json,sys; a,b=(json.load(open(p+'/manifest.json'))['files'] for p in sys.argv[1:3]); print(a==b)" data/runs/<first dir> data/runs/<repeat dir>
+```
+
+The shared files are compared separately: for each benchmark, all nine files against the first N3 run (45 hashes), and for each configuration, the nine files of the N4 replacement run against the N5 run, with `metrics.json` the only addition (D025, item 17). The evaluation report performs this comparison for its own input directories before it computes anything, so the repeat report applies it to the repeat directories as well. A mismatch in a shared file stops the campaign. The script used for the registered comparison will be recorded here after it has been run. The directories `data/runs` and `data/reports` are not in Git.
+
+A change to `src` after the first registered N5 run is a bug fix only. Each fix requires rerunning all thirteen runs on the new tree, each with `--parent` set to its previous run, followed by a new report, and every attempt is disclosed (D025, item 16; D023, item 8). A change of rule, candidate, window or period after the figures are shown is a new attempt with its own decision record.
