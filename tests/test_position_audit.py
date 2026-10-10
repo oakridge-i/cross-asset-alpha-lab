@@ -92,19 +92,32 @@ def refreeze(run_dir, name, header, records):
     writer.writerows(records)
     body = out.getvalue().encode()
     (run_dir / name).write_bytes(body)
+    edit_manifest(run_dir, lambda manifest: manifest['files'].__setitem__(name, sha256(body)))
+
+
+def edit_manifest(run_dir, edit):
+    """Apply `edit` to the manifest of a run directory and refreeze it so provenance.verify still passes."""
     manifest = json.loads((run_dir / 'manifest.json').read_bytes())
-    manifest['files'][name] = sha256(body)
+    edit(manifest)
     encoded = canonical_bytes(manifest)
     (run_dir / 'manifest.json').write_bytes(encoded)
     (run_dir / 'manifest.sha256').write_text(sha256(encoded) + '\n', encoding='ascii')
     verify(run_dir)
 
 
-def shift_qty(run_dir, ticker, change):
-    """change(session, recorded quantity) -> new recorded quantity, applied to qty_<ticker> of daily.csv."""
+def shift_qty(run_dir, ticker, change, market=None):
+    """change(session, recorded quantity) -> new recorded quantity, applied to qty_<ticker> of daily.csv. With
+    `market`, positions_value and nav of every changed row move by the change in shares times that session's close,
+    so the defective record stays self-consistent."""
     header, records = rows(run_dir, 'daily.csv')
     for r in records:
-        r[f'qty_{ticker}'] = repr(change(r['session'], float(r[f'qty_{ticker}'])))
+        old = float(r[f'qty_{ticker}'])
+        new = change(r['session'], old)
+        r[f'qty_{ticker}'] = repr(new)
+        if market is not None and new != old:
+            value = (new - old) * float(market.close.loc[r['session'], ticker])
+            for column in ('positions_value', 'nav'):
+                r[column] = repr(float(r[column]) + value)
     refreeze(run_dir, 'daily.csv', header, records)
 
 
@@ -163,7 +176,14 @@ def test_fractional_position_after_a_reverse_split_passes(campaign, no_network):
 
 def test_an_added_share_passes_the_invariants_and_fails_the_audit(rotation):
     run_dir, market = rotation['run'], rotation['market']
-    shift_qty(run_dir, 'AAA', lambda s, q: q + 1.0 if s >= '2017-12-01' else q)
+    before = rows(run_dir, 'daily.csv')[1]
+    shift_qty(run_dir, 'AAA', lambda s, q: q + 1.0 if s >= '2017-12-01' else q, market)
+    after = rows(run_dir, 'daily.csv')[1]
+    # The defective record is self-consistent: nav moves with the extra share's value at that session's close.
+    assert all(float(a['nav']) - float(b['nav']) == pytest.approx(market.close.loc[a['session'], 'AAA'])
+               for a, b in zip(after, before) if a['session'] >= '2017-12-01')
+    assert all(float(a['nav']) - float(a['positions_value']) == pytest.approx(
+        float(b['nav']) - float(b['positions_value'])) for a, b in zip(after, before))
     assert all(invariants(run_dir)[name]['passed'] for name in SEVEN) and invariants(run_dir)['passed']
     audit = audit_run(run_dir, market)
     later = [s for s in window(market, run_dir) if s >= '2017-12-01']
@@ -202,8 +222,9 @@ def test_slow_drift_is_found_only_by_the_cumulative_variant(campaign, no_network
     position = held[after[0]]
     assert position > 0 and all(held[s] == position for s in after)  # first-only: no trade after the splits
     # Per session the step is 0.8e-9 of the position, inside the per-session tolerance (1e-9 + 1e-9 of the
-    # magnitude, at least 2e-9 of the position); after about 30 sessions the drift is far outside the cumulative
-    # tolerance (1e-9 + 1e-9 of twice the position, as no trade follows the purchase).
+    # magnitude, at least 2e-9 of the position); the cumulative deviation grows by one step per session and exceeds
+    # the cumulative tolerance (1e-9 + 1e-9 of twice the position, as no trade follows the purchase) from the third
+    # session on (3 * 0.8e-9 > 2e-9).
     step = 0.8e-9 * position
     rank = {s: i + 1 for i, s in enumerate(after)}
     shift_qty(run_dir, 'SPY', lambda s, q: q + rank[s] * step if s in rank else q)
@@ -351,11 +372,12 @@ def test_unapproved_vintage_is_refused(rotation):
     assert journal(root)[-1]['status'] == 'failed'
 
 
-def test_runs_on_different_vintages_are_refused(rotation, campaign):
+def test_runs_on_different_vintages_are_refused(rotation):
     root, run_dir = rotation['root'], rotation['run']
-    other = root / 'data/runs' / campaign['runs']['B1'].name
-    shutil.copytree(campaign['runs']['B1'], other)
-    with pytest.raises(ValueError, match='vintage'):
+    other = copy_run(run_dir, 'other-vintage')
+    edit_manifest(other, lambda m: m['metadata'].__setitem__('derived_snapshot', 'data/derived/another-vintage'))
+    assert run_dir.parent == other.parent
+    with pytest.raises(ValueError, match='runs on different vintages'):
         build_position_audit(root, [run_dir, other], expected_sha256=rotation['digest'])
     assert journal(root)[-1]['status'] == 'failed'
 

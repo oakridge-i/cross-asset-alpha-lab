@@ -13,8 +13,11 @@ from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256, verify
 # Frozen CSV files carry 10 significant digits (engine.csv_bytes, '%.10g'), so each parsed operand is off by at most
 # 0.5e-9 of its own magnitude. Comparing a - b where a and b are sums of such operands, the rounding error is at most
 # 0.5e-9 times the sum of the operand magnitudes; 1e-9 of that sum bounds it with a factor of two to spare, and the
-# absolute 1e-9 covers zero positions. One share is many orders of magnitude above this bound for any position below
-# 1e8 shares, so a created or lost share cannot hide inside the tolerance.
+# absolute 1e-9 covers zero positions. The product case notional = qty * price carries three roundings (qty, price and
+# notional), 1.5e-9 relative, against a tolerance of 2e-9: a margin of about 1.33x, still safe but thinner.
+# Detection margin: the tolerance on a position is about 2e-9 times its size (the carried and the recorded position
+# both enter the magnitude), so a one-share error is detected in every session for positions below about 5e8 shares,
+# with a margin of about 5x at 1e8 shares.
 ABS_TOLERANCE = 1e-9
 REL_TOLERANCE = 1e-9
 TRADE_KINDS = ('price', 'notional', 'cost', 'order_link', 'filled_qty', 'side', 'order_without_trade',
