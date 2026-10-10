@@ -2,8 +2,10 @@
 --root PROJECT; python -m alpha_lab simulate DERIVED --provider NAME --start DATE --end DATE
 [--cost C --lag L --reserve R --proxy-days D --expected-sha256 HASH --stage 5] --root PROJECT [--parent ATTEMPT];
 python -m alpha_lab {report,hypothesis-report,evaluate} --runs DIR [DIR ...] --root PROJECT [--parent ATTEMPT]
+[--expected-sha256 HASH]; python -m alpha_lab position-audit --runs DIR [DIR ...] --root PROJECT [--parent ATTEMPT]
 [--expected-sha256 HASH].
-Exit codes: 0 completed; 3 simulate finished with failed invariants or audit with failed QA; 1 exception; 2 usage."""
+Exit codes: 0 completed; 3 simulate finished with failed invariants, audit with failed QA or position-audit with a
+failed run; 1 exception; 2 usage."""
 import argparse
 import json
 import sys
@@ -15,6 +17,7 @@ from .evidence import fetch_evidence
 from .hypothesis_report import build_hypothesis_report
 from .market import VINTAGE_MANIFEST_SHA256
 from .pipeline import acquire_snapshot, audit_snapshot, project_path, replay_snapshot
+from .position_audit import build_position_audit
 from .reconcile import reconcile
 from .report import build_report
 
@@ -27,7 +30,8 @@ def main(argv=None):
         sys.stdout.reconfigure(errors='backslashreplace')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['acquire', 'evidence', 'audit', 'replay', 'reconcile', 'corrections',
-                                            'simulate', 'report', 'hypothesis-report', 'evaluate'])
+                                            'simulate', 'report', 'hypothesis-report', 'evaluate',
+                                            'position-audit'])
     parser.add_argument('snapshot', nargs='?')
     parser.add_argument('evidence', nargs='?')
     parser.add_argument('--runs', nargs='+')
@@ -70,6 +74,14 @@ def main(argv=None):
             parser.error('--runs required for evaluate')
         print(project_path(root, build_evaluation(root, [Path(r) for r in args.runs], args.parent,
                                                   args.expected_sha256)))
+    elif args.command == 'position-audit':
+        if not args.runs:
+            parser.error('--runs required for position-audit')
+        target = build_position_audit(root, [Path(r) for r in args.runs], args.parent, args.expected_sha256)
+        print(project_path(root, target))
+        totals = json.loads((target / 'position_audit.json').read_bytes())['totals']
+        if totals['runs_passed'] != totals['runs']:
+            raise SystemExit(EXIT_CHECKS_FAILED)
     elif args.command == 'simulate':
         if not (args.snapshot and args.provider and args.start and args.end):
             parser.error('derived snapshot, --provider, --start and --end required for simulate')
