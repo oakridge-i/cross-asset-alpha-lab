@@ -281,3 +281,17 @@ Limitations:
 Verified commit: the campaign evidence ends at the journal commit `7f6dac8`, which the checks above verified; this publication is the documentation commit that follows it.
 
 Next step: N6, on a separate branch after the N5 branch has been reviewed and its integration authorized: the cost and delay scenarios of protocol section 12, the opening of the reserved period under a frozen procedure, and the decisions of protocol section 13.
+
+## Position-balance audit (D026): 10 October 2026
+
+The seven run invariants do not reconcile recorded positions with split events and filled trades; a synthetic counterexample showed that an erroneous change of share quantities can pass all seven. D026 records an independent read-only audit over frozen run files instead of an eighth engine invariant, so the engine, all run outputs and the N3, N4 and N5 validators are unchanged and nothing was rerun. The audit is implemented on the branch `claude/position-audit` (from the N5 branch at `8989012`): `src/alpha_lab/position_audit.py`, the command `position-audit`, 25 synthetic tests (commits `c67b7de`, `57d4edd`), D026 and the documents (`68e1a8f`).
+
+Checks performed in this checkout on 10 October 2026:
+
+- Full test suite on a clean tree at `68e1a8f`: 791 passed, 0 skipped, 640.72 seconds.
+- The 25 run directories missing from this working copy were copied (not moved) from the primary checkout and the N4 worktree; all 62 completed runs of the journal were verified with `provenance.verify` and against the `data_sha256` of their terminal journal records.
+- Registered audit `20261010T110315-dc0148ac1c` over the 62 runs (N2: 2, N3: 10, N4: 24, N5: 26), journal commit `6f0cc02`, status `completed`: 62 of 62 runs passed; 2,143,200 position comparisons with zero per-session and zero cumulative failures (maximum absolute difference 0.0); 46,862 trades and orders checked with zero failures; zero structure failures.
+
+Limitations: the audit is not tamper protection (a run altered together with all its records would pass), does not check the audited runs' journal records, and tests the reconciliation of positions, trades and orders only. Valuation (positions value against quantity times close), the held quantities of orders and the sign of positions are not part of this audit.
+
+Next action: owner review of the N5 branch and of this branch; any merge or push requires authorization. N6 follows.

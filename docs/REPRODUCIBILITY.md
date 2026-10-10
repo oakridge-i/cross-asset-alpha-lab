@@ -472,12 +472,14 @@ python -c "import json,sys; a,b=(json.load(open(p+'/manifest.json'))['files'] fo
 
 A change to `src` after the first registered N5 run is a bug fix only. Each fix requires rerunning all thirteen runs on the new tree, each with `--parent` set to its previous run, followed by a new report, and every attempt is disclosed (D025, item 16; D023, item 8). No such change was made in this campaign. A change of rule, candidate, window or period after the figures are shown is a new attempt with its own decision record.
 
-## Position-balance audit (D026): not yet executed
+## Position-balance audit (D026): executed receipt
 
-The audit of frozen runs described in [EXECUTION_MODEL.md](../EXECUTION_MODEL.md), section 10 and recorded in D026 is a read-only command. It has not yet been executed on the real runs; this section states the command and is not a receipt. `<ROOT>` is the absolute path of the working copy and `<run dirs>` are the run directories under `data/runs`; the audit refuses a directory outside it.
+The audit of frozen runs described in [EXECUTION_MODEL.md](../EXECUTION_MODEL.md), section 10 and recorded in D026 is a read-only command. It was executed once on 10 October 2026 over the 62 completed runs of the journal; the receipt follows the command description. `<ROOT>` is the absolute path of the working copy and `<run dirs>` are the run directories under `data/runs`; the audit refuses a directory outside it.
 
 ```bash
 PYTHONIOENCODING=utf-8 PYTHONPATH=src ../../.venv/Scripts/python -m alpha_lab position-audit --runs <run dirs> --root <ROOT>
 ```
 
 The command prints the path of the frozen report (`data/reports/<run_id>/position_audit.json`) and exits with 0 when every run passes and with 3 when any run fails. It appends a `started` and a terminal record to the experiment journal, so it is run from a clean tree and the new journal lines are committed afterwards, as for the other registered commands. Its unit tests use synthetic vintages in temporary directories and do not touch the real journal.
+
+Receipt (10 October 2026). The command above was run from the root of the branch's working copy (branch `claude/position-audit`, a Git worktree of the project) at commit `68e1a8f` on a clean tree, after the full test suite passed there (791 passed, 0 skipped), with `<run dirs>` the 62 run directories of every completed run in the journal: the two N2 execution runs, the ten N3 benchmark runs, the twenty-four N4 hypothesis runs and the twenty-six N5 runs. Before the audit, the 25 run directories that were not yet in this working copy were copied from the primary checkout and the N4 worktree, and all 62 copies were verified with `provenance.verify` and against the `data_sha256` of their terminal journal records. The attempt `20261010T110315-dc0148ac1c` exited with 0 and has the journal status `completed` with no quality warning; its journal lines were committed as `6f0cc02`. The frozen `position_audit.json` reports 62 of 62 runs passed: 214,320 run sessions, 2,143,200 position comparisons with zero per-session and zero cumulative failures (maximum absolute difference 0.0), 46,862 trades and orders checked with zero trade failures, and zero structure failures.
