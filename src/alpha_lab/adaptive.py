@@ -95,9 +95,11 @@ class Policy:
     `simulate(market, provider, start, end)` runs one validation account of `provider` on `market` from the session
     `start` to the session `end` in the main scenario and returns the engine Result (the registry injects an adapter
     around engine.simulate with RunConfig(start, end)); `providers` maps each candidate to its provider function.
-    The history must hold the five full calendar years before the selection year. A decision at t uses the selection of selection_year(t), computed once per instance on the
-    history truncated to the selection date s_Y; the weights are those of the chosen candidate at t on the history up
-    to t, and its signal rows carry `selection_year` and `selected_config`."""
+    The history must hold every XNYS session from the first session of the fifth calendar year before the selection
+    year through s_Y, and each validation account the 24 month-end decisions of its segment (D025 item 7). A decision
+    at t uses the selection of selection_year(t), computed once per instance on the history truncated to the selection
+    date s_Y; the weights are those of the chosen candidate at t on the history up to t, and its signal rows carry
+    `selection_year` and `selected_config`."""
 
     def __init__(self, simulate, providers, candidates=CANDIDATES):
         candidates = tuple(candidates)
@@ -134,12 +136,22 @@ class Policy:
             raise ValueError(f'selection year {year} needs the history from the first session of '
                              f'{year - HISTORY_YEARS} through the selection date {last}')
         truncated = history.history(last)  # nothing after the selection date reaches the selection
+        start = required.date().isoformat()
+        expected = [d.date().isoformat() for d in calendar(start, last).sessions]
+        if [s for s in truncated.sessions if s >= start] != expected:
+            raise ValueError(f'selection year {year} needs every XNYS session from the first session of '
+                             f'{year - HISTORY_YEARS} through the selection date (D025 item 7)')
+        month_ends = [xnys_month_end(f'{y}-{mo:02d}') for y in range(year - 3, year)
+                      for mo in range(1, 13) if (y, mo) >= (year - 3, 12) and (y, mo) <= (year - 1, 11)]
         excess, sessions, decisions = {}, None, None
         for name in self.candidates:
             result = self._simulate(truncated, self._providers[name], first, last)
             if not result.invariants['passed']:
                 raise ValueError(f'a run invariant failed in the validation account of {name} '
                                  f'for selection year {year}')
+            if [d.get('decision_session') for d in result.decisions] != month_ends:
+                raise ValueError(f'the validation account of {name} for selection year {year} does not hold the '
+                                 f'{len(month_ends)} month-end decisions of its segment')
             series = excess_series(truncated, result)
             ordered = sorted(series)
             if sessions is None:

@@ -303,6 +303,14 @@ def test_validation_accounts_have_24_decisions_inside_the_segment(base_frames, b
     assert policy.selection_log() == base_selection[0]
 
 
+def test_a_month_end_missing_from_every_instrument_stops_the_selection(base_frames):
+    frames = {t: f.drop(index='2013-06-28') for t, f in copy_frames(base_frames).items()}
+    policy = Policy(engine_adapter(), real_providers())
+    with pytest.raises(ValueError, match='2014'):
+        policy('2014-01-31', market_from_frames(frames).history('2014-01-31'))
+    assert policy.selection_log() == []
+
+
 def test_selection_is_deterministic(base_frames, base_selection):
     again, _ = selection(market_from_frames(base_frames))
     assert again == base_selection[0]

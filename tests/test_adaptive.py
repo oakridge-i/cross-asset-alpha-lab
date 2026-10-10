@@ -189,10 +189,10 @@ class FakeSimulate:
     """Records (market, candidate, (start, end)); the NAV of a candidate grows by the BIL close return plus its drift and a
     noise term that depends only on the candidate, so the result does not depend on the call order."""
 
-    def __init__(self, drift=None, failed=(), raising=None, short=(), nan=()):
+    def __init__(self, drift=None, failed=(), raising=None, short=(), nan=(), fewer=()):
         self.calls = []
         self.drift = {**dict.fromkeys(CANDIDATES, 0.0), **(drift or {})}
-        self.failed, self.raising, self.short, self.nan = failed, raising, short, nan
+        self.failed, self.raising, self.short, self.nan, self.fewer = failed, raising, short, nan, fewer
 
     def __call__(self, market, provider, start, end):
         name = provider.candidate
@@ -205,8 +205,14 @@ class FakeSimulate:
         navs = fake_navs(market, sessions, name, self.drift[name])
         if name in self.nan:
             navs[5] = float('nan')
+        month_ends = {}
+        for s in sessions:
+            month_ends[s[:7]] = s
+        decisions = [{'decision_session': month_ends[m]} for m in sorted(month_ends)[:-1]]
+        if name in self.fewer:
+            decisions = decisions[:-1]
         return SimpleNamespace(daily=[{'session': s, 'nav': v} for s, v in zip(sessions, navs)],
-                               decisions=[{}] * 24, invariants={'passed': name not in self.failed})
+                               decisions=decisions, invariants={'passed': name not in self.failed})
 
 
 def loop_utility(market, sessions, navs):
@@ -424,3 +430,32 @@ def test_selection_date_must_be_in_the_history(market):
     with pytest.raises(ValueError, match='history'):
         adaptive.Policy(fake, FAKE_PROVIDERS)('2014-01-31', gap.history('2014-01-31'))
     assert fake.calls == []
+
+
+def without_session(market, session):
+    """The market with `session` removed from every instrument."""
+    sessions = tuple(s for s in market.sessions if s != session)
+    return replace(market, sessions=sessions, **{k: getattr(market, k).loc[list(sessions)]
+                                                 for k in ('open', 'close', 'dividend', 'split_ratio')})
+
+
+def test_a_session_missing_from_every_candidate_stops_the_selection(market):
+    gap = without_session(from_session(market, '2008-01-02'), '2013-06-28')
+    fake = FakeSimulate()
+    policy = adaptive.Policy(fake, FAKE_PROVIDERS)
+    with pytest.raises(ValueError, match='2014'):
+        policy('2014-01-31', gap.history('2014-01-31'))
+    assert fake.calls == [] and policy.selection_log() == []
+    early = without_session(from_session(market, '2008-01-02'), '2009-01-02')
+    with pytest.raises(ValueError, match='2014'):
+        adaptive.Policy(FakeSimulate(), FAKE_PROVIDERS)('2014-01-31', early.history('2014-01-31'))
+
+
+def test_validation_accounts_need_the_24_month_end_decisions(market):
+    fake = FakeSimulate()
+    adaptive.Policy(fake, FAKE_PROVIDERS)('2014-01-31', market.history('2014-01-31'))
+    assert len(fake.calls) == len(CANDIDATES)
+    policy = adaptive.Policy(FakeSimulate(fewer=tuple(CANDIDATES)), FAKE_PROVIDERS)
+    with pytest.raises(ValueError, match='2014'):
+        policy('2014-01-31', market.history('2014-01-31'))
+    assert policy.selection_log() == []
