@@ -292,6 +292,8 @@ Checks performed in this checkout on 10 October 2026:
 - The 25 run directories missing from this working copy were copied (not moved) from the primary checkout and the N4 worktree; all 62 completed runs of the journal were verified with `provenance.verify` and against the `data_sha256` of their terminal journal records.
 - Registered audit `20261010T110315-dc0148ac1c` over the 62 runs (N2: 2, N3: 10, N4: 24, N5: 26), journal commit `6f0cc02`, status `completed`: 62 of 62 runs passed; 2,143,200 position comparisons with zero per-session and zero cumulative failures (maximum absolute difference 0.0); 46,862 trades and orders checked with zero failures; zero structure failures.
 
+- After a review found that invalid order rows were read as unfilled orders and that a fill could exceed its order, order checks were added (commits `f71cdbc`, `3e06b23`; D026 addition). Full test suite on a clean tree at `3e06b23`: 845 passed, 0 skipped, 855.14 seconds. Second registered audit `20261010T135509-caa4c06730` (parent `20261010T110315-dc0148ac1c`), journal commit `2674d6d`, status `completed`: 62 of 62 runs passed, zero position, trade, order and structure failures.
+
 Limitations: the audit is not tamper protection (a run altered together with all its records would pass), does not check the audited runs' journal records, and tests the reconciliation of positions, trades and orders only. Valuation (positions value against quantity times close), the held quantities of orders and the sign of positions are not part of this audit.
 
 Next action: owner review of the N5 branch and of this branch; any merge or push requires authorization. N6 follows.
