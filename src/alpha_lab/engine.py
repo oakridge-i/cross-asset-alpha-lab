@@ -17,7 +17,7 @@ from alpha_lab.metrics import compute_metrics, periods_for
 from alpha_lab.normalize import calendar, finite_number
 from alpha_lab.pipeline import project_path, require_inside
 from alpha_lab.provenance import Run, canonical_bytes, freeze, sha256
-from alpha_lab.adaptive import CANDIDATES, Policy
+from alpha_lab.adaptive import CANDIDATES, STABILITY_SEED, Policy
 
 GRID = {'cost': (0, 0.001, 0.002, 0.005), 'lag': (1, 2), 'reserve': (0, 0.01, 0.02), 'proxy_pay_days': (0, 10, 30)}
 WEIGHT_SUM_TOLERANCE = 1e-12
@@ -380,8 +380,11 @@ def run_simulation(root, derived, provider_name, config, parent=None, expected_s
     else:
         raise ValueError(f'stage {stage} has no purpose for a {entry.kind} provider: {provider_name}')
     withheld = 'N4 viewing restriction' if stage is None else 'N5 viewing procedure'
-    with Run(root, purpose, cfg, parent,
-             candidate_ids=[provider_name] if entry.kind != 'test' else None) as run:
+    run = Run(root, purpose, cfg, parent, candidate_ids=[provider_name] if entry.kind != 'test' else None)
+    if entry.kind == 'policy':  # the stability bootstrap seed, in the started and the terminal record
+        run.base['seed'] = STABILITY_SEED
+        run.base['null_reasons']['seed'] = None
+    with run:
         try:
             require_inside(root, derived)
             market = load_market(root, derived, expected_sha256)

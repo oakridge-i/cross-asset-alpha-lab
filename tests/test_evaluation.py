@@ -823,6 +823,13 @@ def test_report_is_deterministic_and_journaled(built):
         assert all(r['candidate_ids'] == list(KEYS) for r in mine)
         assert mine[1]['output_paths'] == [f'data/reports/{target.name}']
         assert mine[1]['data_sha256'] == provenance.sha256((target / 'manifest.json').read_bytes())
+        # The paired bootstrap seed is the report's seed (D025 item 8), in the started and the terminal record.
+        assert all(r['seed'] == 20261006 and r['null_reasons']['seed'] is None for r in mine)
+    policy = [r for r in journal(c.root) if r['purpose'] == 'N5 policy run']
+    assert policy and all(r['seed'] == 20261007 and r['null_reasons']['seed'] is None for r in policy)
+    others = [r for r in journal(c.root) if r['purpose'] not in ('N5 evaluation report', 'N5 policy run')]
+    assert others and all(r['seed'] is None and r['null_reasons']['seed'] == 'deterministic_data_pipeline'
+                          for r in others)
 
 
 def test_render_markdown_shows_gated_values_and_the_disclosures(built):

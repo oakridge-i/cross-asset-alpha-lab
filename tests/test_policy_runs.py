@@ -94,6 +94,9 @@ def test_policy_run_files_and_journal(tmp_path, no_network):
     assert started['purpose'] == completed['purpose'] == 'N5 policy run'
     assert started['candidate_ids'] == completed['candidate_ids'] == ['P_A1']
     assert completed['event'] == 'completed' and completed['quality_warnings'] == []
+    # The stability bootstrap seed is the run's seed (D025 item 8), in the started and the terminal record.
+    assert started['seed'] == completed['seed'] == 20261007
+    assert started['null_reasons']['seed'] is None and completed['null_reasons']['seed'] is None
     assert json.loads((run_dir / 'config.json').read_text())['provider'] == {'name': 'P_A1', 'version': '1',
                                                                             'parameters': PARAMETERS}
     assert started['config']['provider']['parameters'] == PARAMETERS
@@ -186,6 +189,17 @@ def test_policy_failure_messages_stay_withheld(tmp_path, no_network, monkeypatch
     with pytest.raises(RuntimeError) as excinfo:
         policy_run(tmp_path)
     assert_withheld(tmp_path, excinfo, capsys, 'ValueError', '12.5')
+    started, failed = journal(tmp_path)
+    assert started['seed'] == failed['seed'] == 20261007 and failed['event'] == 'failed'
+    assert started['null_reasons']['seed'] is None and failed['null_reasons']['seed'] is None
+
+
+def test_hypothesis_run_keeps_a_null_seed(tmp_path, no_network):
+    derived, digest = vintage(tmp_path)
+    run_simulation(tmp_path, derived, 'H1_252_3', RunConfig(START, END), expected_sha256=digest, stage=5)
+    records = journal(tmp_path)
+    assert [r['event'] for r in records] == ['started', 'completed']
+    assert all(r['seed'] is None and r['null_reasons']['seed'] == 'deterministic_data_pipeline' for r in records)
 
 
 def test_failed_validation_invariant_stops_the_run_with_a_withheld_message(tmp_path, no_network, monkeypatch,

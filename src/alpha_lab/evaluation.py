@@ -793,7 +793,10 @@ def build_evaluation(root, run_dirs, parent=None, expected_sha256=VINTAGE_MANIFE
     manifest hashes go to the manifest metadata only. Returns the report directory."""
     root = Path(root).resolve()
     config = {'runs': [project_path(root, (root / d).resolve()) for d in run_dirs], 'expected_sha256': expected_sha256}
-    with provenance.Run(root, REPORT_PURPOSE, config, parent, candidate_ids=list(KEYS)) as run:
+    run = provenance.Run(root, REPORT_PURPOSE, config, parent, candidate_ids=list(KEYS))
+    run.base['seed'] = SEED  # the paired bootstrap seed, in the started and the terminal record
+    run.base['null_reasons']['seed'] = None
+    with run:
         report.require(run.base['dirty_tree'] is False, 'item 3, report: the report tree is dirty')
         runs = verified_n5_runs(root, run_dirs, expected_sha256, run.base, references=REFERENCES)
         with rule(6, f'{POLICY} selection.json'):

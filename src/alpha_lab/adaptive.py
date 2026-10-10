@@ -17,6 +17,7 @@ PENALTY = 1.5
 FIRST_YEAR = 2014
 LAST_YEAR = 2022
 HISTORY_YEARS = 5  # validation years 2 + context years 3 (spec 5.2 item 1)
+STABILITY_SEED = 20261007  # selection stability bootstrap (spec 5.4); journaled as the policy run's seed
 
 assert PENALTY == UTILITY_PENALTY
 
@@ -63,7 +64,7 @@ def choose(utilities, order=CANDIDATES):
     return {'best': best, 'close': close, 'chosen': close[0], 'fallback': False, 'warning': None}
 
 
-def stability(excess, replicates=1000, length=63, seed=20261007, order=CANDIDATES):
+def stability(excess, replicates=1000, length=63, seed=STABILITY_SEED, order=CANDIDATES):
     """Selection frequencies under joint circular block resampling of the candidates' excess returns (5.4).
 
     One index matrix serves every candidate; each replicate recomputes every U and applies `choose`, so a
