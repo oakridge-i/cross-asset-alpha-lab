@@ -52,6 +52,17 @@ def _sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def _compare(expected, actual, tolerance):
+    """(ok, diff); ok is False when expected, actual or their difference is missing or not finite, or diff > tolerance."""
+    if expected is None or actual is None:
+        return False, float('inf')
+    expected, actual = float(expected), float(actual)
+    with np.errstate(invalid='ignore'):
+        diff = abs(actual - expected)
+    ok = bool(np.isfinite(expected) and np.isfinite(actual) and np.isfinite(diff) and diff <= tolerance)
+    return ok, diff
+
+
 @lru_cache(maxsize=None)
 def _run(name):
     """(result, config, files) of a full-window run of a registered benchmark or configuration, in memory, stage 5."""
@@ -202,18 +213,19 @@ def test_policy_selection_is_recomputed_independently(no_network):
         if best is None or entry['best_utility'] is None:
             same &= best is None and entry['best_utility'] is None
         else:
-            diff = abs(entry['best_utility'] - best)
-            max_diff = max(max_diff, diff)
-            same &= diff <= UTILITY_TOLERANCE
+            within, diff = _compare(best, entry['best_utility'], UTILITY_TOLERANCE)
+            if np.isfinite(diff):
+                max_diff = max(max_diff, diff)
+            same &= within
         agree += bool(same)
-    print(f'selection years {len(YEARS)}, years that agree {agree}')
+    print(f'selection years {len(YEARS)}, years that agree {agree}, max finite utility difference {max_diff:.3e}')
     assert agree == len(YEARS), f'{agree} of {len(YEARS)} years agree'
 
 
 @real_vintage
 def test_metrics_match_an_independent_computation(no_network):
     names = [p[0] for p in PERIODS]
-    max_diff, compared, period_sets = 0.0, 0, 0
+    max_diff, compared, failures, period_sets = 0.0, 0, 0, 0
     for name in CONFIGURATIONS:
         result, config, _ = _run(name)
         computed = compute_metrics(_market(), result, periods_for(config))['periods']
@@ -227,12 +239,24 @@ def test_metrics_match_an_independent_computation(no_network):
             growth = nav[rows[-1]] / nav[rows[0] - 1]
             expected = {'total_return': growth - 1.0, 'utility': _utility(e[rows - 1])}
             for key, value in expected.items():
-                got = computed[period][key]
-                diff = float('inf') if got is None else abs(got - float(value))
-                max_diff = max(max_diff, diff)
+                within, diff = _compare(value, computed[period][key], METRICS_TOLERANCE)
+                failures += not within
+                if np.isfinite(diff):
+                    max_diff = max(max_diff, diff)
                 compared += 1
-    print(f'configurations {len(CONFIGURATIONS)}, values compared {compared}, period-set mismatches {period_sets}, '
-          f'max abs difference {max_diff:.3e}')
+    print(f'configurations {len(CONFIGURATIONS)}, values compared {compared}, failures {failures}, '
+          f'period-set mismatches {period_sets}, max finite abs difference {max_diff:.3e}')
     assert period_sets == 0, f'{period_sets} configurations with a different period set'
     assert compared == 2 * len(PERIODS) * len(CONFIGURATIONS), f'{compared} values compared'
-    assert max_diff <= METRICS_TOLERANCE, 'metrics differ beyond 1e-9'
+    assert failures == 0, f'{failures} values missing, not finite or beyond 1e-9'
+
+
+def test_comparison_treats_non_finite_values_as_failures():
+    assert _compare(1.0, 1.0 + 1e-12, 1e-9) == (True, pytest.approx(1e-12, abs=1e-15))
+    assert not _compare(1.0, 1.1, 1e-9)[0]
+    assert not _compare(float('nan'), 1.0, 1e-9)[0]
+    assert not _compare(1.0, float('nan'), 1e-9)[0]
+    assert not _compare(float('nan'), float('nan'), 1e-9)[0]
+    assert not _compare(float('inf'), float('inf'), 1e-9)[0]
+    assert not _compare(1.0, float('-inf'), 1e-9)[0]
+    assert not _compare(None, 1.0, 1e-9)[0] and not _compare(1.0, None, 1e-9)[0]
