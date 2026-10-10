@@ -130,6 +130,15 @@ def test_n3_report_bytes_unchanged(project):
     assert {name: provenance.sha256((target / name).read_bytes()) for name in N3_BYTES} == N3_BYTES
 
 
+def test_report_rejects_an_n5_benchmark_run(project):
+    """A stage 5 benchmark run has the files of an N3 run; only its journaled purpose tells it apart."""
+    n5 = run_simulation(project.root, project.derived, 'B2', RunConfig(START, END), expected_sha256=project.digest,
+                        stage=5)
+    assert set(verify(n5)['files']) == set(verify(project.runs['B2'])['files'])
+    assert journal(project.root)[-1]['purpose'] == 'N5 benchmark run'
+    reject(project, 'B2 benchmark run', runs=[n5 if n == 'B2' else project.runs[n] for n in BENCHMARKS])
+
+
 def test_markdown_tables_and_formats(project):
     document = document_of(make(project))
     text = render_markdown(document)

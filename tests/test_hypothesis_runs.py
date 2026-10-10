@@ -9,6 +9,7 @@ import pytest
 from n3_fixtures import RISKY, benchmark_frames, benchmark_vintage
 from n2_fixtures import write_vintage
 from alpha_lab import engine
+from alpha_lab.__main__ import main
 from alpha_lab.engine import PROVIDERS, Result, RunConfig, provider_weights, result_files, run_simulation
 from alpha_lab.hypotheses import SIGNAL_COLUMNS_H1, SIGNAL_COLUMNS_H2
 from alpha_lab.market import load_market, market_from_frames
@@ -329,6 +330,38 @@ def test_stage_five_failure_messages_stay_withheld(tmp_path, no_network, monkeyp
     assert len(failed) == 1 and failed[0]['error'] == expected
     assert '12.5' not in json.dumps(journal(tmp_path)[1:])
     assert '12.5' not in ''.join(traceback.format_exception(excinfo.value))
+
+
+def cli_argv(root, derived, digest, name, *extra):
+    return ['simulate', derived.relative_to(root).as_posix(), '--provider', name, '--start', START, '--end', END,
+            '--root', str(root), '--expected-sha256', digest, *extra]
+
+
+def cli_run(root, name, *extra):
+    derived, digest = benchmark_vintage(root)
+    main(cli_argv(root, derived, digest, name, *extra))
+    return root / journal(root)[-1]['output_paths'][0]
+
+
+def test_cli_simulate_stage_five_option(tmp_path, no_network):
+    """The --stage 5 option of the simulate command line reaches run_simulation (the real-vintage CLI is not run)."""
+    b0 = cli_run(tmp_path / 'b0', 'B0', '--stage', '5')
+    assert [r['purpose'] for r in journal(tmp_path / 'b0')] == ['N5 benchmark run'] * 2
+    assert len(file_hashes(b0)) == 9 and 'metrics.json' in file_hashes(b0)
+    h1 = cli_run(tmp_path / 'h1', 'H1_252_3', '--stage', '5')
+    assert [r['purpose'] for r in journal(tmp_path / 'h1')] == ['N5 hypothesis run'] * 2
+    assert len(file_hashes(h1)) == 10 and 'metrics.json' in file_hashes(h1)
+    plain = cli_run(tmp_path / 'plain', 'H1_252_3')
+    assert [r['purpose'] for r in journal(tmp_path / 'plain')] == ['N4 hypothesis run'] * 2
+    assert len(file_hashes(plain)) == 9 and not (plain / 'metrics.json').exists()
+
+
+def test_cli_simulate_rejects_stage_four(tmp_path, no_network):
+    derived, digest = benchmark_vintage(tmp_path)
+    with pytest.raises(SystemExit) as exit_info:
+        main(cli_argv(tmp_path, derived, digest, 'H1_252_3', '--stage', '4'))
+    assert exit_info.value.code == 2
+    assert not (tmp_path / 'experiments').exists()
 
 
 @pytest.mark.parametrize('stage', [4, 0, '5'])
