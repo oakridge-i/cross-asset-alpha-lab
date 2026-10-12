@@ -1,8 +1,16 @@
 """N6 Scenario Runner - Automated execution of cost/delay scenarios.
 
-This script automates the N6 robustness campaign as specified in RESEARCH_PROTOCOL.md section 12.
+WARNING: This is a template/prototype for N6 execution.
+It requires:
+- N6 specification and design document approval (not yet finalized)
+- Protocol version frozen in RESEARCH_PROTOCOL.md
+- D026+ decisions recorded in DECISIONS.md
+- Code freeze at N6 start
 
-Usage:
+DO NOT run on real data without the above. This runner will be enabled
+after N6 specification is complete.
+
+Usage (when enabled):
     python scripts/n6_runner.py --root . --provider H1_252_3 --scenarios cost_grid
     python scripts/n6_runner.py --root . --provider all --scenarios full_grid --dry-run
 
@@ -10,7 +18,6 @@ Scenarios:
     - cost_grid: 0/10/20/50 bps with lag=1
     - lag_grid: lag 1/2 with cost=10 bps
     - full_grid: all cost × lag combinations
-    - leave_one_out: exclude each asset class
 """
 import argparse
 import json
@@ -49,67 +56,34 @@ class N6Runner:
         
     def run_simulation(self, provider: str, start: str, end: str, cost: float, lag: int, 
                       reserve: float = 0.01, proxy_days: int = 10, parent: str = None) -> Dict:
-        """Execute one simulation run."""
-        cmd = [
-            sys.executable, '-m', 'alpha_lab', 'simulate',
-            str(self.vintage),
-            '--provider', provider,
-            '--start', start,
-            '--end', end,
-            '--cost', str(cost),
-            '--lag', str(lag),
-            '--reserve', str(reserve),
-            '--proxy-days', str(proxy_days),
-            '--stage', '5',
-            '--root', str(self.root)
-        ]
+        """Execute one simulation run.
         
-        if parent:
-            cmd.extend(['--parent', parent])
+        Note: This method requires N6 specification and code freeze to be finalized.
+        Currently only supports dry-run mode for demonstration.
+        """
+        if not self.dry_run:
+            raise RuntimeError(
+                "N6 runner is not yet enabled for real execution.\n"
+                "Waiting for N6 specification completion and code freeze."
+            )
         
         scenario_id = f"{provider}_c{int(cost*10000)}bp_lag{lag}_proxy{proxy_days}"
         
-        print(f"\n{'[DRY RUN] ' if self.dry_run else ''}Running: {scenario_id}")
-        print(f"Command: {' '.join(cmd)}")
+        print(f"[DRY RUN] {scenario_id}")
+        print(f"  Provider: {provider}")
+        print(f"  Cost: {cost} ({int(cost*10000)} bps)")
+        print(f"  Lag: {lag} sessions")
+        print(f"  Proxy: {proxy_days} calendar days")
         
-        if self.dry_run:
-            return {
-                'scenario_id': scenario_id,
-                'provider': provider,
-                'cost': cost,
-                'lag': lag,
-                'proxy_days': proxy_days,
-                'status': 'dry_run',
-                'run_id': 'DRY_RUN'
-            }
-        
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, 
-                                  env={'PYTHONPATH': 'src', **subprocess.os.environ})
-            run_id = result.stdout.strip().split('/')[-1] if '/' in result.stdout else result.stdout.strip()
-            
-            return {
-                'scenario_id': scenario_id,
-                'provider': provider,
-                'cost': cost,
-                'lag': lag,
-                'proxy_days': proxy_days,
-                'status': 'completed',
-                'run_id': run_id,
-                'timestamp': datetime.utcnow().isoformat()
-            }
-        except subprocess.CalledProcessError as e:
-            print(f"ERROR: {e}")
-            print(f"STDERR: {e.stderr}")
-            return {
-                'scenario_id': scenario_id,
-                'provider': provider,
-                'cost': cost,
-                'lag': lag,
-                'proxy_days': proxy_days,
-                'status': 'failed',
-                'error': str(e)
-            }
+        return {
+            'scenario_id': scenario_id,
+            'provider': provider,
+            'cost': cost,
+            'lag': lag,
+            'proxy_days': proxy_days,
+            'status': 'dry_run',
+            'run_id': 'DRY_RUN_N6_NOT_ACTIVE'
+        }
     
     def run_cost_grid(self, provider: str, start: str, end: str) -> List[Dict]:
         """Run all cost scenarios with lag=1."""
@@ -147,14 +121,17 @@ class N6Runner:
                 'timestamp': datetime.utcnow().isoformat(),
                 'total_runs': len(self.results),
                 'completed': len([r for r in self.results if r['status'] == 'completed']),
-                'failed': len([r for r in self.results if r['status'] == 'failed']),
+                'dry_runs': len([r for r in self.results if r['status'] == 'dry_run']),
+                'status': 'N6 not yet active - dry-run mode only',
                 'results': self.results
             }, f, indent=2)
         print(f"\nResults saved to {output}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="N6 Scenario Runner")
+    parser = argparse.ArgumentParser(
+        description="N6 Scenario Runner (dry-run only, awaiting N6 specification)"
+    )
     parser.add_argument('--root', type=Path, required=True, help='Project root directory')
     parser.add_argument('--vintage', type=Path, 
                        default=Path('data/derived/20261006T172442-80ef993493'),
@@ -163,16 +140,27 @@ def main():
                        help='Provider name or "all" for all hypothesis providers')
     parser.add_argument('--scenarios', required=True,
                        choices=['cost_grid', 'lag_grid', 'full_grid'],
-                       help='Which scenario grid to run')
+                       help='Which scenario grid to preview')
     parser.add_argument('--start', default='2008-12-31', help='Start date')
     parser.add_argument('--end', default='2022-12-30', help='End date')
     parser.add_argument('--output', type=Path, 
                        default=Path('outputs/n6_results.json'),
                        help='Output JSON file')
-    parser.add_argument('--dry-run', action='store_true', 
-                       help='Print commands without executing')
+    parser.add_argument('--dry-run', action='store_true', default=True,
+                       help='Preview mode (always dry-run until N6 is active)')
     
     args = parser.parse_args()
+    
+    print("=" * 70)
+    print("N6 Scenario Runner - DRY RUN MODE")
+    print("=" * 70)
+    print("\nWARNING: N6 is not yet active.")
+    print("This tool is in preview/dry-run mode only.\n")
+    print("To enable N6 execution, the following must be complete:")
+    print("  1. N6 specification document (docs/superpowers/specs/2026-10-XX-n6-*.md)")
+    print("  2. D0XX decisions in DECISIONS.md with all interpretations")
+    print("  3. Code freeze at start of N6 campaign")
+    print("  4. Update this runner to remove the RuntimeError check\n")
     
     runner = N6Runner(args.root, args.vintage, args.dry_run)
     
@@ -186,42 +174,38 @@ def main():
         print(f"Available: {', '.join(ALL_PROVIDERS)}, or 'all'")
         return 1
     
-    print(f"N6 Scenario Runner")
-    print(f"{'=' * 60}")
     print(f"Providers: {', '.join(providers)}")
     print(f"Scenarios: {args.scenarios}")
     print(f"Window: {args.start} to {args.end}")
-    print(f"Dry run: {args.dry_run}")
-    print(f"{'=' * 60}\n")
+    print("-" * 70 + "\n")
     
-    # Run scenarios
-    for provider in providers:
-        print(f"\nProvider: {provider}")
-        print("-" * 40)
+    # Run scenarios (dry-run only)
+    try:
+        for provider in providers:
+            print(f"\nProvider: {provider}")
+            print("-" * 40)
+            
+            if args.scenarios == 'cost_grid':
+                runner.run_cost_grid(provider, args.start, args.end)
+            elif args.scenarios == 'lag_grid':
+                runner.run_lag_grid(provider, args.start, args.end)
+            elif args.scenarios == 'full_grid':
+                runner.run_full_grid(provider, args.start, args.end)
         
-        if args.scenarios == 'cost_grid':
-            runner.run_cost_grid(provider, args.start, args.end)
-        elif args.scenarios == 'lag_grid':
-            runner.run_lag_grid(provider, args.start, args.end)
-        elif args.scenarios == 'full_grid':
-            runner.run_full_grid(provider, args.start, args.end)
+        # Save results
+        runner.save_results(args.output)
+        
+        # Summary
+        print(f"\n{'=' * 70}")
+        print(f"Dry-run preview complete. No actual runs were executed.")
+        print(f"Total scenarios previewed: {len(runner.results)}")
+        print(f"{'=' * 70}\n")
+        
+        return 0
     
-    # Save results
-    runner.save_results(args.output)
-    
-    # Summary
-    print(f"\n{'=' * 60}")
-    print(f"Summary:")
-    print(f"Total runs: {len(runner.results)}")
-    print(f"Completed: {len([r for r in runner.results if r['status'] == 'completed'])}")
-    print(f"Failed: {len([r for r in runner.results if r['status'] == 'failed'])}")
-    print(f"{'=' * 60}")
-    
-    # Exit with error code if any failed
-    if any(r['status'] == 'failed' for r in runner.results):
+    except RuntimeError as e:
+        print(f"\nError: {e}\n")
         return 1
-    
-    return 0
 
 
 if __name__ == '__main__':

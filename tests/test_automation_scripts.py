@@ -12,21 +12,34 @@ sys.path.insert(0, str(scripts_path))
 
 
 def test_visualization_imports():
-    """Test that visualization modules can be imported."""
+    """Test that visualization modules can be imported (skip if matplotlib unavailable).
+    
+    Visualization scripts require matplotlib, pandas, numpy which are optional.
+    This test skips in CI environments without these packages.
+    """
+    pytest = pytest_module()
+    
     try:
-        from visualization import equity_curves
-        from visualization import comparison_plots
-        from visualization import risk_charts
-        assert hasattr(equity_curves, 'main')
-        assert hasattr(comparison_plots, 'main')
-        assert hasattr(risk_charts, 'main')
+        # Try importing visualization dependencies first
+        import matplotlib  # noqa
+        import pandas  # noqa
+        import numpy  # noqa
     except ImportError as e:
-        # matplotlib not installed is acceptable in CI
-        if 'matplotlib' in str(e) or 'pandas' in str(e):
-            import pytest
-            pytest.skip(f"Visualization dependencies not installed: {e}")
-        else:
-            raise
+        pytest.skip(f"Visualization dependencies not installed: {e}")
+    
+    # If we get here, dependencies are available, so visualization imports must work
+    from visualization import equity_curves
+    from visualization import comparison_plots
+    from visualization import risk_charts
+    assert hasattr(equity_curves, 'main')
+    assert hasattr(comparison_plots, 'main')
+    assert hasattr(risk_charts, 'main')
+
+
+def pytest_module():
+    """Get pytest module for skipping."""
+    import pytest
+    return pytest
 
 
 def test_n6_runner_import():
