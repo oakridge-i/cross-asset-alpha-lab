@@ -1,0 +1,10 @@
+# Optional Visualization Dependencies
+# 
+# These packages are NOT required for core research functionality.
+# They are only needed for the visualization scripts in scripts/visualization/
+#
+# Install with: pip install -r requirements-viz.txt
+
+matplotlib>=3.8.0
+numpy>=2.5.0
+pandas>=3.0.0
