@@ -17,6 +17,10 @@ outputs/
 
 # Local working instructions and execution notes
 /AGENTS.md
+/AGENTS_CONTEXT.md
+/AGENTS_QUICKREF.md
+/AGENTS_CHECKLIST.md
+/AGENTS_INDEX.md
 /README.agent.md
 /CLAUDE.md
 /.agents/
